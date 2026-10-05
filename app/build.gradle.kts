@@ -11,10 +11,14 @@ android {
         minSdk = 29
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1.0-stage1"
+        versionName = "0.2.0-dev"
+        ndk { abiFilters += "arm64-v8a" }   // Galaxy S24 Ultra is arm64; keeps the APK smaller
     }
     buildTypes {
-        release { isMinifyEnabled = true; isDebuggable = false }
+        release {
+            isMinifyEnabled = true; isDebuggable = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

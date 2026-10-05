@@ -12,6 +12,11 @@ import app.personal.banglaai.doc.DocWorkflow
 import app.personal.banglaai.jobs.JobStatus
 import app.personal.banglaai.ocr.TesseractOcr
 import app.personal.banglaai.storage.VaultDoc
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import app.personal.banglaai.export.Exporter
+import app.personal.banglaai.export.ExportOptions
+import app.personal.banglaai.export.PdfExport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,6 +40,20 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
         scope.launch {
             runCatching { withContext(Dispatchers.IO) { block() } }.onFailure { error = it.message ?: it.javaClass.simpleName }
             running = null; tick++
+        }
+    }
+
+    var exportKind by remember { mutableStateOf("txt") }
+    var rtlOriginal by remember { mutableStateOf(false) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val saver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        start("এক্সপোর্ট") {
+            val pages = wf.exportPages(doc); val o = ExportOptions(doc.name, includeOriginal = true, originalIsRtl = rtlOriginal)
+            ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                when (exportKind) { "docx" -> Exporter.docx(pages, o, out); "pdf" -> PdfExport.write(pages, o, out); else -> out.write(Exporter.txt(pages, o).toByteArray(Charsets.UTF_8)) }
+            } ?: error("ফাইল লেখা যায়নি")
+            JobStatus.DONE
         }
     }
 
@@ -74,6 +93,19 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
                 Text("কিছু পৃষ্ঠায় লেখা পাওয়া যায়নি (সম্ভবত স্ক্যান করা ছবি)। নিচের OCR বাটন দিয়ে চেষ্টা করুন; না হলে সেগুলো অনুবাদ হবে না।", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         tr?.let { Text("অনুবাদ (${it.status}): ${it.coverageReport()}", style = MaterialTheme.typography.bodySmall) }
 
+        if (tr != null) {
+            HorizontalDivider()
+            Text("এক্সপোর্ট (আপনার বেছে নেওয়া জায়গায়, ফোনের ভেতরেই; কোথাও আপলোড হয় না)", style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(selected = rtlOriginal, onClick = { rtlOriginal = !rtlOriginal }, label = { Text("মূল ডান-থেকে-বাঁ (আরবি/উর্দু)") })
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("txt" to "TXT", "docx" to "DOCX", "pdf" to "PDF").forEach { (k, label) ->
+                    OutlinedButton(enabled = running == null, onClick = { exportKind = k; saver.launch("${doc.name.substringBeforeLast('.')}-bn.$k") }) { Text(label) }
+                }
+            }
+            Text("এক্সপোর্টে অনুবাদ-না-হওয়া পৃষ্ঠার তালিকা থাকে। পৃষ্ঠা-বিন্যাস মূলের সঙ্গে হুবহু মিলবে না।", style = MaterialTheme.typography.bodySmall)
+        }
         if (ext != null) {
             HorizontalDivider()
             OutlinedTextField(value = pageInput, onValueChange = { pageInput = it.filter(Char::isDigit).take(5) }, label = { Text("পৃষ্ঠা নম্বর (ফাইলের ভৌত পৃষ্ঠা)") }, singleLine = true)

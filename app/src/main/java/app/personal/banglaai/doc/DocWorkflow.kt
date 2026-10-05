@@ -106,6 +106,15 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         }
     }
 
+    /** Builds export pages from stored text/translation; pages without translation are included and reported as missing. */
+    fun exportPages(doc: VaultDoc): List<app.personal.banglaai.export.ExportPage> {
+        val total = job(doc, Kind.Extract)?.total ?: 0
+        return (1..total).map { p ->
+            val src = texts.get(doc.id, p); val bn = translations.get(doc.id, p)
+            app.personal.banglaai.export.ExportPage(p, src?.printedLabel, src?.text, bn?.text, src?.ocr == true)
+        }
+    }
+
     fun deleteDerived(doc: VaultDoc) {
         texts.deleteDoc(doc.id); translations.deleteDoc(doc.id)
         Kind.entries.forEach { jobs.delete(jobId(doc, it)) }
