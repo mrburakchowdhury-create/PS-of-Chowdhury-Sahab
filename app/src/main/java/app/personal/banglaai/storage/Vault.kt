@@ -60,6 +60,20 @@ class Vault(private val context: Context) {
         }
     }
 
+    /** Restores a document from a backup stream under its ORIGINAL id (so derived data still maps). Never overwrites an existing id. */
+    @Synchronized fun restore(id: String, name: String, added: Long, input: java.io.InputStream): VaultDoc? {
+        if (File(dir, "$id.enc").exists()) return null
+        val tmp = File(dir, "$id.tmp"); val out = File(dir, "$id.enc")
+        try {
+            var total = 0L
+            aead.newEncryptingStream(FileOutputStream(tmp), id.toByteArray()).use { dst ->
+                val buf = ByteArray(64 * 1024); while (true) { val n = input.read(buf); if (n < 0) break; dst.write(buf, 0, n); total += n }
+            }
+            check(tmp.renameTo(out)) { "সংরক্ষণ ব্যর্থ" }
+            val doc = VaultDoc(id, name, total, added); writeIndex(readIndex() + doc); return doc
+        } catch (e: Throwable) { tmp.delete(); out.delete(); throw e }
+    }
+
     /** Small-blob encryption for derived data (job checkpoints, page text). [aad] binds the blob to its owner id. */
     fun seal(plain: ByteArray, aad: ByteArray): ByteArray = sealWith(aead, plain, aad)
     fun unseal(blob: ByteArray, aad: ByteArray): ByteArray = unsealWith(aead, blob, aad)

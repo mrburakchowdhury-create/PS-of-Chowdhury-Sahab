@@ -16,9 +16,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import app.personal.banglaai.MainActivity
 import app.personal.banglaai.security.PinStore
+import app.personal.banglaai.backup.BackupService
+import app.personal.banglaai.backup.PassphraseBackup
 import app.personal.banglaai.doc.DocWorkflow
 import app.personal.banglaai.storage.KnownModels
 import app.personal.banglaai.storage.ModelStore
+import app.personal.banglaai.storage.StorageStats
 import app.personal.banglaai.storage.Vault
 import app.personal.banglaai.storage.VaultDoc
 import kotlinx.coroutines.Dispatchers
@@ -120,6 +123,28 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
     val refresh: suspend () -> Unit = { docs = withContext(Dispatchers.IO) { runCatching { vault.list() }.getOrDefault(emptyList()) }; modelList = withContext(Dispatchers.IO) { models.list() } }
     LaunchedEffect(Unit) { refresh() }
 
+    var backupPass by remember { mutableStateOf("") }
+    val backup = remember { BackupService(vault, workflow) }
+    val saveBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = "এনক্রিপ্টেড ব্যাকআপ তৈরি হচ্ছে…"; error = null
+            runCatching { withContext(Dispatchers.IO) { activity.contentResolver.openOutputStream(uri)!!.use { backup.create(it, backupPass.toCharArray()) } } }
+                .onSuccess { error = "✅ ব্যাকআপ লেখা হয়েছে। পাসফ্রেজ হারালে এটি কেউ খুলতে পারবে না — আপনিও না।" }.onFailure { error = it.message ?: "ব্যর্থ" }
+            busy = null
+        }
+    }
+    val restoreBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            busy = "ব্যাকআপ থেকে ফেরত আনা হচ্ছে…"; error = null
+            runCatching { withContext(Dispatchers.IO) { activity.contentResolver.openInputStream(uri)!!.use { backup.restore(it, backupPass.toCharArray()) } } }
+                .onSuccess { error = "✅ ফেরত এসেছে: ${it.restored}টি ফাইল (আগে থেকে থাকায় বাদ: ${it.skipped}টি)" }
+                .onFailure { error = if (it is PassphraseBackup.BadBackup) it.message else "পাসফ্রেজ ভুল অথবা ফাইল নষ্ট" }
+            busy = null; refresh()
+        }
+    }
+
     val pickDoc = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
         scope.launch {
@@ -184,6 +209,21 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
         }
         Text("SHA-256 মিলিয়ে নিন মডেলের অফিসিয়াল পাতায় দেওয়া checksum-এর সঙ্গে।", style = MaterialTheme.typography.bodySmall)
 
+        SectionTitle("স্টোরেজ ব্যবহার")
+        var stats by remember { mutableStateOf(StorageStats.read(activity)) }
+        LaunchedEffect(docs, modelList, busy) { stats = withContext(Dispatchers.IO) { StorageStats.read(activity) } }
+        Text("মূল ফাইল ${fmtSize(stats.originals)} · বের করা লেখা/অনুবাদ ${fmtSize(stats.derived)} · মডেল ${fmtSize(stats.models)} · OCR ডেটা ${fmtSize(stats.ocrData)} · ক্যাশ ${fmtSize(stats.cache)}\nখালি জায়গা এখন: ${fmtSize(stats.free)} (এটি নির্দিষ্ট ধরে নেওয়া হয় না; প্রতিটি কাজের আগে যাচাই হয়)", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = { StorageStats.clearCache(activity); stats = StorageStats.read(activity) }) { Text("ক্যাশ মুছুন (ফাইল/অনুবাদ মোছে না)") }
+
+        SectionTitle("এনক্রিপ্টেড ব্যাকআপ ও রিকভারি")
+        Text("পাসফ্রেজ থেকে চাবি তৈরি হয়; কোনো গোপন master key নেই। ফোন রিসেট/অ্যাপ মুছলে অ্যাপের ভেতরের ডেটা চলে যায় — ব্যাকআপ ও পাসফ্রেজ আপনার কাছে থাকলে ফেরানো যায়। পাসফ্রেজ হারালে ব্যাকআপ চিরতরে অপাঠ্য।", style = MaterialTheme.typography.bodySmall)
+        OutlinedTextField(value = backupPass, onValueChange = { backupPass = it }, label = { Text("ব্যাকআপ পাসফ্রেজ (কমপক্ষে ${PassphraseBackup.MIN_PASSPHRASE} অক্ষর)") }, singleLine = true,
+            visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(enabled = busy == null && backupPass.length >= PassphraseBackup.MIN_PASSPHRASE, onClick = { saveBackup.launch("banglaai-backup.bai") }) { Text("ব্যাকআপ তৈরি") }
+            OutlinedButton(enabled = busy == null && backupPass.isNotEmpty(), onClick = { restoreBackup.launch(arrayOf("*/*")) }) { Text("ব্যাকআপ থেকে ফেরান") }
+        }
+
         SectionTitle("ফিচারের অবস্থা (সৎ তালিকা)")
         listOf(
             "PIN + বায়োমেট্রিক লক, এনক্রিপ্টেড ফাইল সংরক্ষণ" to "তৈরি; ডিভাইসে পরীক্ষা বাকি",
@@ -193,6 +233,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
             "কোড-স্ক্রিনশট OCR, ব্যাখ্যা, ভুল খোঁজা, diff" to "তৈরি; diff/ইন্ডেন্টেশন-পুনর্গঠনের লজিক টেস্টকৃত, ফোনে বা বাস্তব স্ক্রিনশটে চালানো হয়নি",
             "বাংলা পড়ে শোনানো (ফোনের অফলাইন voice), পজ/রিজিউম/গতি/অবস্থান" to "তৈরি; কার্সর-লজিক টেস্টকৃত; ফোনে অফলাইন বাংলা voice আছে কি না ও মান — ডিভাইস-টেস্ট বাকি",
             "ভয়েস কমান্ড (চেপে বলুন, on-device চেনা)" to "তৈরি; কমান্ড-পার্সার টেস্টকৃত; ফোনে বাংলা ভাষা-প্যাক/মাইক — ডিভাইস-টেস্ট বাকি",
+            "পাসফ্রেজ-এনক্রিপ্টেড ব্যাকআপ/রিকভারি" to "তৈরি; এনক্রিপশন কন্টেইনার টেস্টকৃত (ভুল পাসফ্রেজ/বদল ধরা পড়ে); পূর্ণ create→restore ফোনে চালানো হয়নি",
             "ব্যাকগ্রাউন্ড/স্ক্রিন-অফ প্লেব্যাক, headphone কন্ট্রোল" to "এখনো তৈরি হয়নি",
             "প্রশ্নোত্তর (কীওয়ার্ড অনুসন্ধান + AI, উৎস পৃষ্ঠা-লিঙ্ক)" to "তৈরি; অনুসন্ধান টেস্টকৃত; AI-উত্তরের মান ফোনে/বাস্তব বইয়ে যাচাই বাকি",
             "পড়ার মাঝে প্রশ্ন (নির্বাচিত শব্দ/লাইন), নোট, বুকমার্ক, শব্দভান্ডার, glossary" to "এখনো তৈরি হয়নি",
