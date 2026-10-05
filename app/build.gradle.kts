@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "app.personal.banglaai"
-    compileSdk = 35
+    compileSdk = 37
     defaultConfig {
         applicationId = "app.personal.banglaai"
         minSdk = 29
