@@ -114,6 +114,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
     var modelList by remember { mutableStateOf(models.list()) }
     val workflow = remember { DocWorkflow(activity, vault, models) }
     var openDoc by remember { mutableStateOf<VaultDoc?>(null) }
+    var codeOpen by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val refresh: suspend () -> Unit = { docs = withContext(Dispatchers.IO) { runCatching { vault.list() }.getOrDefault(emptyList()) }; modelList = withContext(Dispatchers.IO) { models.list() } }
@@ -137,6 +138,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
     }
 
     openDoc?.let { d -> DocScreen(d, workflow) { openDoc = null }; return }
+    if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("বাংলা সহকারী", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
@@ -145,6 +147,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
 
+        Button(onClick = { codeOpen = true }) { Text("কোড বিশ্লেষণ / ছবি থেকে কোড") }
         SectionTitle("আমার ফাইল (এনক্রিপ্টেড)")
         Button(onClick = { pickDoc.launch(arrayOf("*/*")) }, enabled = busy == null) { Text("ফাইল যোগ করুন") }
         if (docs.isEmpty()) Text("এখনো কোনো ফাইল নেই।")
@@ -188,7 +191,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
             "স্ক্যান PDF-এর OCR (Tesseract: ইংরেজি/বাংলা/আরবি/উর্দু/হিন্দি)" to "তৈরি; ডেস্কটপে synthetic-এ যাচাইকৃত, ফোনে বা বাস্তব স্ক্যানে চালানো হয়নি",
             "কোড-স্ক্রিনশট/ছবি import ও OCR স্ক্রিন" to "এখনো তৈরি হয়নি (ইঞ্জিন তৈরি, UI নেই)",
             "বাংলা অনুবাদ (স্থানীয় Gemma 4)" to "তৈরি; ডেস্কটপে মডেল যাচাইকৃত, ফোনে চালানো হয়নি (ডিভাইস-টেস্ট বাকি)",
-            "কোড ব্যাখ্যা / ভুল খোঁজা" to "এখনো তৈরি হয়নি",
+            "কোড-স্ক্রিনশট OCR, ব্যাখ্যা, ভুল খোঁজা, diff" to "তৈরি; diff/ইন্ডেন্টেশন-পুনর্গঠনের লজিক টেস্টকৃত, ফোনে বা বাস্তব স্ক্রিনশটে চালানো হয়নি",
             "বাংলা পড়ে শোনানো, ভয়েস কমান্ড" to "এখনো তৈরি হয়নি",
         ).forEach { (k, v) -> Text("• $k — $v", style = MaterialTheme.typography.bodySmall) }
     }
