@@ -12,7 +12,7 @@ export ANDROID_HOME=<sdk path>
 
 ## বিল্ড ও টেস্ট
 ```
-cd android-app
+
 ./gradlew testDebugUnitTest      # ৫৪টি JVM/Robolectric টেস্ট
 ./gradlew assembleDebug          # app/build/outputs/apk/debug/app-debug.apk  (≈ 88 MB, debug)
 ./gradlew assembleRelease        # app-release-unsigned.apk (≈ 47 MB, arm64-v8a, R8 minified)
@@ -29,4 +29,4 @@ ANDROID_HOME=... tools/sign_release.sh ~/banglaai-release.jks banglaai
 এই সেশনে সই-প্রক্রিয়া একটি **অস্থায়ী** চাবিতে যাচাই হয়েছে (`apksigner verify` → v3 পাস); সেই চাবি মুছে ফেলা হয়েছে। **কোনো signed release APK এই রিপোতে নেই।**
 
 ## ফোনে ইনস্টল
-`adb install -r BanglaAI-release.apk` অথবা ফাইলটি ফোনে নিয়ে "অজানা উৎস থেকে ইনস্টল" অনুমতি দিয়ে খুলুন।
+`adb install -r ChoudhurySahebsPS-release.apk` অথবা ফাইলটি ফোনে নিয়ে "অজানা উৎস থেকে ইনস্টল" অনুমতি দিয়ে খুলুন।

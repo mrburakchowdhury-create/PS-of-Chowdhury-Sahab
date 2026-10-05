@@ -9,5 +9,5 @@ dependencyResolutionManagement {
         maven("https://jitpack.io") { content { includeGroupByRegex("com\\.github\\.adaptech-cz.*") } }
     }
 }
-rootProject.name = "BanglaAI"
+rootProject.name = "ChoudhurySahebsPS"
 include(":app")

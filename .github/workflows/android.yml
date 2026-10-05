@@ -1,0 +1,26 @@
+name: android-build
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Android SDK platform 37 (compileSdk)
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null; "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;35.0.0"
+      - name: Unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+      - name: Build debug and release (unsigned)
+        run: ./gradlew --no-daemon assembleDebug assembleRelease
+      - name: Verify INTERNET permission is absent in merged manifests
+        run: |
+          for v in debug release; do
+            M=$(find app/build -name AndroidManifest.xml -path "*merged_manifests/$v*" | head -1)
+            echo "$v: $M"; test -n "$M"; ! grep -q 'android.permission.INTERNET"' "$M"
+          done
+      - uses: actions/upload-artifact@v4
+        with: { name: choudhury-sahebs-ps-debug-apk, path: app/build/outputs/apk/debug/*.apk }

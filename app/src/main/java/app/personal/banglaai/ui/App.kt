@@ -166,7 +166,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("বাংলা সহকারী", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            Text("চৌধুরী সাহেবের পিএস", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = onLock) { Text("🔒 বন্ধ করুন") }
         }
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }

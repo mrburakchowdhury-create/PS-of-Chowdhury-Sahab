@@ -8,7 +8,7 @@ KS="${1:?keystore path}"; ALIAS="${2:?key alias}"
 SDK="${ANDROID_HOME:?set ANDROID_HOME}"; BT="$(ls -d "$SDK"/build-tools/* | sort -V | tail -1)"
 cd "$(dirname "$0")/.."
 ./gradlew assembleRelease
-IN=app/build/outputs/apk/release/app-release-unsigned.apk; OUT=app/build/outputs/apk/release/BanglaAI-release.apk
+IN=app/build/outputs/apk/release/app-release-unsigned.apk; OUT=app/build/outputs/apk/release/ChoudhurySahebsPS-release.apk
 "$BT/zipalign" -f -p 4 "$IN" "$OUT.aligned"
 "$BT/apksigner" sign --ks "$KS" --ks-key-alias "$ALIAS" --out "$OUT" "$OUT.aligned"
 rm -f "$OUT.aligned" "$OUT.idsig"

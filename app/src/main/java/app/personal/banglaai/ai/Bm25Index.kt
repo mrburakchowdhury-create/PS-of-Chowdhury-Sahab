@@ -33,7 +33,7 @@ class Bm25Index(pages: Map<Int, String>, private val k1: Double = 1.5, private v
     }
 
     companion object {
-        private val marks = Regex("[\\u064B-\\u065F\\u0670\\u0640\\u06D6-\\u06ED]")   // Arabic harakat, tatweel, Quranic marks
+        private val marks = Regex("[\\u064B-\\u065F\\u0670\\u0640\\u06D6-\\u06ED]")   // Arabic vowel marks, tatweel, annotation marks
         fun normalize(s: String) = marks.replace(s.lowercase(), "")
         fun tokens(s: String): List<String> = Regex("[\\p{L}\\p{M}\\p{N}]+").findAll(normalize(s)).map { it.value }.filter { it.length > 1 || it[0].isDigit() }.toList()
     }
