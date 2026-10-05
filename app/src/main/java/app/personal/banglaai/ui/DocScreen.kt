@@ -107,6 +107,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
             Text("এক্সপোর্টে অনুবাদ-না-হওয়া পৃষ্ঠার তালিকা থাকে। পৃষ্ঠা-বিন্যাস মূলের সঙ্গে হুবহু মিলবে না।", style = MaterialTheme.typography.bodySmall)
         }
         if (ext != null) {
+            ReaderSection(doc, wf, ext.total)
             HorizontalDivider()
             OutlinedTextField(value = pageInput, onValueChange = { pageInput = it.filter(Char::isDigit).take(5) }, label = { Text("পৃষ্ঠা নম্বর (ফাইলের ভৌত পৃষ্ঠা)") }, singleLine = true)
             val page = pageInput.toIntOrNull()?.takeIf { it in 1..ext.total }

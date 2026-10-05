@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- No INTERNET permission by design. Camera permission will be added only with the OCR stage. -->
+    <!-- Microphone only for press-to-talk voice commands (runtime permission, asked on first press). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.fingerprint" android:required="false" />
+    <!-- Lets the app see installed text-to-speech engines (Android 11+ package visibility). -->
+    <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>
     <application
         android:label="@string/app_name"
         android:allowBackup="false"

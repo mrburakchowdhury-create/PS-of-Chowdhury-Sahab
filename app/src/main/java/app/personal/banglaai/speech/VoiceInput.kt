@@ -1,0 +1,50 @@
+package app.personal.banglaai.speech
+
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+
+/**
+ * Press-to-talk, ONE utterance per press, using Android's ON-DEVICE recognizer only (API 31+). If the on-device recognizer or its
+ * Bengali language pack is missing it says so; it never falls back to the default (possibly cloud) recognizer.
+ * The transcript is returned for the user to see/correct; it is never executed here. Status: compiles; device-test pending.
+ */
+class VoiceInput(private val context: Context) {
+    fun available() = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+
+    private var rec: SpeechRecognizer? = null
+
+    fun listen(onText: (String) -> Unit, onError: (String) -> Unit) {
+        if (!available()) return onError("এই ফোনে অফলাইন (on-device) বাংলা ভয়েস চেনা পাওয়া যায়নি। ইন্টারনেট-ভিত্তিক বিকল্পে নিজে থেকে যাওয়া হয় না। লিখে নির্দেশ দিন।")
+        stop()
+        val r = SpeechRecognizer.createOnDeviceSpeechRecognizer(context); rec = r
+        r.setRecognitionListener(object : RecognitionListener {
+            override fun onResults(results: Bundle?) {
+                val t = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+                if (t.isNullOrBlank()) onError("কিছু শোনা যায়নি") else onText(t); stop()
+            }
+            override fun onError(error: Int) {
+                onError(when (error) {
+                    SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+                        "বাংলা ভাষা-প্যাক ফোনে নেই। ফোনের সেটিংস → ভাষা/ভয়েস ইনপুট থেকে অফলাইন বাংলা নামান, অথবা লিখে নির্দেশ দিন।"
+                    SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "কিছু শোনা যায়নি"
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "মাইক্রোফোনের অনুমতি দেওয়া হয়নি"
+                    else -> "ভয়েস চেনা ব্যর্থ (কোড $error)"
+                }); stop()
+            }
+            override fun onReadyForSpeech(p: Bundle?) {}; override fun onBeginningOfSpeech() {}; override fun onRmsChanged(v: Float) {}
+            override fun onBufferReceived(b: ByteArray?) {}; override fun onEndOfSpeech() {}
+            override fun onPartialResults(b: Bundle?) {}; override fun onEvent(t: Int, b: Bundle?) {}
+        })
+        r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD").putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false))
+    }
+
+    /** Mic is released on every path: result, error, or leaving the screen. */
+    fun stop() { rec?.cancel(); rec?.destroy(); rec = null }
+}
