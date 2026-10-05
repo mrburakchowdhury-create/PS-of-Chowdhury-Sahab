@@ -98,7 +98,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () 
         if (bio) {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
-                activity.promptBiometric("আঙুলের ছাপ / ফেস দিয়ে খুলুন", "PIN ব্যবহার করুন", onUnlocked)
+                activity.promptBiometric("আঙুলের ছাপ / ফেস দিয়ে খুলুন", "PIN ব্যবহার করুন", onUnlocked) { msg = it }
             }) { Text("বায়োমেট্রিক দিয়ে খুলুন") }
             Text("মনে রাখবেন: ফোনে অন্য কারও আঙুলের ছাপ/ফেস নথিভুক্ত থাকলে সেও খুলতে পারবে। তা থাকলে শুধু PIN ব্যবহার করুন।",
                 style = MaterialTheme.typography.bodySmall)
@@ -194,7 +194,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
             "বাংলা পড়ে শোনানো (ফোনের অফলাইন voice), পজ/রিজিউম/গতি/অবস্থান" to "তৈরি; কার্সর-লজিক টেস্টকৃত; ফোনে অফলাইন বাংলা voice আছে কি না ও মান — ডিভাইস-টেস্ট বাকি",
             "ভয়েস কমান্ড (চেপে বলুন, on-device চেনা)" to "তৈরি; কমান্ড-পার্সার টেস্টকৃত; ফোনে বাংলা ভাষা-প্যাক/মাইক — ডিভাইস-টেস্ট বাকি",
             "ব্যাকগ্রাউন্ড/স্ক্রিন-অফ প্লেব্যাক, headphone কন্ট্রোল" to "এখনো তৈরি হয়নি",
-            "প্রশ্নোত্তর (উৎস-লিঙ্কসহ), পড়ার মাঝে প্রশ্ন, নোট/বুকমার্ক" to "এখনো তৈরি হয়নি",
+            "প্রশ্নোত্তর (কীওয়ার্ড অনুসন্ধান + AI, উৎস পৃষ্ঠা-লিঙ্ক)" to "তৈরি; অনুসন্ধান টেস্টকৃত; AI-উত্তরের মান ফোনে/বাস্তব বইয়ে যাচাই বাকি",
+            "পড়ার মাঝে প্রশ্ন (নির্বাচিত শব্দ/লাইন), নোট, বুকমার্ক, শব্দভান্ডার, glossary" to "এখনো তৈরি হয়নি",
         ).forEach { (k, v) -> Text("• $k — $v", style = MaterialTheme.typography.bodySmall) }
     }
 }

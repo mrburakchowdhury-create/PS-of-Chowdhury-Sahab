@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import app.personal.banglaai.security.BiometricGate
 import app.personal.banglaai.ui.App
 
 class MainActivity : FragmentActivity() {
@@ -46,13 +47,22 @@ class MainActivity : FragmentActivity() {
     fun canUseStrongBiometric() =
         BiometricManager.from(this).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
 
-    fun promptBiometric(title: String, negative: String, onSuccess: () -> Unit) {
+    /** Returns a message to show the user if biometric cannot be used right now (e.g. key invalidated by new enrollment). */
+    fun promptBiometric(title: String, negative: String, onSuccess: () -> Unit, onProblem: (String) -> Unit = {}) {
+        val cipher = when (val prep = BiometricGate.prepare()) {
+            is BiometricGate.Prep.Ready -> prep.cipher
+            BiometricGate.Prep.Invalidated -> return onProblem("ফোনে আঙুলের ছাপ/ফেস বদলেছে, তাই বায়োমেট্রিক বন্ধ হয়েছে। PIN দিয়ে খুলুন; পরের বার আবার বায়োমেট্রিক চলবে।")
+        }
         val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = onSuccess()
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                // Unlock only if the Keystore key actually worked; a UI-only "success" is not enough.
+                if (result.cryptoObject?.cipher?.let(BiometricGate::confirm) == true) onSuccess() else onProblem("বায়োমেট্রিক যাচাই সম্পূর্ণ হয়নি — PIN ব্যবহার করুন")
+            }
         })
         prompt.authenticate(
             BiometricPrompt.PromptInfo.Builder().setTitle(title).setNegativeButtonText(negative)
-                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG).build()
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG).build(),
+            BiometricPrompt.CryptoObject(cipher)
         )
     }
 
