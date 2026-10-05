@@ -16,6 +16,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import app.personal.banglaai.MainActivity
 import app.personal.banglaai.security.PinStore
+import app.personal.banglaai.doc.DocWorkflow
+import app.personal.banglaai.storage.KnownModels
 import app.personal.banglaai.storage.ModelStore
 import app.personal.banglaai.storage.Vault
 import app.personal.banglaai.storage.VaultDoc
@@ -110,6 +112,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
     val vault = remember { Vault(activity) }; val models = remember { ModelStore(activity) }
     var docs by remember { mutableStateOf<List<VaultDoc>>(emptyList()) }
     var modelList by remember { mutableStateOf(models.list()) }
+    val workflow = remember { DocWorkflow(activity, vault, models) }
+    var openDoc by remember { mutableStateOf<VaultDoc?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val refresh: suspend () -> Unit = { docs = withContext(Dispatchers.IO) { runCatching { vault.list() }.getOrDefault(emptyList()) }; modelList = withContext(Dispatchers.IO) { models.list() } }
@@ -132,6 +136,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
         }
     }
 
+    openDoc?.let { d -> DocScreen(d, workflow) { openDoc = null }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("বাংলা সহকারী", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
@@ -147,7 +152,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Text(d.name); Text(fmtSize(d.size), style = MaterialTheme.typography.bodySmall) }
-                    TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { vault.delete(d.id) }; refresh() } }) { Text("মুছুন") }
+                    TextButton(onClick = { openDoc = d }) { Text("খুলুন") }
+                    TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { vault.delete(d.id); workflow.deleteDerived(d) }; refresh() } }) { Text("মুছুন") }
                 }
             }
         }
@@ -163,6 +169,11 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
                     Column(Modifier.weight(1f)) {
                         Text(m.name); Text(fmtSize(m.size), style = MaterialTheme.typography.bodySmall)
                         Text("SHA-256: ${m.sha256}", style = MaterialTheme.typography.bodySmall)
+                        Text(when (val v = KnownModels.verdict(m.name, m.size, m.sha256)) {
+                            is KnownModels.Verdict.Official -> "✅ অফিসিয়াল ফাইলের সঙ্গে মিলেছে: ${v.model.label}"
+                            is KnownModels.Verdict.Mismatch -> "❌ নামের সঙ্গে মিললেও ফাইলের কনটেন্ট মেলেনি — নষ্ট বা বদলানো হতে পারে; ব্যবহার করবেন না"
+                            KnownModels.Verdict.Unknown -> "⚠️ আমাদের যাচাই-করা তালিকায় নেই; অফিসিয়াল checksum নিজে মিলিয়ে নিন"
+                        }, style = MaterialTheme.typography.bodySmall)
                     }
                     TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { models.delete(m.name) }; refresh() } }) { Text("মুছুন") }
                 }
@@ -173,8 +184,9 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
         SectionTitle("ফিচারের অবস্থা (সৎ তালিকা)")
         listOf(
             "PIN + বায়োমেট্রিক লক, এনক্রিপ্টেড ফাইল সংরক্ষণ" to "তৈরি; ডিভাইসে পরীক্ষা বাকি",
-            "PDF লেখা বের করা / OCR" to "এখনো তৈরি হয়নি",
-            "বাংলা অনুবাদ (স্থানীয় AI)" to "এখনো তৈরি হয়নি — মডেল ও runtime বাছাই বাকি",
+            "PDF/TXT লেখা বের করা, পৃষ্ঠা-ম্যাপ, থামা/চালু" to "তৈরি; synthetic টেস্টে যাচাইকৃত, ফোনে পরীক্ষা বাকি",
+            "স্ক্যান PDF / ছবির OCR" to "এখনো তৈরি হয়নি",
+            "বাংলা অনুবাদ (স্থানীয় Gemma 4)" to "তৈরি; ডেস্কটপে মডেল যাচাইকৃত, ফোনে চালানো হয়নি (ডিভাইস-টেস্ট বাকি)",
             "কোড ব্যাখ্যা / ভুল খোঁজা" to "এখনো তৈরি হয়নি",
             "বাংলা পড়ে শোনানো, ভয়েস কমান্ড" to "এখনো তৈরি হয়নি",
         ).forEach { (k, v) -> Text("• $k — $v", style = MaterialTheme.typography.bodySmall) }
