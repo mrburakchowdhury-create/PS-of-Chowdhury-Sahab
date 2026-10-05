@@ -13,7 +13,7 @@ export ANDROID_HOME=<sdk path>
 ## বিল্ড ও টেস্ট
 ```
 cd android-app
-./gradlew testDebugUnitTest      # ৪৫+ JVM/Robolectric টেস্ট
+./gradlew testDebugUnitTest      # ৫৪টি JVM/Robolectric টেস্ট
 ./gradlew assembleDebug          # app/build/outputs/apk/debug/app-debug.apk  (≈ 88 MB, debug)
 ./gradlew assembleRelease        # app-release-unsigned.apk (≈ 47 MB, arm64-v8a, R8 minified)
 ```

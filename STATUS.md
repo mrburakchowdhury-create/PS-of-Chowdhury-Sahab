@@ -10,7 +10,7 @@
 | Gradle wrapper 9.8.0 + distribution checksum; AGP 9.4.1, Kotlin 2.4.20, Compose BOM 2026.09.00 (Maven metadata থেকে stable) | বিল্ড সফল |
 | `assembleDebug` (≈ 88 MB) ও `assembleRelease` unsigned, R8 minified (≈ 47 MB, arm64) সফল | বিল্ড লগ |
 | merged manifest-এ `android.permission.INTERNET` নেই (debug ও release); release APK debuggable নয় | `aapt2 dump`, `ManifestSecurityTest` (INTERNET ঢুকিয়ে দেখা গেছে টেস্ট ফেল করে) |
-| ৪৫+ JVM/Robolectric টেস্ট পাস | `./gradlew testDebugUnitTest` |
+| ৫৪টি JVM/Robolectric টেস্ট পাস (০ ব্যর্থ) | `./gradlew testDebugUnitTest` |
 | signing প্রক্রিয়া (zipalign+apksigner, অস্থায়ী চাবিতে; verify পাস) | `tools/sign_release.sh`; **কোনো signed APK রিপোতে নেই** |
 | Gemma 4 E4B ও E2B: লাইসেন্স Apache-2.0, আসল ফাইল নামিয়ে সাইজ+SHA-256 মিলেছে | `docs/MODELS.md` |
 | আসল E4B মডেলে (ডেস্কটপ CPU) ইংরেজি/আরবি/উর্দু/হিন্দি→বাংলা নমুনা, কোড-ব্যাখ্যা, প্রম্পট-ইনজেকশন, QA | `docs/MODEL_EVAL.md` |
