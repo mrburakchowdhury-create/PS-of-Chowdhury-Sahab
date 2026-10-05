@@ -1,39 +1,59 @@
 # অবস্থা (শেষ হালনাগাদ: ২০২৬-১০-০৫)
 
-প্রতিটি আইটেম চারভাগে: **তৈরি** (কোড আছে) · **যাচাইকৃত** (এই সেশনে বাস্তবে চালিয়ে প্রমাণ পেয়েছি) · **ডিভাইস-টেস্ট বাকি** (S24 Ultra-তে চালানো হয়নি) · **ব্লকড**।
+প্রতিটি আইটেম চারভাগে: **তৈরি** (কোড আছে, কম্পাইল হয়) · **যাচাইকৃত** (এই সেশনে বাস্তবে চালিয়ে প্রমাণ পেয়েছি) · **ডিভাইস-টেস্ট বাকি** (S24 Ultra-তে চালানো হয়নি) · **ব্লকড**।
+**S24 Ultra-তে এখন পর্যন্ত কিছুই চালানো হয়নি।** তাই গতি, RAM, ব্যাটারি, তাপ, Keystore/বায়োমেট্রিক, voice — সবই "ডিভাইস-টেস্ট বাকি"।
 
-## পরিবেশ (বাস্তবে যাচাই)
-Java 21; Android SDK (cmdline-tools 16111833, sha1 মিলেছে; platform 35/36/37.0; build-tools 35.0.0); Gradle wrapper 9.8.0 (+ distributionSha256Sum); AGP 9.4.1, Kotlin 2.4.20, Compose BOM 2026.09.00, Tink 1.23.0 — সব Maven metadata থেকে stable যাচাই করা। নেটওয়ার্ক খোলা (HF, Maven, Google)।
+## বাস্তবে যাচাইকৃত (প্রমাণসহ)
+| বিষয় | প্রমাণ |
+|---|---|
+| Android SDK ইনস্টল (cmdline-tools sha1 মিলেছে; platform 35/36/37; build-tools 35.0.0) | `docs/BUILD.md` |
+| Gradle wrapper 9.8.0 + distribution checksum; AGP 9.4.1, Kotlin 2.4.20, Compose BOM 2026.09.00 (Maven metadata থেকে stable) | বিল্ড সফল |
+| `assembleDebug` (≈ 88 MB) ও `assembleRelease` unsigned, R8 minified (≈ 47 MB, arm64) সফল | বিল্ড লগ |
+| merged manifest-এ `android.permission.INTERNET` নেই (debug ও release); release APK debuggable নয় | `aapt2 dump`, `ManifestSecurityTest` (INTERNET ঢুকিয়ে দেখা গেছে টেস্ট ফেল করে) |
+| ৪৫+ JVM/Robolectric টেস্ট পাস | `./gradlew testDebugUnitTest` |
+| signing প্রক্রিয়া (zipalign+apksigner, অস্থায়ী চাবিতে; verify পাস) | `tools/sign_release.sh`; **কোনো signed APK রিপোতে নেই** |
+| Gemma 4 E4B ও E2B: লাইসেন্স Apache-2.0, আসল ফাইল নামিয়ে সাইজ+SHA-256 মিলেছে | `docs/MODELS.md` |
+| আসল E4B মডেলে (ডেস্কটপ CPU) ইংরেজি/আরবি/উর্দু/হিন্দি→বাংলা নমুনা, কোড-ব্যাখ্যা, প্রম্পট-ইনজেকশন, QA | `docs/MODEL_EVAL.md` |
+| Tesseract (ডেস্কটপ) ৫ ভাষার synthetic রেন্ডারে; **কোডের indentation হারায় — ধরা পড়েছে ও সামলানো হয়েছে** | `docs/OCR_EVAL.md` |
+| থার্ড-পার্টি লাইসেন্স | `docs/THIRD_PARTY.md` |
 
-## বিল্ড ও টেস্ট
-- ✅ যাচাইকৃত: `./gradlew assembleDebug` সফল (debug APK ~35 MB, `app-debug.apk`); merged manifest-এ **INTERNET নেই** (শুধু USE_BIOMETRIC, USE_FINGERPRINT)।
-- ✅ যাচাইকৃত: ১৭টি JVM/Robolectric টেস্ট পাস (PinStore ৩, নিষ্কাশন+job ৭, অনুবাদ-job/chunker/prompt/মডেল-verdict ৭)।
-- ⏳ ডিভাইস-টেস্ট বাকি: ফোনে ইনস্টল, বায়োমেট্রিক, Keystore/Tink Vault (Robolectric-এ Android Keystore নেই, তাই Vault-এর আসল এনক্রিপশন এখানে চলেনি; টেস্টে সাধারণ Tink কী ব্যবহার হয়েছে)।
-- ❌ release APK/signing: **এখনো নয়**।
+## বৈশিষ্ট্য-ভিত্তিক অবস্থা
+| ফিচার | তৈরি | যাচাইকৃত (যা বাস্তবে চলেছে) | ডিভাইস-টেস্ট বাকি / সীমা |
+|---|---|---|---|
+| PIN (PBKDF2, ক্রমবর্ধমান অপেক্ষা, ডেটা মোছে না) | ✅ | ✅ ৩টি টেস্ট | ঘড়ি বদলে অপেক্ষা এড়ানো যায় (জানা সীমা) |
+| বায়োমেট্রিক (Keystore CryptoObject; নতুন ছাপে চাবি বাতিল) | ✅ | কম্পাইল মাত্র | সবটাই ডিভাইসে |
+| এনক্রিপ্টেড Vault (Tink + Keystore), FLAG_SECURE, ইনঅ্যাক্টিভিটি লক | ✅ | আংশিক (Tink AEAD জব/টেক্সটে টেস্টকৃত; Keystore নয়) | Keystore, recents/স্ক্রিনশট |
+| PDF/TXT লেখা বের করা, পৃষ্ঠা-ম্যাপ, printed-label, চেকপয়েন্ট, pause/cancel/resume, coverage | ✅ | ✅ synthetic ৫০০/১০০০ পৃষ্ঠা (JVM: ≈ 0.7s / 1.6s — **ফোন নয়**), ফাঁকা পৃষ্ঠা UNREADABLE, রিস্টার্টে PAUSED | বাস্তব বই, নষ্ট/পাসওয়ার্ডযুক্ত PDF, RAM, low-memory |
+| OCR (Tesseract, bundled eng/ben/ara/urd/hin, sha256-যাচাই) | ✅ | ডেস্কটপে synthetic | ফোনে, বাস্তব স্ক্যান, ঝাপসা ছবি, নাস্তালিক উর্দু, হরকত |
+| কোড-স্ক্রিনশট: indentation পুনর্গঠন + সন্দেহজনক অক্ষর চিহ্ন | ✅ | ✅ আসল Tesseract box-এ ০/৪/৮ কলাম ঠিক | বাস্তব স্ক্রিনশট; শব্দের ভেতরের ফাঁক পুনর্গঠন **অসম্ভব** (শুধু অনিশ্চিত চিহ্ন) |
+| বাংলা অনুবাদ job (Chunker, per-page checkpoint, ব্যর্থ পৃষ্ঠা আলাদা, বিরতি/রিজিউম) | ✅ | ✅ লজিক (নকল অনুবাদকে) | ফোনে LiteRT-LM চালানো, গতি/RAM |
+| LiteRT-LM wrapper (`LocalLlm`), Gemma 4 | ✅ | ✅ একই মডেল ডেস্কটপে | ফোনে লোড/গতি; GPU backend অপরীক্ষিত |
+| কোড ব্যাখ্যা / ভুল খোঁজা / diff (diff অ্যাপ নিজে হিসাব করে; কোড চালানো হয় না) | ✅ | ✅ diff/ফেন্স টেস্ট; মডেল-উত্তর ডেস্কটপে | ফোনে |
+| উৎস-লিঙ্কসহ প্রশ্নোত্তর (BM25 + মডেল) | ✅ | ✅ অনুসন্ধান টেস্ট; মডেল QA ডেস্কটপে (একটি ছোট ত্রুটি নথিবদ্ধ) | সীমা: কীওয়ার্ড-ভিত্তিক, অর্থ-ভিত্তিক নয়; পুরো বই যাচাই নয় |
+| এক্সপোর্ট TXT / DOCX | ✅ | ✅ XML বৈধ, বাংলা/RTL চিহ্ন, escape, কভারেজ অংশ | **Word-এ খুলে দেখা হয়নি** |
+| এক্সপোর্ট PDF (Android text stack) | ✅ | কম্পাইল মাত্র | বাংলা যুক্তাক্ষর/আরবি আকার ফোনে |
+| পড়ে শোনানো (শুধু অফলাইন বাংলা voice; পজ/রিজিউম/গতি/অবস্থান-সংরক্ষণ) | ✅ | ✅ কার্সর-লজিক | **ফোনে অফলাইন বাংলা voice আছে কি না জানা নেই** |
+| ভয়েস কমান্ড (চেপে বলুন, on-device; নিশ্চিতকরণ) | ✅ | ✅ কমান্ড-পার্সার (১০ টেস্ট) | বাংলা ভাষা-প্যাক, মাইক |
+| পাসফ্রেজ-এনক্রিপ্টেড ব্যাকআপ/রিকভারি | ✅ | ✅ কন্টেইনার: ভুল পাসফ্রেজ/বাইট-বদল/ফাইল-ভুল ধরা পড়ে | পূর্ণ create→restore ফোনে |
+| স্টোরেজ ব্যবহার প্যানেল, ক্যাশ মোছা | ✅ | কম্পাইল মাত্র | ফোনে |
 
-## ধাপ ১ — ভিত্তি
-- তৈরি+যাচাইকৃত(কম্পাইল): PIN (PBKDF2, ক্রমবর্ধমান অপেক্ষা, ডেটা মোছে না — টেস্ট পাস), FLAG_SECURE, ইনঅ্যাক্টিভিটি লক, এনক্রিপ্টেড Vault, মডেল import।
-- ডিভাইস-টেস্ট বাকি: উপরের সবটার আসল ফোনে আচরণ।
-- জানা সীমা: বায়োমেট্রিক এখনো Keystore CryptoObject-এ বাঁধা নয়; PIN-recovery নেই; PIN-লক ঘড়ির ওপর নির্ভর করে।
+## ❌ এখনো নেই (সৎ তালিকা)
+- ব্যাকগ্রাউন্ড/স্ক্রিন-অফ প্লেব্যাক, foreground notification, ইয়ারফোন কন্ট্রোল, অডিও ক্যাশ-সীমা
+- DOCX/EPUB/XLSX/PPTX/ছবি-ফাইল import (শুধু PDF, TXT); ছবি import শুধু কোড-স্ক্রিনে
+- glossary, নোট, বুকমার্ক, শব্দভান্ডার, নির্বাচিত শব্দ/লাইন ধরে প্রশ্ন, practice questions
+- semantic (embedding) অনুসন্ধান; SQLCipher; হাইলাইটসহ মূল PDF viewer
+- ক্যামেরা দিয়ে ছবি তোলা; ছবির zoom/crop/rotate
+- TTS/STT-এর জন্য sherpa-onnx/Whisper-জাতীয় নিজস্ব অফলাইন মডেল (ফোনের বাংলা voice না থাকলে বিকল্প নেই)
+- signed release APK (চাবি আপনি বানাবেন), CI-এর সবুজ রান (লিখেছি, চালিয়ে দেখিনি)
+- S24 Ultra-র কোনো পরীক্ষা বা পারফরম্যান্স সংখ্যা
 
-## ধাপ ২ — PDF
-- তৈরি+যাচাইকৃত (synthetic): `PdfExtractor` (pdfbox-android 2.0.27.0, পৃষ্ঠা-প্রতি, temp-file বাফার, password/malformed শনাক্ত), `JobState/JobStore` (এনক্রিপ্টেড চেকপয়েন্ট, atomic write, রিস্টার্টে RUNNING→PAUSED), `ExtractionJob` (pause/cancel/resume, সম্পন্ন পৃষ্ঠা পুনরায় নয়), coverage report, printed page label পড়া।
-- যাচাই ফল (build-machine JVM, **ফোন নয়**): synthetic ৫০০ পৃষ্ঠা ≈ ০.৭ সে., ১০০০ পৃষ্ঠা ≈ ১.৬ সে.; ফাঁকা পৃষ্ঠা UNREADABLE হিসেবে ধরা পড়ে, বানানো হয় না।
-- ⏳ বাকি/ব্লকড-নয়-তবে-অসম্পূর্ণ: **OCR এখনো নেই** (স্ক্যান PDF-এ UNREADABLE দেখায়)। Tesseract4Android (JitPack, 4.8.0) প্রার্থী; আরবি/উর্দু/বাংলা মান যাচাই হয়নি। প্রকৃত বই ও স্ক্যান PDF, বিভিন্ন encoding/font-এ pdfbox-এর আচরণ যাচাই হয়নি। Page-সংখ্যা ও ভাষা-ভিত্তিক RTL ক্রম যাচাই বাকি।
-- ⏳ UI: PDF import থেকে নিষ্কাশন চালানোর বাটন/অগ্রগতি স্ক্রিন এখনো অ্যাপে যুক্ত নয়।
+## ব্লকড / আপনার সিদ্ধান্ত লাগবে
+1. **অফলাইন বাংলা TTS**: ফোনে Google TTS-এর বাংলা voice নামানো আছে কি না আমি জানি না। না থাকলে বিকল্প মডেল লাগবে — MMS-TTS বাংলা `cc-by-nc-4.0` (অবাণিজ্যিক শর্ত)। ব্যক্তিগত ব্যবহারে আপনি তা গ্রহণ করবেন কি না জানান।
+2. **signed release**: কী আপনার কাছে — `docs/BUILD.md`-র নির্দেশ অনুযায়ী বানান।
+3. **ফোনে পরীক্ষা**: ইনস্টল করে `docs/DEVICE_TEST_CHECKLIST.md` চালিয়ে ফলাফল জানালে বাকি সংখ্যা ও ত্রুটি ঠিক করা যাবে। (এই পরিবেশে ইমুলেটর চালানো যায় না: KVM নেই।)
 
-## ধাপ ৩ — মডেল ও অনুবাদ
-- ✅ যাচাইকৃত (বাস্তবে নামিয়ে): Gemma 4 E4B ও E2B `.litertlm` — লাইসেন্স Apache-2.0, সাইজ ও SHA-256 নিজে হিসাব করে মিলেছে → `docs/MODELS.md`।
-- ✅ যাচাইকৃত (ডেস্কটপ CPU, ফোন নয়): আসল E4B মডেলে ইংরেজি/আরবি/উর্দু/হিন্দি→বাংলা নমুনা ও কোড-ব্যাখ্যা ঠিকঠাক চলেছে; প্রম্পট-ইনজেকশন নমুনায় নির্দেশ মানা হয়নি → `docs/MODEL_EVAL.md`। ছোট নমুনা, চূড়ান্ত মানের প্রমাণ নয়।
-- তৈরি (কম্পাইল হয়, ফোনে চলেনি): `LocalLlm` (LiteRT-LM 0.17.1 wrapper, load/cancel/close), `Prompts`, `Chunker`, `TranslationJob` (fake translator-এ লজিক যাচাইকৃত), `KnownModels` (import-এ official checksum মিলানো — UI-তে এখনো দেখানো হয়নি)।
-- ⏳ ডিভাইস-টেস্ট বাকি: S24 Ultra-তে লোড সময়, tokens/sec, peak RAM, তাপ। (মডেল-কার্ডের সংখ্যা S26 Ultra-র, আপনার ফোনের নয়।)
-- বাকি: অনুবাদ-job-এর UI/glossary, পাশাপাশি original-অনুবাদ viewer, TXT/DOCX/PDF export, কোড diff UI।
-
-## ধাপ ৪–৬ — এখনো **শুরু হয়নি**
-TTS/STT, ভয়েস কমান্ড, grounded Q&A, ব্যাকগ্রাউন্ড প্লেব্যাক, recovery/backup, export, কোড-স্ক্রিনশট OCR, release signing, ব্যবহারবিধি, ডিভাইস-টেস্ট চেকলিস্ট। কোনোটিকে সম্পন্ন বলা হচ্ছে না।
-
-## পরবর্তী ধাপ (ক্রম)
-1. অ্যাপে import→নিষ্কাশন→অনুবাদ UI যুক্ত করা (বাটন, অগ্রগতি, pause/resume/cancel, coverage)।
-2. OCR (Tesseract4Android) যাচাই: ara/urd/ben/eng traineddata লাইসেন্স+সাইজ+checksum।
-3. TTS/STT প্রার্থী যাচাই (ডিভাইসের অফলাইন বাংলা voice; sherpa-onnx)।
-4. ডিভাইস-টেস্ট চেকলিস্ট ও release signing (কী আপনার কাছে)।
+## পরবর্তী কাজ (ক্রম)
+1. ডিভাইস-টেস্ট ফল অনুযায়ী ত্রুটি ঠিক (বিশেষত Keystore Vault, মডেল লোড, OCR, TTS)।
+2. ব্যাকগ্রাউন্ড playback সার্ভিস (MediaSession, private-নোটিফিকেশন) ও অডিও-ক্যাশ সীমা।
+3. DOCX/EPUB/ছবি import; glossary; নোট/বুকমার্ক; নির্বাচিত-শব্দ প্রশ্ন।
+4. CI চালিয়ে সবুজ করা।

@@ -1,14 +1,22 @@
-# স্থাপত্য ও উপাদান-প্রার্থী (যাচাই বাকি)
+# স্থাপত্য (বাস্তবে যা আছে)
 
-> নিচের সবই **প্রার্থী**। নেটওয়ার্ক ব্লক থাকায় লাইসেন্স, ফাইল সাইজ, checksum ও বাংলা মান এখনো যাচাই হয়নি; কোনো সংখ্যা বা লিংক বানানো হয়নি।
-
-| কাজ | প্রার্থী | যাচাই বাকি |
-|---|---|---|
-| বাংলা অনুবাদ/ব্যাখ্যা/কোড | Gemma-পরিবারের on-device ভ্যারিয়েন্ট (LiteRT/MediaPipe LLM) অথবা llama.cpp + GGUF | লাইসেন্স শর্ত, S24 Ultra-তে গতি/RAM, আরবি/উর্দু→বাংলা মান |
-| OCR | ML Kit (লাতিন, দেবনাগরী) — **আরবি/উর্দু/বাংলা সমর্থন নেই বলে জানা আছে**; তাই Tesseract (Android বাইন্ডিং) + `ara`, `urd`, `ben` ডেটা | লাইসেন্স, নির্ভুলতা |
-| PDF টেক্সট | pdfbox-android (Apache-2.0); রেন্ডার: android PdfRenderer। MuPDF বাদ (AGPL) | বড় ফাইলে স্ট্রিমিং |
-| বাংলা TTS | ডিভাইসের offline বাংলা voice (Google/Samsung TTS) অথবা sherpa-onnx + বাংলা মডেল | offline voice আছে কি, মডেল লাইসেন্স |
-| STT (বাংলা) | whisper.cpp-ধরনের স্থানীয় মডেল / Vosk | বাংলা মান |
-| এনক্রিপশন | Tink streaming AEAD + Keystore (করা হয়েছে); ডাটাবেস: SQLCipher (পরের ধাপ) | — |
-
-নীতি: মডেল একসঙ্গে লোড হবে না; job queue checkpoint-সহ; কোনো cloud fallback নয়।
+```
+MainActivity ── Compose UI (ui/*): App(lock) → Home → DocScreen[Reader, Q&A] / CodeScreen
+security/  PinStore (PBKDF2, delay) · BiometricGate (Keystore CryptoObject, invalidates on new enrollment)
+storage/   Vault (Tink AES-GCM-HKDF streaming + Keystore master key) · ModelStore · KnownModels (official sha256) · StorageStats
+doc/       PdfExtractor (pdfbox-android, per page) · ExtractionJob · PageTextStore · DocWorkflow (glue; explicit buttons only)
+jobs/      JobState (per-page status, coverage) · JobStore (encrypted, atomic checkpoints; RUNNING→PAUSED after restart)
+ocr/       TesseractOcr (bundled tessdata, sha256-verified) · OcrJob (only UNREADABLE pages) · CodeReconstructor (indent from boxes)
+ai/        LocalLlm (LiteRT-LM, Gemma 4) · Prompts (<DOC> data wrapping) · Chunker · TranslationJob · Bm25Index · CodeDiff
+speech/    TtsReader (offline Bengali voice only) · VoiceInput (on-device recognizer only) · VoiceCommands · ReadingPlan
+export/    Exporter (TXT, DOCX) · PdfExport (Android text stack)
+backup/    PassphraseBackup (PBKDF2 → Tink streaming, authenticated header) · BackupService
+```
+## নীতি (কোডে প্রয়োগ করা)
+- INTERNET permission নেই; `ManifestSecurityTest` + CI + `sign_release.sh` merged manifest-এ নজর রাখে।
+- মডেল ও OCR/TTS/STT কোথাও cloud fallback নেই: voice না পেলে বা ভাষা-প্যাক না থাকলে বার্তা দেখায়।
+- একসঙ্গে একটি ভারী মডেল: `LocalLlm` ব্যবহারের শেষে `close()`; OCR শেষে `close()`; স্ক্রিন ছাড়লে TTS/মাইক মুক্ত।
+- সব দীর্ঘ কাজ বাটন-চালিত, চেকপয়েন্টসহ; নিজে থেকে পুনরায় শুরু হয় না।
+- ডকুমেন্টের লেখা `<DOC>` ট্যাগে তথ্য হিসেবে যায়; ভেতরের `</DOC>` নিষ্ক্রিয় করা হয়; মডেলের কোনো টুল/নেটওয়ার্ক নেই।
+## এখনো নেই
+ব্যাকগ্রাউন্ড প্লেব্যাক সার্ভিস/নোটিফিকেশন, DOCX/EPUB/XLSX/PPTX/ছবি ফাইল import, glossary, নোট/বুকমার্ক, নির্বাচিত-শব্দ প্রশ্ন, semantic embedding অনুসন্ধান, SQLCipher।
