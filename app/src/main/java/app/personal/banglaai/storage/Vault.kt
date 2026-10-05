@@ -60,6 +60,10 @@ class Vault(private val context: Context) {
         }
     }
 
+    /** Small-blob encryption for derived data (job checkpoints, page text). [aad] binds the blob to its owner id. */
+    fun seal(plain: ByteArray, aad: ByteArray): ByteArray = sealWith(aead, plain, aad)
+    fun unseal(blob: ByteArray, aad: ByteArray): ByteArray = unsealWith(aead, blob, aad)
+
     /** Decrypting stream for later stages (extraction, viewer). Caller must close it. */
     fun open(id: String) = aead.newDecryptingStream(FileInputStream(File(dir, "$id.enc")), id.toByteArray())
 
@@ -92,5 +96,14 @@ class Vault(private val context: Context) {
         check(tmp.renameTo(indexFile)) { "ইনডেক্স সংরক্ষণ ব্যর্থ" }
     }
 
-    private companion object { const val MIN_FREE = 200L * 1024 * 1024 }
+    companion object {
+        fun sealWith(a: StreamingAead, plain: ByteArray, aad: ByteArray): ByteArray {
+            val bo = java.io.ByteArrayOutputStream()
+            a.newEncryptingStream(bo, aad).use { it.write(plain) }
+            return bo.toByteArray()
+        }
+        fun unsealWith(a: StreamingAead, blob: ByteArray, aad: ByteArray): ByteArray =
+            a.newDecryptingStream(java.io.ByteArrayInputStream(blob), aad).use { it.readBytes() }
+        private const val MIN_FREE = 200L * 1024 * 1024
+    }
 }

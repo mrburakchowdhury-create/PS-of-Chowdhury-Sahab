@@ -21,6 +21,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
 }
 
 dependencies {
@@ -32,4 +33,9 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.9.1")   // BiometricPrompt needs FragmentActivity
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("com.google.crypto.tink:tink-android:1.23.0")
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("androidx.test:core:1.7.0")
 }
