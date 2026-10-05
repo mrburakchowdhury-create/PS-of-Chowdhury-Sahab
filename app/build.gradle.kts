@@ -34,6 +34,8 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("com.google.crypto.tink:tink-android:1.23.0")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.17.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.17")
