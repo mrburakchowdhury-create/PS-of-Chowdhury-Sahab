@@ -1,0 +1,96 @@
+package app.personal.banglaai.storage
+
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
+import com.google.crypto.tink.KeyTemplates
+import com.google.crypto.tink.StreamingAead
+import com.google.crypto.tink.integration.android.AndroidKeysetManager
+import com.google.crypto.tink.streamingaead.StreamingAeadConfig
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.util.UUID
+
+data class VaultDoc(val id: String, val name: String, val size: Long, val added: Long)
+
+/**
+ * Encrypted store for imported originals. Files are streamed through AES-256-GCM (Tink streaming AEAD);
+ * the keyset is wrapped by an Android Keystore key. Lives in no-backup storage. Originals are never modified.
+ * The document index (names) is encrypted as well.
+ */
+class Vault(private val context: Context) {
+    private val dir = File(context.noBackupFilesDir, "vault").apply { mkdirs() }
+    private val indexFile = File(dir, "index.enc")
+
+    private val aead: StreamingAead by lazy {
+        StreamingAeadConfig.register()
+        AndroidKeysetManager.Builder()
+            .withSharedPref(context, "vault_keyset", "vault_keyset_prefs")
+            .withKeyTemplate(KeyTemplates.get("AES256_GCM_HKDF_4KB"))
+            .withMasterKeyUri("android-keystore://banglaai_vault_master")
+            .build().keysetHandle.getPrimitive(StreamingAead::class.java)
+    }
+
+    @Synchronized fun list(): List<VaultDoc> = readIndex().sortedByDescending { it.added }
+
+    /** Copies the user-chosen file into the vault, encrypted. Throws on failure and leaves no plaintext/partial file. */
+    @Synchronized fun import(uri: Uri): VaultDoc {
+        val (name, declared) = queryMeta(uri)
+        require(declared < 0 || dir.usableSpace > declared + MIN_FREE) { "ফোনে পর্যাপ্ত খালি জায়গা নেই" }
+        val id = UUID.randomUUID().toString()
+        val tmp = File(dir, "$id.tmp"); val out = File(dir, "$id.enc")
+        try {
+            val input = context.contentResolver.openInputStream(uri) ?: error("ফাইল খোলা যায়নি")
+            var total = 0L
+            input.use { src ->
+                aead.newEncryptingStream(FileOutputStream(tmp), id.toByteArray()).use { dst ->
+                    val buf = ByteArray(64 * 1024)
+                    while (true) { val n = src.read(buf); if (n < 0) break; dst.write(buf, 0, n); total += n }
+                }
+            }
+            check(tmp.renameTo(out)) { "সংরক্ষণ ব্যর্থ" }
+            val doc = VaultDoc(id, name, total, System.currentTimeMillis())
+            writeIndex(readIndex() + doc)
+            return doc
+        } catch (e: Throwable) {
+            tmp.delete(); out.delete(); throw e
+        }
+    }
+
+    /** Decrypting stream for later stages (extraction, viewer). Caller must close it. */
+    fun open(id: String) = aead.newDecryptingStream(FileInputStream(File(dir, "$id.enc")), id.toByteArray())
+
+    @Synchronized fun delete(id: String) {
+        File(dir, "$id.enc").delete(); File(dir, "$id.tmp").delete()
+        writeIndex(readIndex().filterNot { it.id == id })
+    }
+
+    private fun queryMeta(uri: Uri): Pair<String, Long> {
+        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+            if (c.moveToFirst()) {
+                val n = c.getColumnIndex(OpenableColumns.DISPLAY_NAME); val s = c.getColumnIndex(OpenableColumns.SIZE)
+                return (if (n >= 0) c.getString(n) else null).orEmpty().ifBlank { "ফাইল" } to (if (s >= 0 && !c.isNull(s)) c.getLong(s) else -1L)
+            }
+        }
+        return "ফাইল" to -1L
+    }
+
+    private fun readIndex(): List<VaultDoc> {
+        if (!indexFile.exists()) return emptyList()
+        val text = aead.newDecryptingStream(FileInputStream(indexFile), "index".toByteArray()).use { String(it.readBytes(), Charsets.UTF_8) }
+        val arr = JSONArray(text)
+        return (0 until arr.length()).map { arr.getJSONObject(it).let { o -> VaultDoc(o.getString("id"), o.getString("name"), o.getLong("size"), o.getLong("added")) } }
+    }
+
+    private fun writeIndex(docs: List<VaultDoc>) {
+        val arr = JSONArray(); docs.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("size", it.size).put("added", it.added)) }
+        val tmp = File(dir, "index.tmp")
+        aead.newEncryptingStream(FileOutputStream(tmp), "index".toByteArray()).use { it.write(arr.toString().toByteArray(Charsets.UTF_8)) }
+        check(tmp.renameTo(indexFile)) { "ইনডেক্স সংরক্ষণ ব্যর্থ" }
+    }
+
+    private companion object { const val MIN_FREE = 200L * 1024 * 1024 }
+}
