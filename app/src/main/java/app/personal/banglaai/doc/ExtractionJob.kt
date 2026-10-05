@@ -12,7 +12,7 @@ class PageTextStore(private val dir: File, private val seal: (ByteArray, ByteArr
     init { dir.mkdirs() }
     private fun f(docId: String, page: Int) = File(File(dir, docId).apply { mkdirs() }, "$page.txt.enc")
     fun put(docId: String, p: PageText) {
-        val body = org.json.JSONObject().put("t", p.text).put("l", p.printedLabel ?: org.json.JSONObject.NULL).toString()
+        val body = org.json.JSONObject().put("t", p.text).put("l", p.printedLabel ?: org.json.JSONObject.NULL).put("o", p.ocr).toString()
         val tmp = File(f(docId, p.page).path + ".tmp")
         tmp.writeBytes(seal(body.toByteArray(Charsets.UTF_8), "$docId/${p.page}".toByteArray()))
         check(tmp.renameTo(f(docId, p.page)))
@@ -20,7 +20,7 @@ class PageTextStore(private val dir: File, private val seal: (ByteArray, ByteArr
     fun get(docId: String, page: Int): PageText? {
         val x = f(docId, page); if (!x.exists()) return null
         val o = org.json.JSONObject(String(unseal(x.readBytes(), "$docId/$page".toByteArray()), Charsets.UTF_8))
-        return PageText(page, o.getString("t"), if (o.isNull("l")) null else o.getString("l"))
+        return PageText(page, o.getString("t"), if (o.isNull("l")) null else o.getString("l"), ocr = o.optBoolean("o", false))
     }
     fun deleteDoc(docId: String) { File(dir, docId).deleteRecursively() }
 }

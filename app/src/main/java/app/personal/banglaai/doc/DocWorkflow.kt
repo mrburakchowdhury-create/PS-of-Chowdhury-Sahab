@@ -7,6 +7,8 @@ import app.personal.banglaai.ai.TranslationJob
 import app.personal.banglaai.jobs.JobState
 import app.personal.banglaai.jobs.JobStatus
 import app.personal.banglaai.jobs.JobStore
+import app.personal.banglaai.ocr.OcrJob
+import app.personal.banglaai.ocr.TesseractOcr
 import app.personal.banglaai.storage.KnownModels
 import app.personal.banglaai.storage.ModelStore
 import app.personal.banglaai.storage.Vault
@@ -26,6 +28,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     @Volatile private var extraction: ExtractionJob? = null
     @Volatile private var translation: TranslationJob? = null
     @Volatile private var llm: LocalLlm? = null
+    @Volatile private var ocrJob: OcrJob? = null
 
     enum class Kind(val key: String) { Extract("extract"), Translate("translate") }
     fun jobId(doc: VaultDoc, k: Kind) = "${doc.id}-${k.key}"
@@ -33,8 +36,8 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
 
     fun isSupported(doc: VaultDoc) = doc.name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".txt") }
 
-    fun pause() { extraction?.pause(); translation?.pause(); llm?.cancel() }
-    fun cancel() { extraction?.cancel(); translation?.cancel(); llm?.cancel() }
+    fun pause() { extraction?.pause(); translation?.pause(); ocrJob?.pause(); llm?.cancel() }
+    fun cancel() { extraction?.cancel(); translation?.cancel(); ocrJob?.cancel(); llm?.cancel() }
 
     /** Blocking; call on a background thread. Safe to call again to resume (finished pages are skipped). */
     fun extract(doc: VaultDoc, retryFailed: Boolean, onProgress: (Int, Int) -> Unit): JobStatus {
@@ -55,6 +58,20 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
                 }
             }
         } finally { extraction = null; tmp.deleteRecursively() }   // never leave plaintext temp data behind
+    }
+
+    /** OCR only for pages the text extraction found empty. Explicit button only. PDF documents only. */
+    fun ocr(doc: VaultDoc, langs: List<TesseractOcr.Lang>, onProgress: (Int, Int) -> Unit): JobStatus {
+        require(doc.name.lowercase().endsWith(".pdf")) { "OCR এখন শুধু PDF-এর জন্য (ছবি import পরের ধাপ)" }
+        val job = job(doc, Kind.Extract) ?: error("আগে 'লেখা বের করুন' চালান")
+        val tmp = File(context.cacheDir, "pdf-${doc.id}")
+        try {
+            PdfExtractor.init(context)
+            val opened = vault.open(doc.id).use { PdfExtractor.open(it, tmp) } as? PdfExtractor.OpenResult.Ok ?: error("PDF খোলা যায়নি")
+            opened.extractor.use { ex -> TesseractOcr(context).use { t ->
+                return OcrJob(job, ex, t, langs, texts, jobs).also { ocrJob = it }.run(onProgress)
+            } }
+        } finally { ocrJob = null; tmp.deleteRecursively() }
     }
 
     private fun extractTxt(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
