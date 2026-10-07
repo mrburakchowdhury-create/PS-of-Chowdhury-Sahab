@@ -123,6 +123,24 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () 
     }
 }
 
+/** First thing on Home: says plainly what is missing (usually the AI model) and gives one-tap access to the assistant and the phone check. */
+@Composable
+private fun StartCard(hasModel: Boolean, hasFiles: Boolean, busy: Boolean, onModel: () -> Unit, onChat: () -> Unit, onDiag: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("শুরুর ধাপ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text((if (hasModel) "✅" else "❌") + " AI মডেল " + (if (hasModel) "বসানো আছে" else "বসানো নেই — এটি ছাড়া অনুবাদ, উত্তর, ব্যাখ্যা কিছুই চলবে না"), style = MaterialTheme.typography.bodyMedium)
+        if (!hasModel) {
+            Text("কম্পিউটারে মডেল (≈ 3.66 GB) নামিয়ে ফোনের Downloads-এ কপি করুন (লিংক ও checksum: docs/MODELS.md), তারপর নিচের বাটন চাপুন।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(enabled = !busy, onClick = onModel) { Text("মডেল ফাইল বসান") }
+        }
+        Text((if (hasFiles) "✅" else "ℹ️") + " ফাইল " + (if (hasFiles) "যোগ করা আছে" else "এখনো যোগ করা হয়নি (ঐচ্ছিক — সরাসরি প্রশ্ন/অনুবাদ ফাইল ছাড়াই চলে)"), style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onChat) { Text("💬 সহকারী (প্রশ্ন / অনুবাদ)") }
+            OutlinedButton(onClick = onDiag) { Text("🩺 ফোন পরীক্ষা") }
+        }
+    } }
+}
+
 @Composable
 private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Float, onFontScale: (Float) -> Unit) {
     val scope = rememberCoroutineScope()
@@ -132,6 +150,9 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     val workflow = remember { DocWorkflow(activity, vault, models) }
     var openDoc by remember { mutableStateOf<VaultDoc?>(null) }
     var codeOpen by remember { mutableStateOf(false) }
+    var chatOpen by remember { mutableStateOf(false) }
+    var chatStart by remember { mutableStateOf<String?>(null) }
+    var diagOpen by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val refresh: suspend () -> Unit = { docs = withContext(Dispatchers.IO) { runCatching { vault.list() }.getOrDefault(emptyList()) }; modelList = withContext(Dispatchers.IO) { models.list() } }
@@ -178,6 +199,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
 
     var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
     openDoc?.let { d -> DocScreen(d, workflow, pendingCmd) { openDoc = null; pendingCmd = null }; return }
+    if (chatOpen) { ChatScreen(workflow, activity.cacheDir, chatStart) { chatOpen = false; chatStart = null }; return }
+    if (diagOpen) { DiagnosticsScreen(workflow, activity.cacheDir) { diagOpen = false }; return }
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Image(painterResource(R.drawable.home_banner), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
@@ -194,7 +217,9 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
 
-        HomeVoice(docs) { d, then -> pendingCmd = then; openDoc = d }
+        StartCard(hasModel = workflow.usableModel() != null, hasFiles = docs.isNotEmpty(), busy = busy != null,
+            onModel = { pickModel.launch(arrayOf("*/*")) }, onChat = { chatStart = null; chatOpen = true }, onDiag = { diagOpen = true })
+        HomeVoice(docs, { d, then -> pendingCmd = then; openDoc = d }) { q -> chatStart = q; chatOpen = true }
 
         Button(onClick = { codeOpen = true }) { Text("কোড বিশ্লেষণ / ছবি থেকে কোড") }
         SectionTitle("আমার ফাইল (এনক্রিপ্টেড)")

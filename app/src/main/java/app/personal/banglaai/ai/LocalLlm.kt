@@ -31,6 +31,16 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File) : AutoCl
         try { return conv.sendMessage(prompt).toString() } finally { current = null; conv.close() }
     }
 
+    /** Streaming answer: [onText] gets each new piece as the model writes it. Call from a background coroutine (loading the model can take many seconds). */
+    suspend fun askStream(system: String, prompt: String, onText: (String) -> Unit) {
+        load()
+        val conv = engine!!.createConversation(ConversationConfig(systemInstruction = Contents.of(system)))
+        current = conv
+        try { conv.sendMessageAsync(prompt).collect { onText(it.toString()) } } finally { current = null; conv.close() }
+    }
+
+    val isLoaded get() = engine != null
+
     /** Stops the running generation (used by pause/cancel). */
     fun cancel() { current?.cancelProcess() }
 

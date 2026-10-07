@@ -50,8 +50,14 @@ class ScreenshotTest {
         rule.onNodeWithText("PIN সেট করুন").performClick(); rule.waitForIdle()
         shot("3_home")
         rule.onNodeWithText("নির্দেশ (লিখেও দিতে পারেন / শোনা লেখা ঠিক করুন)").performTextInput("ইতিহাস ফাইলটা খোলো এবং পনেরো নম্বর পৃষ্ঠা থেকে পড়া শুরু করো")
-        rule.onNodeWithText("নির্দেশ বুঝে নিন").performClick(); rule.waitForIdle(); shot("4_home_voice")
+        rule.onNodeWithText("পাঠান").performScrollTo().performClick(); rule.waitForIdle(); shot("4_home_voice")
         rule.onNodeWithText("ফিচারের অবস্থা (সৎ তালিকা)").performScrollTo(); rule.waitForIdle(); shot("5_home_status")
+        rule.onNodeWithText("💬 সহকারী (প্রশ্ন / অনুবাদ)").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithText("প্রশ্ন").performTextInput("ইসলামে জ্ঞান অর্জনের গুরুত্ব কী?")
+        rule.onNodeWithText("পাঠান").performClick(); rule.waitForIdle(); shot("7_chat_no_model")
+        rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
+        rule.onNodeWithText("🩺 ফোন পরীক্ষা").performScrollTo().performClick(); rule.waitForIdle(); shot("8_diagnostics")
+        rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
         rule.onNodeWithText("🔒 বন্ধ করুন").performScrollTo().performClick(); rule.waitForIdle(); shot("6_locked")
     }
 }

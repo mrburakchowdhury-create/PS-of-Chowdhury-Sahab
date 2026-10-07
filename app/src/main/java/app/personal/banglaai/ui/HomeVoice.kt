@@ -17,7 +17,7 @@ import app.personal.banglaai.storage.VaultDoc
  * the owner taps confirm (or taps one of several matching names). The app cannot be opened or unlocked by voice from outside — see the user guide (Bixby).
  */
 @Composable
-fun HomeVoice(docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit) {
+fun HomeVoice(docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit, onAsk: (String) -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val voice = remember { VoiceInput(ctx) }
     DisposableEffect(Unit) { onDispose { voice.stop() } }
@@ -28,6 +28,8 @@ fun HomeVoice(docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit) {
 
     fun interpret(text: String) {
         val c = VoiceCommands.parse(text); cmd = c; msg = null
+        // Not a file/reading command -> it is a question for the assistant (answered by the local model only).
+        if (c is VoiceCommand.Unknown) { cmd = null; onAsk(text.trim()); return }
         if (VoiceCommands.safeWithoutConfirm(c)) { if (c == VoiceCommand.Stop) ReadAloudController.stop() else ReadAloudController.pause(); cmd = null }
     }
     fun listen() {
@@ -38,13 +40,13 @@ fun HomeVoice(docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit) {
     val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) listen() else msg = "মাইক্রোফোনের অনুমতি ছাড়া ভয়েস চলবে না। নিচের ঘরে লিখে নির্দেশ দিন।" }
 
     SectionTitle("ভয়েস নির্দেশ")
-    Text("যেমন: “ইতিহাস ফাইলটা খোলো এবং পনেরো নম্বর পৃষ্ঠা থেকে পড়া শুরু করো”। বলার পর লেখা দেখে নিশ্চিত করতে হয়।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text("ফাইল-নির্দেশ (“ইতিহাস ফাইলটা খোলো এবং পনেরো নম্বর পৃষ্ঠা থেকে পড়া শুরু করো”) বা যেকোনো প্রশ্ন লিখুন/বলুন — প্রশ্ন হলে সহকারী স্থানীয় AI দিয়ে উত্তর দেবে।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Button(enabled = !listening, onClick = { micPerm.launch(Manifest.permission.RECORD_AUDIO) }) { Text(if (listening) "🎤 শুনছি…" else "🎤 চেপে বলুন") }
         if (listening) OutlinedButton(onClick = { voice.stop(); listening = false }) { Text("মাইক বন্ধ") }
     }
     OutlinedTextField(transcript, { transcript = it }, label = { Text("নির্দেশ (লিখেও দিতে পারেন / শোনা লেখা ঠিক করুন)") }, modifier = Modifier.fillMaxWidth())
-    Button(enabled = transcript.isNotBlank(), onClick = { interpret(transcript) }) { Text("নির্দেশ বুঝে নিন") }
+    Button(enabled = transcript.isNotBlank(), onClick = { interpret(transcript) }) { Text("পাঠান") }
     msg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     cmd?.let { c ->
         Text("বোঝা গেছে: ${describe(c)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
@@ -54,7 +56,8 @@ fun HomeVoice(docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit) {
                 is FileMatcher.Result.One -> Button(onClick = { onOpen(docs.first { it.name == r.name }, c.then); cmd = null }) { Text("নিশ্চিত — “${r.name}” খুলুন") }
                 is FileMatcher.Result.Many -> { Text("একাধিক ফাইল মিলেছে — কোনটি?"); r.names.forEach { n -> OutlinedButton(onClick = { onOpen(docs.first { it.name == n }, c.then); cmd = null }, modifier = Modifier.fillMaxWidth()) { Text(n) } } }
             }
-            is VoiceCommand.Ambiguous, is VoiceCommand.Unknown -> {}
+            is VoiceCommand.Ambiguous -> {}
+            is VoiceCommand.Unknown -> {}   // never reached: unknown text is sent to the assistant right away (see interpret)
             VoiceCommand.Resume, VoiceCommand.Slower, VoiceCommand.Faster, VoiceCommand.Repeat, is VoiceCommand.ReadPage, is VoiceCommand.ReadChapter, VoiceCommand.Explain ->
                 Text("এই নির্দেশের জন্য আগে ফাইল খুলতে হবে। বলুন: “… ফাইলটা খোলো”।", style = MaterialTheme.typography.bodySmall)
             else -> {}
