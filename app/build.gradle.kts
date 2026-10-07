@@ -8,7 +8,7 @@ android {
     compileSdk = 37
     defaultConfig {
         applicationId = "app.personal.banglaai"
-        minSdk = 29
+        minSdk = 31
         targetSdk = 35
         versionCode = 1
         versionName = "0.2.0-dev"
@@ -16,7 +16,7 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = true; isDebuggable = false
+            isMinifyEnabled = true; isShrinkResources = true; isDebuggable = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

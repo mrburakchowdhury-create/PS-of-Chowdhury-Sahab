@@ -39,6 +39,12 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
     var tick by remember { mutableIntStateOf(0) }
     var modelTest by remember { mutableStateOf<String?>(null) }
     var testing by remember { mutableStateOf(false) }
+    // This screen shows no private data, so screenshots are allowed here (so it can be sent for diagnosis); the secure flag returns on leaving.
+    DisposableEffect(Unit) {
+        val w = (ctx as? android.app.Activity)?.window
+        w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { w?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
+    }
     ReadAloudController.get(ctx)   // starts the TTS engine so its state below is real
     val ttsState = ReadAloudController.state
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1500); tick++ } }
@@ -78,6 +84,13 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
                 Text(f.detail, style = MaterialTheme.typography.bodyMedium)
             } }
         }
+        SectionTitle("AI চালানোর উপায়: CPU নাকি GPU")
+        var gpu by remember { mutableStateOf(LocalLlm.preferGpu) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !gpu, onClick = { gpu = false; LocalLlm.preferGpu = false; ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean("gpu", false).apply() }, label = { Text("CPU (নিরাপদ, ডিফল্ট)") })
+            FilterChip(selected = gpu, onClick = { gpu = true; LocalLlm.preferGpu = true; ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean("gpu", true).apply() }, label = { Text("GPU (কম RAM, পরীক্ষামূলক)") })
+        }
+        Text("GPU বেছে 'মডেল পরীক্ষা' চালান: ঠিকমতো চললে ও দ্রুত হলে GPU-ই রাখুন। শুরু না হলে অ্যাপ নিজে CPU-তে ফিরে যাবে ও কারণ লিখবে (তবে GPU-ড্রাইভার ক্র্যাশ করলে অ্যাপ বন্ধ হতে পারে — তখন আবার খুলে CPU বেছে নিন)।", style = MaterialTheme.typography.bodySmall)
         SectionTitle("মডেল পরীক্ষা (লোড + একটি বাক্য)")
         Text("মডেল সত্যিই লোড হয়ে বাংলা বলতে পারে কি না, কত সময় লাগে ও কত মেমরি নেয় — এখানে মাপা হবে। প্রথমবার এক মিনিটের মতো লাগতে পারে; অ্যাপ বন্ধ করবেন না।", style = MaterialTheme.typography.bodySmall)
         Button(enabled = !testing && wf.usableModel() != null, onClick = {
@@ -95,7 +108,7 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
                         val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
                         val pss = am.getProcessMemoryInfo(intArrayOf(android.os.Process.myPid())).firstOrNull()?.totalPss?.div(1024) ?: -1
                         llm.close()
-                        sb.append("✅ সফল\nমডেল লোড: %.1f সে.\nপ্রথম লেখা আসতে: %.1f সে.\nমোট উত্তর: %.1f সে. (%d অক্ষর)\nঅ্যাপের মেমরি (উত্তরের পর, PSS): %d MB\nনেটিভ হিপ: %d MB\n\nউত্তর: %s".format(
+                        sb.append("✅ সফল (চালানো হয়েছে: ${LocalLlm.usedBackend}${LocalLlm.lastGpuFailure?.let { f -> " — GPU ব্যর্থ হয়ে CPU-তে ফিরেছে: $f" } ?: ""})\nমডেল লোড: %.1f সে.\nপ্রথম লেখা আসতে: %.1f সে.\nমোট উত্তর: %.1f সে. (%d অক্ষর)\nঅ্যাপের মেমরি (উত্তরের পর, PSS): %d MB\nনেটিভ হিপ: %d MB\n\nউত্তর: %s".format(
                             tLoad, firstAt, tGen, chars, pss, Debug.getNativeHeapAllocatedSize() / (1 shl 20), text))
                     } catch (e: Throwable) {
                         sb.append("❌ ব্যর্থ\n${e.javaClass.name}\n${e.message}\n\n${e.stackTrace.take(8).joinToString("\n")}")

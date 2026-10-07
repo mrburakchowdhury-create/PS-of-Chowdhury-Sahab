@@ -36,6 +36,7 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
+    var stoppedByUser by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
     DisposableEffect(Unit) { onDispose { llm[0]?.cancel(); llm[0]?.close(); } }   // free the model's RAM when leaving
 
@@ -54,7 +55,8 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
                     var first = true
                     m.askStream(sys, prompt) { piece -> if (first) { first = false; busy = "লিখছে…" }; msgs[idx] = Msg(false, msgs[idx].text + piece) }
                 }
-            }.onFailure { error = "ব্যর্থ: ${it.javaClass.simpleName}: ${it.message ?: ""}".take(400) }
+            }.onFailure { error = if (stoppedByUser) null else "ব্যর্থ: ${it.javaClass.simpleName}: ${it.message ?: ""}".take(400) }
+            stoppedByUser = false
             if (msgs.getOrNull(idx)?.text.isNullOrBlank() && error == null) msgs[idx] = Msg(false, "(কোনো উত্তর আসেনি)")
             busy = null
         }
@@ -86,7 +88,7 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
                 }
             }
         }
-        busy?.let { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text(it, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); OutlinedButton(onClick = { llm[0]?.cancel() }) { Text("থামান") } } }
+        busy?.let { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text(it, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); OutlinedButton(onClick = { stoppedByUser = true; llm[0]?.cancel() }) { Text("থামান") } } }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(input, { input = it }, label = { Text(if (translate) "অনুবাদের লেখা" else "প্রশ্ন") }, modifier = Modifier.weight(1f), maxLines = 5)

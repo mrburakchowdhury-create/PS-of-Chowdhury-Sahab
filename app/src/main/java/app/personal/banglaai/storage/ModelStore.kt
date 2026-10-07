@@ -29,7 +29,8 @@ class ModelStore(private val context: Context) {
                 c.getColumnIndex(OpenableColumns.SIZE).takeIf { it >= 0 && !c.isNull(it) }?.let { declared = c.getLong(it) }
             }
         }
-        name = File(name).name.ifBlank { "model.bin" }   // strip any path components
+        // A file name from a content provider is untrusted: keep only the last path part, drop control characters, and refuse "." / ".." style names.
+        name = File(name.replace('\\', '/')).name.filter { it.code >= 32 && it != '/' }.trim().let { if (it.isBlank() || it.all { c -> c == '.' }) "model.bin" else it }
         require(declared < 0 || dir.usableSpace > declared + 500L * 1024 * 1024) { "ফোনে পর্যাপ্ত খালি জায়গা নেই" }
         val tmp = File(dir, "$name.tmp"); val out = File(dir, name)
         val md = MessageDigest.getInstance("SHA-256")

@@ -19,7 +19,7 @@ fun interface Translator { fun translate(text: String): String }
  */
 class TranslationJob(
     private val job: JobState, private val source: PageTextStore, private val target: PageTextStore,
-    private val jobs: JobStore, private val translator: Translator, private val maxChunk: Int = 1500,
+    private val jobs: JobStore, private val translator: Translator, private val maxChunk: Int = 1200,
     private val checkpointEvery: Int = 5,
 ) {
     private val stop = AtomicBoolean(false)
@@ -43,7 +43,11 @@ class TranslationJob(
                 job.mark(p, PageStatus.DONE)
             } catch (e: InterruptedException) {
                 job.status = stopStatus; jobs.save(job); return job.status
-            } catch (e: Throwable) { job.mark(p, PageStatus.FAILED) }
+            } catch (e: Throwable) {
+                // pause/cancel makes the running model call throw: that is an interruption, not a failed page (page stays PENDING and is redone whole on resume)
+                if (stop.get()) { job.status = stopStatus; jobs.save(job); return job.status }
+                job.mark(p, PageStatus.FAILED)
+            }
             if (++since >= checkpointEvery) { jobs.save(job); since = 0 }
             onProgress(job.count(PageStatus.DONE), job.total)
         }

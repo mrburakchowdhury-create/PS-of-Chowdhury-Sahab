@@ -7,6 +7,7 @@ import app.personal.banglaai.jobs.JobStatus
 import app.personal.banglaai.storage.Vault
 import org.json.JSONArray
 import org.json.JSONObject
+import app.personal.banglaai.importer.readUpTo
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.zip.ZipEntry
@@ -72,7 +73,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow) {
         return Report(restored, skipped)
     }
 
-    private fun readLimited(z: InputStream) = z.readNBytes(1 shl 20)
+    private fun readLimited(z: InputStream) = z.readUpTo(1L shl 20)
     private fun readPage(z: InputStream): PageText? = runCatching {
         val o = JSONObject(String(readLimited(z), Charsets.UTF_8))
         PageText(0, o.getString("t"), if (o.isNull("l")) null else o.getString("l"), ocr = o.optBoolean("o"))

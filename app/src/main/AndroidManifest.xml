@@ -20,6 +20,9 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true"
         android:theme="@style/Theme.BanglaAI">
+        <!-- Needed only if the owner opts into the GPU backend; optional so the app installs and runs on CPU without them. -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
         <service android:name=".speech.ReadAloudService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
         <activity
             android:name=".MainActivity"

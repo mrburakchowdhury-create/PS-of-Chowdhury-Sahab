@@ -31,7 +31,7 @@ object OfficeImporter {
         "pptx" -> pptx(readZip(input))
         "xlsx" -> xlsx(readZip(input))
         "epub" -> epub(readZip(input))
-        "csv" -> csv(input.readNBytes(MAX_ENTRY.toInt()).toString(Charsets.UTF_8))
+        "csv" -> csv(input.readUpTo(MAX_ENTRY).toString(Charsets.UTF_8))
         else -> throw ImportRefused("এই ফরম্যাট সমর্থিত নয়")
     }
 
@@ -168,4 +168,11 @@ object Chunking {
     /** Splits long text into ~3000-char sections on paragraph boundaries without losing text. */
     fun byParagraphs(text: String, @Suppress("UNUSED_PARAMETER") label: String, max: Int = 3000): List<String> =
         app.personal.banglaai.ai.Chunker.split(text, max)
+}
+
+/** Reads at most [limit] bytes (API 31-safe replacement for InputStream.readNBytes, which needs API 33). */
+internal fun java.io.InputStream.readUpTo(limit: Long): ByteArray {
+    val out = java.io.ByteArrayOutputStream(); val buf = ByteArray(16 * 1024); var total = 0L
+    while (total < limit) { val n = read(buf, 0, minOf(buf.size.toLong(), limit - total).toInt()); if (n < 0) break; out.write(buf, 0, n); total += n }
+    return out.toByteArray()
 }

@@ -62,6 +62,17 @@ class TranslationJobTest {
         assertEquals(13, calls - before)   // exactly the 13 remaining pages, none redone
     }
 
+    @Test fun interruptingAModelCallLeavesThePagePendingNotFailed() {
+        val j = job(); lateinit var runner: TranslationJob
+        runner = TranslationJob(j, src, dst, jobs, { if (it.contains("Page 4 ")) { runner.pause(); error("generation cancelled") } else "BN" })
+        assertEquals(JobStatus.PAUSED, runner.run())
+        assertEquals(PageStatus.PENDING, j.pageStatus(4)); assertEquals(0, j.count(PageStatus.FAILED))
+        assertNull(dst.get("d", 4))
+        // resume finishes everything, including page 4
+        assertEquals(JobStatus.DONE, TranslationJob(jobs.load("tj")!!, src, dst, jobs, { "BN" }).run())
+        assertNotNull(dst.get("d", 4))
+    }
+
     @Test fun chunkerKeepsAllTextInOrder() {
         val text = (1..40).joinToString(" ") { "Sentence number $it ends here." } + "\n\n" + "Second paragraph."
         val parts = Chunker.split(text, 200)

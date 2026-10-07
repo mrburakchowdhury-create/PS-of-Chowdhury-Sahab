@@ -19,8 +19,15 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File) : AutoCl
     @Synchronized fun load() {
         if (engine != null) return
         require(modelFile.exists()) { "মডেল ফাইল নেই — আগে মডেল import করুন" }
-        // CPU is the conservative default; GPU backend is a device-test item.
+        // CPU is the safe default. GPU (much lower RAM and a little faster per the model card, measured on another phone) is opt-in via [preferGpu];
+        // if the GPU engine fails to start we fall back to CPU and remember why in [lastGpuFailure] (shown on the phone-check screen).
+        if (preferGpu) {
+            val gpu = runCatching { Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.GPU(), cacheDir = cacheDir.path)).also { it.initialize() } }
+            gpu.onSuccess { engine = it; usedBackend = "GPU"; return }
+            lastGpuFailure = gpu.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" }
+        }
         engine = Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.CPU(), cacheDir = cacheDir.path)).also { it.initialize() }
+        usedBackend = "CPU"
     }
 
     /** One independent request (fresh conversation, so chunks never leak into each other). Blocks; call off the main thread. */
@@ -43,6 +50,13 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File) : AutoCl
 
     /** Stops the running generation (used by pause/cancel). */
     fun cancel() { current?.cancelProcess() }
+
+    companion object {
+        /** Set from the owner's setting at app start. Default false = CPU. */
+        @Volatile var preferGpu = false
+        @Volatile var lastGpuFailure: String? = null
+        @Volatile var usedBackend: String = "-"
+    }
 
     @Synchronized override fun close() { engine?.close(); engine = null }
 }
