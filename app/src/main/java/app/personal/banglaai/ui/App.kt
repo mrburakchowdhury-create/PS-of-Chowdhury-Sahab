@@ -10,11 +10,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import app.personal.banglaai.MainActivity
+import app.personal.banglaai.R
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Color
 import app.personal.banglaai.security.PinStore
 import app.personal.banglaai.backup.BackupService
 import app.personal.banglaai.backup.PassphraseBackup
@@ -35,7 +42,10 @@ fun App(activity: MainActivity, unlocked: Boolean, onUnlocked: () -> Unit, onLoc
         Surface(Modifier.fillMaxSize()) {
             val pins = remember { PinStore(activity) }
             var pinSet by remember { mutableStateOf(pins.isSet()) }
+            var splashDone by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(Unit) { if (!splashDone) { delay(1400); splashDone = true } }
             when {
+                !splashDone -> Image(painterResource(R.drawable.splash_art), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 !pinSet -> SetupScreen(pins) { pinSet = true; onUnlocked() }
                 !unlocked -> UnlockScreen(activity, pins, onUnlocked)
                 else -> HomeScreen(activity, onLock)
@@ -84,6 +94,8 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () 
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait = pins.lockedSeconds() } }
     val bio = remember { activity.canUseStrongBiometric() }
     Column(Modifier.fillMaxSize().padding(24.dp).systemBarsPadding(), verticalArrangement = Arrangement.Center) {
+        Image(painterResource(R.drawable.logo_ps), contentDescription = null, modifier = Modifier.size(96.dp).align(Alignment.CenterHorizontally))
+        Spacer(Modifier.height(12.dp))
         Text("🔒 অ্যাপ বন্ধ আছে", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
         PinField("PIN", pin) { pin = it }
@@ -165,6 +177,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
     openDoc?.let { d -> DocScreen(d, workflow) { openDoc = null }; return }
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Image(painterResource(R.drawable.home_banner), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("চৌধুরী সাহেবের পিএস", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = onLock) { Text("🔒 বন্ধ করুন") }

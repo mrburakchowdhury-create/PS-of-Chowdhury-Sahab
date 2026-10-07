@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+ system splash: app icon on the brand navy; our own full splash art follows right after. -->
+    <style name="Theme.BanglaAI" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/brand_navy</item>
+        <item name="android:statusBarColor">@color/brand_navy</item>
+        <item name="android:navigationBarColor">@color/brand_navy</item>
+        <item name="android:windowSplashScreenBackground">@color/brand_navy</item>
+    </style>
+</resources>
