@@ -22,8 +22,6 @@ import app.personal.banglaai.storage.VaultDoc
 fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember { ctx.getSharedPreferences("reading", Context.MODE_PRIVATE) }
-    var state by remember { mutableStateOf(TtsReader.State.Initialising) }
-    var current by remember { mutableStateOf<Segment?>(null) }
     var rate by remember { mutableFloatStateOf(1.0f) }
     var useTranslation by remember { mutableStateOf(true) }
     var pageInput by remember { mutableStateOf("1") }
@@ -32,14 +30,23 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int) {
     var voiceMsg by remember { mutableStateOf<String?>(null) }
     var listening by remember { mutableStateOf(false) }
 
-    val reader = remember { TtsReader(ctx, { state = it }, { seg, pos -> current = seg; pos?.let { prefs.edit().putString(doc.id, "${it.page}:${it.segment}").apply() } }) }
+    val reader = remember { ReadAloudController.get(ctx) }
+    val state = ReadAloudController.state
+    val current = ReadAloudController.current
+    LaunchedEffect(doc.id) { ReadAloudController.setPositionSaver { prefs.edit().putString(doc.id, "${it.page}:${it.segment}").apply() } }
     val voice = remember { VoiceInput(ctx) }
-    DisposableEffect(Unit) { onDispose { reader.shutdown(); voice.stop() } }   // speech and mic are released when leaving
+    // Reading deliberately continues in the background (foreground service); the mic never does.
+    DisposableEffect(Unit) { onDispose { voice.stop() } }
+    val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     fun plan() = ReadingPlan({ p -> (if (useTranslation) wf.translations.get(doc.id, p) else wf.texts.get(doc.id, p))?.text }, totalPages)
     fun play(page: Int, seg: Int = 0) {
         val pl = plan(); val start = if (seg == 0) pl.startAt(page) else ReadingPosition(page, seg)
-        if (start == null) voiceMsg = "এই পৃষ্ঠা থেকে পড়ার মতো ${if (useTranslation) "অনুবাদ" else "লেখা"} নেই" else { voiceMsg = null; reader.play(pl, start) }
+        if (start == null) voiceMsg = "এই পৃষ্ঠা থেকে পড়ার মতো ${if (useTranslation) "অনুবাদ" else "লেখা"} নেই" else {
+            voiceMsg = null; reader.play(pl, start)
+            if (android.os.Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)   // only affects whether the controls are visible
+            ReadAloudService.start(ctx)
+        }
     }
     fun run(c: VoiceCommand) {
         when (c) {

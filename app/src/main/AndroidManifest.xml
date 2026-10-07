@@ -4,6 +4,10 @@
     <!-- Microphone only for press-to-talk voice commands (runtime permission, asked on first press). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <!-- Read-aloud keeps playing with the screen off: foreground media-playback service + its notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.fingerprint" android:required="false" />
     <!-- Lets the app see installed text-to-speech engines (Android 11+ package visibility). -->
     <queries><intent><action android:name="android.intent.action.TTS_SERVICE" /></intent></queries>
@@ -14,6 +18,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true"
         android:theme="@style/Theme.BanglaAI">
+        <service android:name=".speech.ReadAloudService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

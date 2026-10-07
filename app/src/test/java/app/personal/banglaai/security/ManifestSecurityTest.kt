@@ -14,7 +14,8 @@ class ManifestSecurityTest {
         assertFalse("INTERNET must never be declared", "android.permission.INTERNET" in perms)
         val banned = listOf("READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "MANAGE_EXTERNAL_STORAGE", "READ_CONTACTS", "READ_SMS", "SEND_SMS", "ACCESS_NETWORK_STATE", "CAMERA", "BIND_ACCESSIBILITY_SERVICE", "BIND_DEVICE_ADMIN")
         banned.forEach { b -> assertTrue("$b must not be requested", perms.none { it.endsWith(b) }) }
-        assertEquals(setOf("android.permission.RECORD_AUDIO"), perms)   // only press-to-talk microphone
+        assertEquals(setOf("android.permission.RECORD_AUDIO", "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK", "android.permission.POST_NOTIFICATIONS"), perms)   // mic (press-to-talk) + read-aloud service only
     }
 
     @Test fun backupAndTransferAreDisabled() {
@@ -27,7 +28,10 @@ class ManifestSecurityTest {
 
     @Test fun onlyLauncherActivityIsExportedAndNoServicesReceiversProviders() {
         assertEquals(1, Regex("android:exported=\"true\"").findAll(manifest).count())
-        listOf("<service", "<receiver", "<provider").forEach { assertFalse("$it must not be declared by the app", manifest.contains(it)) }
+        listOf("<receiver", "<provider").forEach { assertFalse("$it must not be declared by the app", manifest.contains(it)) }
+        val services = Regex("<service[^>]*>").findAll(manifest).map { it.value }.toList()
+        assertEquals(1, services.size)   // only the read-aloud service
+        assertTrue(services[0].contains("ReadAloudService") && services[0].contains("android:exported=\"false\"") && services[0].contains("mediaPlayback"))
         assertFalse(manifest.contains("android:debuggable"))
     }
 }
