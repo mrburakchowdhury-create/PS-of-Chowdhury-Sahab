@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.printToString
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
@@ -49,24 +51,22 @@ class ScreenshotTest {
         rule.onNodeWithText("আবার PIN লিখুন").performTextInput("123456")
         rule.onNodeWithText("PIN সেট করুন").performClick(); rule.waitForIdle()
         shot("3_home")
-        rule.onNodeWithText("🎤 ভয়েস নির্দেশ").performClick(); rule.waitForIdle()
+        rule.onNodeWithText("ভয়েস নির্দেশ").performClick(); rule.waitForIdle()
         rule.onNodeWithText("নির্দেশ (লিখেও দিতে পারেন / শোনা লেখা ঠিক করুন)").performTextInput("ইতিহাস ফাইলটা খোলো এবং পনেরো নম্বর পৃষ্ঠা থেকে পড়া শুরু করো")
         rule.onNodeWithText("পাঠান").performScrollTo().performClick(); rule.waitForIdle(); shot("4_home_voice")
         rule.onNodeWithText("← হোম").performClick(); rule.waitForIdle()
-        rule.onNodeWithText("ℹ️ ফিচারের অবস্থা").performClick(); rule.waitForIdle()
+        rule.onNodeWithText("ফিচারের অবস্থা").performClick(); rule.waitForIdle()
         rule.onNodeWithText("ফিচারের অবস্থা (সৎ তালিকা)").performScrollTo(); rule.waitForIdle(); shot("5_home_status")
         rule.onNodeWithText("← হোম").performClick(); rule.waitForIdle()
-        rule.onNodeWithText("💬 সহকারী").performClick(); rule.waitForIdle()
+        rule.onNodeWithText("সহকারী").performClick(); rule.waitForIdle()
         rule.onNodeWithText("প্রশ্ন").performTextInput("ইসলামে জ্ঞান অর্জনের গুরুত্ব কী?")
         rule.onNodeWithText("পাঠান").performClick(); rule.waitForIdle(); shot("7_chat_no_model")
         rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
-        rule.onNodeWithText("🩺 ফোন পরীক্ষা").performClick(); rule.waitForIdle(); shot("8_diagnostics")
+        rule.onNodeWithText("ফোন পরীক্ষা").performClick(); rule.waitForIdle(); shot("8_diagnostics")
         rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
-        rule.mainClock.autoAdvance = false   // the call screen animates forever (orb, blinking); step the clock by hand
-        rule.onNodeWithText("📞 ভয়েস কল").performClick(); rule.mainClock.advanceTimeBy(900)
-        shot("9_voice_call_idle")
-        rule.onNodeWithText("← ফিরে যান").performClick(); rule.mainClock.advanceTimeBy(300)
-        rule.mainClock.autoAdvance = true; rule.waitForIdle()
+        FaceLoopConfig.disabled = true   // the portrait's endless frame loop would keep Compose from ever becoming idle
+        rule.onNodeWithText("ভয়েস কল").performClick(); rule.waitForIdle(); shot("9_voice_call_idle")
+        rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
         rule.onNodeWithText("🔒 বন্ধ করুন").performClick(); rule.waitForIdle(); shot("6_locked")
     }
 }

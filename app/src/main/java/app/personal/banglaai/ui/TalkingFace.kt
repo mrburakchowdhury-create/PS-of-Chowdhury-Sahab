@@ -25,7 +25,7 @@ fun TalkingFace(speaking: Boolean, wordTick: Int, modifier: Modifier = Modifier,
     var nextBlink by remember { mutableLongStateOf(1800L) }
     var blinks by remember { mutableIntStateOf(0) }
     LaunchedEffect(wordTick) { lastWord = now }
-    if (fixedTimeMs == null) LaunchedEffect(Unit) {
+    if (fixedTimeMs == null && !FaceLoopConfig.disabled) LaunchedEffect(Unit) {
         while (true) androidx.compose.runtime.withFrameMillis { t ->
             now = t
             if (t >= nextBlink) { blinkStart = t; blinks++; nextBlink = t + FaceMotion.nextBlinkDelayMs(blinks) }
@@ -62,3 +62,6 @@ fun TalkingFace(speaking: Boolean, wordTick: Int, modifier: Modifier = Modifier,
         }
     }
 }
+
+/** Tests switch the endless frame loop off so Compose can become idle; the app never changes it. */
+object FaceLoopConfig { @Volatile var disabled = false }

@@ -1,6 +1,7 @@
 package app.personal.banglaai.ui
 
 import android.net.Uri
+import androidx.compose.material.icons.rounded.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -10,6 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -19,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import app.personal.banglaai.MainActivity
 import app.personal.banglaai.R
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -202,10 +206,17 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     if (diagOpen) { DiagnosticsScreen(workflow, activity.cacheDir) { diagOpen = false }; return }
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Image(painterResource(R.drawable.home_banner), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxWidth().height(if (tab == HomeTab.Menu) 120.dp else 56.dp).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("চৌধুরী সাহেবের পিএস", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-            if (tab != HomeTab.Menu) OutlinedButton(onClick = { tab = HomeTab.Menu }) { Text("← হোম") } else OutlinedButton(onClick = onLock) { Text("🔒 বন্ধ করুন") }
+        if (tab == HomeTab.Menu) Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
+            // the logo art has its own dark backdrop: fade its edges out so it melts into the app background
+            Image(painterResource(R.drawable.home_logo), contentDescription = "চৌধুরী সাহেবের পিএস",
+                modifier = Modifier.fillMaxHeight().graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                    .drawWithContent { drawContent(); drawRect(androidx.compose.ui.graphics.Brush.radialGradient(0f to Color.Black, 0.62f to Color.Black, 1f to Color.Transparent, center = center, radius = size.maxDimension * 0.55f), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn) },
+                contentScale = ContentScale.Fit)
+            OutlinedButton(onClick = onLock, modifier = Modifier.align(Alignment.TopEnd)) { Text("🔒 বন্ধ করুন") }
+        } else Image(painterResource(R.drawable.home_banner), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxWidth().height(56.dp).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
+        if (tab != HomeTab.Menu) Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("চৌধুরী সাহেবের পিএস", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            OutlinedButton(onClick = { tab = HomeTab.Menu }) { Text("← হোম") }
         }
         app.personal.banglaai.storage.ModelImporter.copiedMb?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("মডেল কপি হচ্ছে… $it MB / প্রায় ৩৪৯০ MB — স্ক্রিন জাগিয়ে রাখা হয়েছে, অ্যাপ বন্ধ করবেন না") }
         app.personal.banglaai.storage.ModelImporter.lastOk?.let { Text("✅ $it", color = MaterialTheme.colorScheme.tertiary) }
@@ -217,30 +228,21 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             HomeTab.Menu -> {
         val hasModel = workflow.usableModel() != null
         Text(if (hasModel) "✅ AI মডেল বসানো আছে" else "❌ AI মডেল বসানো নেই — নিচে '🤖 AI মডেল' চেপে বসান", color = if (hasModel) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        val items = listOf<Pair<String, () -> Unit>>(
-            "📞 ভয়েস কল" to { callOpen = true },
-            "💬 সহকারী" to { chatStart = null; chatOpen = true },
-            "📄 PDF/ফাইল যোগ" to { pickDoc.launch(arrayOf("*/*")) },
-            "📁 আমার ফাইল" to { tab = HomeTab.Files },
-            "📷 ছবি তুলুন" to { takeDocPhoto() },
-            "🎤 ভয়েস নির্দেশ" to { tab = HomeTab.Voice },
-            "</> কোড বিশ্লেষণ" to { codeOpen = true },
-            "🤖 AI মডেল" to { tab = HomeTab.Model },
-            "📚 পরিভাষা ও শব্দ" to { tab = HomeTab.Terms },
-            "⚙️ সেটিংস" to { tab = HomeTab.Settings },
-            "🩺 ফোন পরীক্ষা" to { diagOpen = true },
-            "ℹ️ ফিচারের অবস্থা" to { tab = HomeTab.Status },
-        )
-        items.chunked(2).forEach { r ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                r.forEachIndexed { i, (label, act) ->
-                    val primary = label.startsWith("📞") || label.startsWith("💬")
-                    val m = Modifier.weight(1f).height(56.dp)
-                    if (primary) Button(onClick = act, modifier = m, enabled = busy == null || !label.startsWith("📄") && !label.startsWith("📷")) { Text(label) }
-                    else OutlinedButton(onClick = act, modifier = m, enabled = busy == null || !label.startsWith("📄") && !label.startsWith("📷")) { Text(label) }
-                }
-            }
-        }
+        val ic = androidx.compose.material.icons.Icons.Rounded; val st = TileStyle
+        TileGrid(listOf(
+            Tile("ভয়েস কল", ic.Call, st.call.first, st.call.second) { callOpen = true },
+            Tile("সহকারী", ic.Forum, st.chat.first, st.chat.second) { chatStart = null; chatOpen = true },
+            Tile("ফাইল যোগ (PDF)", ic.UploadFile, st.add.first, st.add.second, enabled = busy == null) { pickDoc.launch(arrayOf("*/*")) },
+            Tile("আমার ফাইল", ic.FolderOpen, st.files.first, st.files.second) { tab = HomeTab.Files },
+            Tile("ছবি তুলুন", ic.PhotoCamera, st.camera.first, st.camera.second, enabled = busy == null) { takeDocPhoto() },
+            Tile("ভয়েস নির্দেশ", ic.Mic, st.voice.first, st.voice.second) { tab = HomeTab.Voice },
+            Tile("কোড বিশ্লেষণ", ic.Code, st.code.first, st.code.second) { codeOpen = true },
+            Tile("AI মডেল", ic.SmartToy, st.model.first, st.model.second) { tab = HomeTab.Model },
+            Tile("পরিভাষা ও শব্দ", ic.MenuBook, st.terms.first, st.terms.second) { tab = HomeTab.Terms },
+            Tile("সেটিংস", ic.Settings, st.settings.first, st.settings.second) { tab = HomeTab.Settings },
+            Tile("ফোন পরীক্ষা", ic.MonitorHeart, st.diag.first, st.diag.second) { diagOpen = true },
+            Tile("ফিচারের অবস্থা", ic.Info, st.status.first, st.status.second) { tab = HomeTab.Status },
+        ))
         Text("যোগ করার পর নিজে থেকে কোনো অনুবাদ বা AI কাজ শুরু হয় না।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             HomeTab.Files -> {
