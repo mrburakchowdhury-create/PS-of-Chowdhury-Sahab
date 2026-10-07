@@ -199,12 +199,15 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     }
     val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
-        scope.launch {
-            error = null
-            runCatching { withContext(Dispatchers.IO) { models.import(uri) { busy = "মডেল কপি হচ্ছে… ${it / (1 shl 20)} MB" } } }.onFailure { error = it.message ?: "ব্যর্থ" }
-            busy = null; refresh()
-        }
+        app.personal.banglaai.storage.ModelImporter.start(models, uri)
     }
+    // Keep the display on while the big copy runs, and refresh the model list when it ends.
+    val importing = app.personal.banglaai.storage.ModelImporter.running
+    DisposableEffect(importing) {
+        if (importing) activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+    LaunchedEffect(importing) { if (!importing) refresh() }
 
     var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
     openDoc?.let { d -> DocScreen(d, workflow, pendingCmd) { openDoc = null; pendingCmd = null }; return }
@@ -224,10 +227,13 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             Text("${(fontScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
             OutlinedButton(onClick = { onFontScale(fontScale + 0.1f) }, enabled = fontScale < 1.59f) { Text("A+") }
         }
+        app.personal.banglaai.storage.ModelImporter.copiedMb?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("মডেল কপি হচ্ছে… $it MB / প্রায় ৩৪৯০ MB — স্ক্রিন জাগিয়ে রাখা হয়েছে, অ্যাপ বন্ধ করবেন না") }
+        app.personal.banglaai.storage.ModelImporter.lastOk?.let { Text("✅ $it", color = MaterialTheme.colorScheme.tertiary) }
+        app.personal.banglaai.storage.ModelImporter.lastError?.let { Text("❌ মডেল বসানো ব্যর্থ: $it", color = MaterialTheme.colorScheme.error) }
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
 
-        StartCard(hasModel = workflow.usableModel() != null, hasFiles = docs.isNotEmpty(), busy = busy != null,
+        StartCard(hasModel = workflow.usableModel() != null, hasFiles = docs.isNotEmpty(), busy = busy != null || importing,
             onModel = { pickModel.launch(arrayOf("*/*")) }, onChat = { chatStart = null; chatOpen = true }, onCall = { callOpen = true }, onDiag = { diagOpen = true })
         HomeVoice(docs, { d, then -> pendingCmd = then; openDoc = d }) { q -> chatStart = q; chatOpen = true }
 
@@ -250,7 +256,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         Text("যোগ করার পর নিজে থেকে কোনো অনুবাদ বা AI কাজ শুরু হয় না।", style = MaterialTheme.typography.bodySmall)
 
         SectionTitle("AI মডেল (ম্যানুয়ালি বসান)")
-        Button(onClick = { pickModel.launch(arrayOf("*/*")) }, enabled = busy == null) { Text("মডেল ফাইল বসান") }
+        Button(onClick = { pickModel.launch(arrayOf("*/*")) }, enabled = busy == null && !importing) { Text("মডেল ফাইল বসান") }
         Text("খালি জায়গা: ${fmtSize(models.freeBytes())}", style = MaterialTheme.typography.bodySmall)
         if (modelList.isEmpty()) Text("কোনো মডেল বসানো নেই — অনুবাদ/প্রশ্নোত্তর এখনো কাজ করবে না।")
         modelList.forEach { m ->
