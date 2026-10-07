@@ -111,6 +111,22 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         return JobStatus.DONE
     }
 
+    /** Decodes the stored picture downsampled to at most [maxDim] px on its longest side (the original encrypted file is never changed). */
+    fun loadImage(doc: VaultDoc, maxDim: Int = 2400): android.graphics.Bitmap? {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        vault.open(doc.id).use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1; while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maxDim) sample *= 2
+        return vault.open(doc.id).use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) }
+    }
+
+    /** Stores OCR text of a picture (or of a selected part of it) as the page text, marked as OCR so the UI warns it may contain mistakes. */
+    fun saveOcrText(doc: VaultDoc, text: String) {
+        val job = job(doc, Kind.Extract) ?: JobState(jobId(doc, Kind.Extract), doc.id, Kind.Extract.key, 1)
+        texts.put(doc.id, PageText(1, text, null, ocr = true)); job.mark(1, app.personal.banglaai.jobs.PageStatus.DONE)
+        if (job.status != JobStatus.DONE) job.status = JobStatus.DONE
+        jobs.save(job)
+    }
+
     /** DOCX/PPTX/XLSX/EPUB/CSV: sections (slide/sheet/chapter/part) become "pages". Refused files raise a clear Bengali message. */
     private fun extractOffice(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
         val sections = vault.open(doc.id).use { app.personal.banglaai.importer.OfficeImporter.extract(doc.name, it) }

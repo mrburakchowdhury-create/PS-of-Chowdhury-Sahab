@@ -26,6 +26,7 @@ fun QaSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, cacheDir: File, o
     var answer by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var wide by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
     DisposableEffect(Unit) { onDispose { llm[0]?.close() } }
@@ -33,12 +34,19 @@ fun QaSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, cacheDir: File, o
     HorizontalDivider()
     Text("প্রশ্ন করুন (ডকুমেন্ট থেকে, উৎস-সহ)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
     OutlinedTextField(value = q, onValueChange = { q = it }, label = { Text("প্রশ্ন") }, modifier = Modifier.fillMaxWidth())
+    FilterChip(selected = wide, onClick = { wide = !wide }, label = { Text("আরও ব্যাপক খোঁজ (AI সমার্থক শব্দ যোগ করে — ধীর)") })
     Button(enabled = !busy && q.isNotBlank(), onClick = {
         busy = true; error = null; answer = null; hits = emptyList()
         scope.launch {
             runCatching { withContext(Dispatchers.IO) {
                 val pages = (1..totalPages).mapNotNull { p -> wf.texts.get(doc.id, p)?.text?.takeIf { it.isNotBlank() }?.let { p to it } }.toMap()
-                val found = Bm25Index(pages).search(q, 5)
+                var query = q
+                if (wide && pages.isNotEmpty()) {
+                    val model0 = wf.usableModel() ?: error("কোনো AI মডেল বসানো নেই — আগে মডেল import করুন")
+                    val m0 = llm[0] ?: LocalLlm(model0, File(cacheDir, "llm")).also { llm[0] = it }
+                    query = app.personal.banglaai.ai.QueryExpansion.expand(q, app.personal.banglaai.ai.QueryExpansion.parse(m0.ask(app.personal.banglaai.ai.QueryExpansion.SYSTEM, app.personal.banglaai.ai.QueryExpansion.prompt(q))))
+                }
+                val found = Bm25Index(pages).search(query, 5)
                 if (found.isEmpty()) return@withContext Triple(found, null as String?, pages.size)
                 val model = wf.usableModel() ?: error("কোনো AI মডেল বসানো নেই — আগে মডেল import করুন")
                 val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }

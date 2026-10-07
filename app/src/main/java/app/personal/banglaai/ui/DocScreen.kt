@@ -30,6 +30,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
     var error by remember { mutableStateOf<String?>(null) }
     var tick by remember { mutableIntStateOf(0) }
     var langs by remember { mutableStateOf(setOf(TesseractOcr.Lang.ENG)) }
+    var editImage by remember { mutableStateOf(false) }
     var pageInput by remember { mutableStateOf("1") }
     val ext = remember(tick) { wf.job(doc, DocWorkflow.Kind.Extract) }
     val tr = remember(tick) { wf.job(doc, DocWorkflow.Kind.Translate) }
@@ -57,6 +58,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
         }
     }
 
+    if (editImage) { ImageEditScreen(doc, wf) { editImage = false; tick++ }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row { TextButton(onClick = onBack) { Text("← ফিরে যান") }; Text(doc.name, Modifier.padding(top = 12.dp)) }
         if (!wf.isSupported(doc)) {
@@ -64,6 +66,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
             return@Column
         }
         if (initialCommand != null && ext == null) Text("ভয়েস নির্দেশ ধরা হয়নি: এই ফাইলের লেখা এখনো বের করা হয়নি। আগে 'লেখা বের করুন' চালান, তারপর আবার বলুন।", color = MaterialTheme.colorScheme.tertiary)
+        if (wf.isImage(doc)) OutlinedButton(onClick = { editImage = true }) { Text("🖼️ ছবি দেখুন / বড় করুন / কাটুন / ঘোরান") }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
         running?.let { Text("চলছে: $it — ${progress.first}/${progress.second}"); LinearProgressIndicator(progress = { if (progress.second == 0) 0f else progress.first / progress.second.toFloat() }, modifier = Modifier.fillMaxWidth()) }
 
@@ -121,6 +124,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
                 Text("বাংলা অনুবাদ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 SelectionContainer { Text(bn?.text ?: "(এখনো অনুবাদ হয়নি)") }
             }
+            pageInput.toIntOrNull()?.takeIf { it in 1..ext.total }?.let { SegmentExplainer(doc, wf, it, ext.total) }
             MarksSection(doc, wf, pageInput.toIntOrNull()?.takeIf { it in 1..ext.total }) { pageInput = it.toString() }
         }
     }
