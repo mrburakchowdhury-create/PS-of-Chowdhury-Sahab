@@ -141,6 +141,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     var codeOpen by remember { mutableStateOf(false) }
     var chatOpen by remember { mutableStateOf(false) }
     var callOpen by remember { mutableStateOf(false) }
+    var liveOpen by remember { mutableStateOf(false) }
     var chatStart by remember { mutableStateOf<String?>(null) }
     var diagOpen by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf(HomeTab.Menu) }
@@ -201,12 +202,13 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     androidx.activity.compose.BackHandler(enabled = tab != HomeTab.Menu && openDoc == null && !callOpen && !chatOpen && !diagOpen && !codeOpen) { tab = HomeTab.Menu }
     var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
     openDoc?.let { d -> DocScreen(d, workflow, pendingCmd) { openDoc = null; pendingCmd = null }; return }
+    if (liveOpen) { LiveTranslateScreen(workflow, activity.cacheDir) { liveOpen = false }; return }
     if (callOpen) { VoiceCallScreen(workflow, vault, activity.cacheDir) { callOpen = false }; return }
     if (chatOpen) { ChatScreen(workflow, activity.cacheDir, chatStart) { chatOpen = false; chatStart = null }; return }
     if (diagOpen) { DiagnosticsScreen(workflow, activity.cacheDir) { diagOpen = false }; return }
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (tab == HomeTab.Menu) Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
+        if (tab == HomeTab.Menu) Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
             // the logo art has its own dark backdrop: fade its edges out so it melts into the app background
             Image(painterResource(R.drawable.home_logo), contentDescription = "চৌধুরী সাহেবের পিএস",
                 modifier = Modifier.fillMaxHeight().graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
@@ -231,6 +233,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         val ic = androidx.compose.material.icons.Icons.Rounded; val st = TileStyle
         TileGrid(listOf(
             Tile("ভয়েস কল", ic.Call, st.call.first, st.call.second) { callOpen = true },
+            Tile("লাইভ অনুবাদ", ic.Translate, st.live.first, st.live.second) { liveOpen = true },
             Tile("সহকারী", ic.Forum, st.chat.first, st.chat.second) { chatStart = null; chatOpen = true },
             Tile("ফাইল যোগ (PDF)", ic.UploadFile, st.add.first, st.add.second, enabled = busy == null) { pickDoc.launch(arrayOf("*/*")) },
             Tile("আমার ফাইল", ic.FolderOpen, st.files.first, st.files.second) { tab = HomeTab.Files },
@@ -300,6 +303,14 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             }
             HomeTab.Settings -> {
         SectionTitle("সেটিংস")
+        var shots by remember { mutableStateOf(activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean("allow_screenshots", true)) }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(checked = shots, onCheckedChange = { shots = it; activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().putBoolean("allow_screenshots", it).apply(); activity.applyScreenshotPolicy() })
+            Column(Modifier.weight(1f)) {
+                Text("স্ক্রিনশট / স্ক্রিন-রেকর্ডিং অনুমতি")
+                Text(if (shots) "চালু: স্ক্রিনশট নেওয়া যাবে। সাবধান: রিসেন্ট-অ্যাপ প্রিভিউতেও ভেতরের লেখা দেখা যেতে পারে।" else "বন্ধ: স্ক্রিনশট/রেকর্ডিং ও রিসেন্ট-অ্যাপ প্রিভিউ অন্ধকার থাকবে (বেশি গোপনীয়)।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("লেখার আকার", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedButton(onClick = { onFontScale(fontScale - 0.1f) }, enabled = fontScale > 0.86f) { Text("A−") }

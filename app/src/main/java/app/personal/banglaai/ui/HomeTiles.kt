@@ -64,6 +64,7 @@ fun TileGrid(tiles: List<Tile>) {
 object TileStyle {
     // accent (icon badge / glow) and band (label background) per job
     val call = Color(0xFF29B6F6) to Color(0xFF0B5E8A)
+    val live = Color(0xFFE879F9) to Color(0xFF86198F)
     val chat = Color(0xFFB388FF) to Color(0xFF5B3A9E)
     val add = Color(0xFF4CD08A) to Color(0xFF1B6B45)
     val files = Color(0xFFF2C14E) to Color(0xFF7A5608)

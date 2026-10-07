@@ -31,11 +31,17 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         // Hide content from screenshots and the recent-apps preview.
         app.personal.banglaai.ai.LocalLlm.preferGpu = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("gpu", false)
-        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        applyScreenshotPolicy()
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
         // A crash or kill mid-extraction can leave a plaintext PDF working copy in the cache; remove any such leftovers at every start.
         cacheDir.listFiles { f -> f.name.startsWith("pdf-") || f.name == "photos" }?.forEach { it.deleteRecursively() }
         setContent { App(activity = this, unlocked = unlocked, onUnlocked = { unlocked = true }, onLock = { unlocked = false }) }
+    }
+
+    /** Screenshots/screen-recording and the recent-apps preview are allowed only if the owner turned that on in Settings (default: allowed, as requested). */
+    fun applyScreenshotPolicy() {
+        val allowed = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("allow_screenshots", true)
+        if (allowed) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
     }
 
     override fun onStop() { super.onStop(); leftAt = SystemClock.elapsedRealtime() }

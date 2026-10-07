@@ -43,7 +43,7 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
     DisposableEffect(Unit) {
         val w = (ctx as? android.app.Activity)?.window
         w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose { w?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
+        onDispose { (ctx as? app.personal.banglaai.MainActivity)?.applyScreenshotPolicy() }
     }
     ReadAloudController.get(ctx)   // starts the TTS engine so its state below is real
     val ttsState = ReadAloudController.state

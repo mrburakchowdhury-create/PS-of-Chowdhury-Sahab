@@ -18,7 +18,7 @@ class VoiceInput(private val context: Context) {
 
     private var rec: SpeechRecognizer? = null
 
-    fun listen(onText: (String) -> Unit, onError: (String) -> Unit, onLevel: ((Float) -> Unit)? = null) {
+    fun listen(onText: (String) -> Unit, onError: (String) -> Unit, onLevel: ((Float) -> Unit)? = null, lang: String = "bn-BD") {
         if (!available()) return onError("এই ফোনে অফলাইন (on-device) বাংলা ভয়েস চেনা পাওয়া যায়নি। ইন্টারনেট-ভিত্তিক বিকল্পে নিজে থেকে যাওয়া হয় না। লিখে নির্দেশ দিন।")
         stop()
         val r = SpeechRecognizer.createOnDeviceSpeechRecognizer(context); rec = r
@@ -30,7 +30,7 @@ class VoiceInput(private val context: Context) {
             override fun onError(error: Int) {
                 onError(when (error) {
                     SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
-                        "বাংলা ভাষা-প্যাক ফোনে নেই। ফোনের সেটিংস → ভাষা/ভয়েস ইনপুট থেকে অফলাইন বাংলা নামান, অথবা লিখে নির্দেশ দিন।"
+                        "এই ভাষার (বা বাংলার) অফলাইন ভাষা-প্যাক ফোনে নেই। ফোনের সেটিংস → ভাষা/ভয়েস ইনপুট থেকে অফলাইন প্যাক নামান, অথবা লিখে দিন।"
                     SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "কিছু শোনা যায়নি"
                     SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "মাইক্রোফোনের অনুমতি দেওয়া হয়নি"
                     else -> "ভয়েস চেনা ব্যর্থ (কোড $error)"
@@ -42,7 +42,7 @@ class VoiceInput(private val context: Context) {
         })
         r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "bn-BD").putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false))
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang).putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false))
     }
 
     /** Mic is released on every path: result, error, or leaving the screen. */
