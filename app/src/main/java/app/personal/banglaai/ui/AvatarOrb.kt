@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
 import app.personal.banglaai.call.VoiceCallMachine.Phase
 
@@ -45,7 +44,7 @@ val SkyBlue = Color(0xFF5CC8FF)
  * It does not move the lips of the photo (that would need a face-animation model).
  */
 @Composable
-fun AvatarOrb(photo: ImageBitmap?, fallback: Painter, phase: Phase, level: Float, wordTick: Int, modifier: Modifier = Modifier) {
+fun AvatarOrb(photo: ImageBitmap?, phase: Phase, level: Float, wordTick: Int, modifier: Modifier = Modifier) {
     val t = rememberInfiniteTransition(label = "orb")
     val breath by t.animateFloat(0f, 1f, infiniteRepeatable(tween(3600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "breath")
     val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "spin")
@@ -69,7 +68,7 @@ fun AvatarOrb(photo: ImageBitmap?, fallback: Painter, phase: Phase, level: Float
         val s = 1f + 0.015f * breath + 0.035f * pulse.value
         val photoMod = Modifier.fillMaxSize(0.68f).scale(s).rotate((breath - 0.5f) * 2.4f).clip(CircleShape)
         if (photo != null) Image(photo, "আপনার ছবি", photoMod, contentScale = ContentScale.Crop)
-        else Image(fallback, "অ্যাপের লোগো", photoMod, contentScale = ContentScale.Crop)
+        else TalkingFace(phase == Phase.Speaking, wordTick, photoMod)
         if (phase == Phase.Speaking) Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             for (i in 0 until 5) {
                 val h = 6f + 18f * (if (i % 2 == 0) bars else 1f - bars) * (0.5f + 0.5f * pulse.value.coerceAtLeast(0.3f))

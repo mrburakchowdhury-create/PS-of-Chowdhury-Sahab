@@ -23,6 +23,7 @@ import app.personal.banglaai.R
 import app.personal.banglaai.ai.LocalLlm
 import app.personal.banglaai.ai.Prompts
 import app.personal.banglaai.call.AvatarStore
+import app.personal.banglaai.call.CallReaderSession
 import app.personal.banglaai.call.SentenceBuffer
 import app.personal.banglaai.call.VoiceCallMachine
 import app.personal.banglaai.call.VoiceCallMachine.Action
@@ -66,43 +67,82 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
     var turn by remember { mutableIntStateOf(0) }          // invalidates work of an interrupted turn
     var generating by remember { mutableStateOf(false) }
     var genDone by remember { mutableStateOf(true) }
+    val docNames = remember { mutableListOf<app.personal.banglaai.storage.VaultDoc>() }
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { docNames.clear(); docNames += runCatching { vault.list() }.getOrDefault(emptyList()) } }
+    val session = remember {
+        CallReaderSession(
+            { docNames.map { it.name } },
+            { n -> docNames.firstOrNull { it.name == n }?.let { d -> wf.job(d, DocWorkflow.Kind.Extract)?.total } ?: 0 },
+            { n, pg -> docNames.firstOrNull { it.name == n }?.let { d -> (wf.translations.get(d.id, pg) ?: wf.texts.get(d.id, pg))?.text } },
+            { n -> docNames.firstOrNull { it.name == n }?.let { d -> wf.chapters(d).map { it.title to it.page } }.orEmpty() })
+    }
+    var reading by remember { mutableStateOf(false) }
+    var rate by remember { mutableFloatStateOf(1f) }
+    val idleRef = remember { arrayOfNulls<() -> Unit>(1) }
     val speakerRef = remember { arrayOfNulls<CallSpeaker>(1) }
     val actRef = remember { arrayOfNulls<(Action) -> Unit>(1) }
 
     fun finishTurn() { if (machine.phase == Phase.Speaking || machine.phase == Phase.Thinking) actRef[0]?.invoke(machine.onSpeechFinished()) }
 
     val speaker = remember {
-        CallSpeaker(ctx, { ok -> speakerReady = ok }, { wordTick++ }, { if (genDone) finishTurn() }).also { speakerRef[0] = it }
+        CallSpeaker(ctx, { ok -> speakerReady = ok }, { wordTick++ }, { idleRef[0]?.invoke() }).also { speakerRef[0] = it }
     }
 
     fun endCall(reason: String?) {
-        voice.stop(); speaker.stop(); llm[0]?.cancel(); turn++
+        reading = false; voice.stop(); speaker.stop(); llm[0]?.cancel(); turn++
         phase = Phase.Ended; machine.onUserEnd(); level = 0f
         note = reason
     }
 
+    /** Starts a turn: either a document command (open/read/explain…) or a normal spoken question for the local model. */
     fun think(text: String) {
-        val my = ++turn; heard = text; answer = ""; generating = true; genDone = false; phase = Phase.Thinking
-        val model = wf.usableModel()
-        if (model == null) { endCall("কোনো AI মডেল বসানো নেই। হোমে গিয়ে মডেল বসিয়ে আবার কল করুন।"); return }
-        scope.launch {
-            val buf = SentenceBuffer(); val sb = StringBuilder()
-            fun emit(s: String) { if (my != turn) return; if (machine.phase == Phase.Thinking) { machine.onAnswerStarted(); phase = machine.phase }; sb.append(s).append(' '); answer = sb.toString().trim(); speaker.speak(s) }
-            val pieces = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
-            val consumer = launch { for (p in pieces) if (my == turn) buf.push(p).forEach(::emit) }   // main thread, in order
-            val ok = runCatching {
-                withContext(Dispatchers.IO) {
-                    val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
-                    m.askStream(Prompts.CALL_SYSTEM, Prompts.callPrompt(history, text)) { piece -> pieces.trySend(piece) }
-                }
-            }
-            pieces.close(); consumer.join()
-            if (my != turn) return@launch   // interrupted or ended: someone else owns the state now
-            ok.onFailure { generating = false; genDone = true; speaker.stop(); endCall("উত্তর বানাতে ব্যর্থ: ${it.javaClass.simpleName}"); return@launch }
-            buf.flush()?.let { emit(it) }
-            if (sb.isEmpty()) { answer = "(কোনো উত্তর আসেনি)" } else history += text to sb.toString().trim()
+        val my = ++turn; heard = text; answer = ""; generating = true; genDone = false; phase = Phase.Thinking; reading = false
+        fun say(msg: String) {   // a short fixed sentence (command feedback): show it, speak it, then listen again
+            answer = msg; if (machine.phase == Phase.Thinking) machine.onAnswerStarted(); phase = machine.phase
             generating = false; genDone = true
-            if (!speaker.isSpeaking) finishTurn()   // nothing queued (no voice / empty): go back to listening
+            if (speaker.ready) speaker.speak(msg) else finishTurn()
+        }
+        fun readStep() {
+            val seg = session.current()
+            if (seg == null) { reading = false; say("পড়া শেষ হয়েছে।"); return }
+            reading = true; answer = "পৃষ্ঠা ${seg.page}: ${seg.text}"
+            if (machine.phase == Phase.Thinking) machine.onAnswerStarted(); phase = machine.phase
+            generating = false; genDone = true
+            if (speaker.ready) speaker.speak(seg.text) else { reading = false; note = "ফোনে অফলাইন বাংলা কণ্ঠ নেই, তাই পড়ে শোনানো যাচ্ছে না; লেখা পর্দায় আছে।"; finishTurn() }
+        }
+        idleRef[0] = {
+            if (reading) { if (session.advance()) readStep() else { reading = false; say("পড়া শেষ হয়েছে।") } }
+            else if (genDone) finishTurn()
+        }
+        fun generate(system: String, prompt: String, historyKey: String) {
+            val model = wf.usableModel()
+            if (model == null) { endCall("কোনো AI মডেল বসানো নেই। হোমে গিয়ে মডেল বসিয়ে আবার কল করুন।"); return }
+            scope.launch {
+                val buf = SentenceBuffer(); val sb = StringBuilder()
+                fun emit(s: String) { if (my != turn) return; if (machine.phase == Phase.Thinking) { machine.onAnswerStarted(); phase = machine.phase }; sb.append(s).append(' '); answer = sb.toString().trim(); speaker.speak(s) }
+                val pieces = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+                val consumer = launch { for (p in pieces) if (my == turn) buf.push(p).forEach(::emit) }   // main thread, in order
+                val ok = runCatching {
+                    withContext(Dispatchers.IO) {
+                        val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
+                        m.askStream(system, prompt) { piece -> pieces.trySend(piece) }
+                    }
+                }
+                pieces.close(); consumer.join()
+                if (my != turn) return@launch   // interrupted or ended: someone else owns the state now
+                ok.onFailure { generating = false; genDone = true; speaker.stop(); endCall("উত্তর বানাতে ব্যর্থ: ${it.javaClass.simpleName}"); return@launch }
+                buf.flush()?.let { emit(it) }
+                if (sb.isEmpty()) { answer = "(কোনো উত্তর আসেনি)" } else history += historyKey to sb.toString().trim()
+                generating = false; genDone = true
+                if (!speaker.isSpeaking) finishTurn()   // nothing queued (no voice / empty): go back to listening
+            }
+        }
+        when (val o = session.handle(app.personal.banglaai.speech.VoiceCommands.parse(text))) {
+            is CallReaderSession.Outcome.NotACommand -> generate(Prompts.CALL_SYSTEM, Prompts.callPrompt(history, text), text)
+            is CallReaderSession.Outcome.Say -> say(o.text)
+            CallReaderSession.Outcome.StartReading -> readStep()
+            is CallReaderSession.Outcome.Explain -> generate(Prompts.EXPLAIN_SYSTEM, Prompts.explain(o.segment, o.pageContext), "(ব্যাখ্যা) ${o.segment.take(80)}")
+            is CallReaderSession.Outcome.Rate -> { rate = (rate + if (o.faster) 0.15f else -0.15f).coerceIn(0.5f, 2f); speaker.setRate(rate); say(if (o.faster) "ঠিক আছে, একটু দ্রুত বলছি।" else "ঠিক আছে, আস্তে বলছি।") }
         }
     }
 
@@ -129,7 +169,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
         when (a) {
             Action.Listen -> listenNext()
             is Action.Think -> think(a.userText)
-            Action.StopSpeaking -> { speaker.stop(); llm[0]?.cancel(); turn++; generating = false; genDone = true; listenNext() }
+            Action.StopSpeaking -> { reading = false; speaker.stop(); llm[0]?.cancel(); turn++; generating = false; genDone = true; listenNext() }
             is Action.End -> endCall(a.reason)
             Action.None -> {}
         }
@@ -165,7 +205,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
             TextButton(onClick = { if (active) endCall(null); onBack() }) { Text("← ফিরে যান") }
             Text("ভয়েস কল", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
         }
-        AvatarOrb(photo?.asImageBitmap(), painterResource(R.drawable.logo_ps), phase, level, wordTick,
+        AvatarOrb(photo?.asImageBitmap(), phase, level, wordTick,
             Modifier.fillMaxWidth(0.85f).clickable(enabled = phase == Phase.Speaking || phase == Phase.Thinking) { act(machine.onInterrupt()) })
         Text(when (phase) {
             Phase.Idle -> "কল শুরু করুন"; Phase.Listening -> "🎤 শুনছি… বলুন"; Phase.Thinking -> "ভাবছি… (ছবিতে চাপলে থামে)"
@@ -177,10 +217,11 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
         if (speakerReady == false && active) Text("⚠️ ফোনে অফলাইন বাংলা কণ্ঠ নেই, তাই উত্তর শুধু লেখায় দেখানো হবে (ফোনের সেটিংস → Text-to-speech থেকে বাংলা ভয়েস নামান)।", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         note?.let { Text(it, color = if (phase == Phase.Ended) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
         if (!active) {
+            Text("কলে বলতে পারেন: “ইতিহাস ফাইলটা খোলো এবং পনেরো নম্বর পৃষ্ঠা থেকে পড়ো”, “বুঝিয়ে বলো”, “আবার পড়ো”, “আস্তে পড়ো”। পড়ার সময় থামাতে ছবিতে চাপুন (তখন মাইক বন্ধ থাকে, তাই মুখে থামানো যায় না)।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             Button(onClick = { micPerm.launch(Manifest.permission.RECORD_AUDIO) }) { Text("📞 কল শুরু করুন") }
-            OutlinedButton(onClick = { pickPhoto.launch("image/*") }) { Text(if (photo == null) "🖼️ আমার ছবি বসান" else "🖼️ ছবি বদলান") }
-            if (photo != null) TextButton(onClick = { store.clear(); photo = null }) { Text("ছবি মুছুন") }
-            Text("ছবি শুধু এই ফোনে, এনক্রিপ্টেড অবস্থায় থাকে — কোথাও পাঠানো হয় না। ছবির মুখ নড়ে না; ছবি শ্বাস নেওয়ার মতো দোলে, শোনার সময় মাইকের মাত্রায় আর বলার সময় প্রতিটি শব্দে স্পন্দিত হয়।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            OutlinedButton(onClick = { pickPhoto.launch("image/*") }) { Text(if (photo == null) "🖼️ অন্য ছবি বসান (স্থির, মুখ নড়বে না)" else "🖼️ ছবি বদলান") }
+            if (photo != null) TextButton(onClick = { store.clear(); photo = null }) { Text("আমার মূল ছবিতে ফিরুন") }
+            Text("ছবি শুধু এই ফোনে, এনক্রিপ্টেড অবস্থায় থাকে — কোথাও পাঠানো হয় না। আপনার ছবি কথা বলার সময় মুখ নাড়ে ও চোখ পিটপিট করে (সরল ২-ডি অ্যানিমেশন, নিখুঁত লিপ-সিঙ্ক নয়)। অন্য ছবি বসালে সেটা স্থির থাকে।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         } else {
             Button(onClick = { endCall(null) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("📵 কল শেষ") }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

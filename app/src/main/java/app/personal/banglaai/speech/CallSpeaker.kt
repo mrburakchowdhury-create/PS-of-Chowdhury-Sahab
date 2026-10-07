@@ -49,6 +49,7 @@ class CallSpeaker(context: Context, private val onReady: (Boolean) -> Unit, priv
         tts?.speak(sentence.take(TextToSpeech.getMaxSpeechInputLength() - 1), TextToSpeech.QUEUE_ADD, null, "c${++seq}")
     }
 
+    fun setRate(r: Float) { tts?.setSpeechRate(r.coerceIn(0.5f, 2.0f)) }
     val isSpeaking get() = pending > 0
     fun stop() { gen++; pending = 0; tts?.stop() }
     fun shutdown() { gen++; pending = 0; tts?.stop(); tts?.shutdown(); tts = null }

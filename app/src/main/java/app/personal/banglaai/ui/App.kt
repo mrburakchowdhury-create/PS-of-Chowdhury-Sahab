@@ -124,23 +124,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () 
 }
 
 /** First thing on Home: says plainly what is missing (usually the AI model) and gives one-tap access to the assistant and the phone check. */
-@Composable
-private fun StartCard(hasModel: Boolean, hasFiles: Boolean, busy: Boolean, onModel: () -> Unit, onChat: () -> Unit, onCall: () -> Unit, onDiag: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("শুরুর ধাপ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-        Text((if (hasModel) "✅" else "❌") + " AI মডেল " + (if (hasModel) "বসানো আছে" else "বসানো নেই — এটি ছাড়া অনুবাদ, উত্তর, ব্যাখ্যা কিছুই চলবে না"), style = MaterialTheme.typography.bodyMedium)
-        if (!hasModel) {
-            Text("কম্পিউটারে মডেল (≈ 3.66 GB) নামিয়ে ফোনের Downloads-এ কপি করুন (লিংক ও checksum: docs/MODELS.md), তারপর নিচের বাটন চাপুন।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(enabled = !busy, onClick = onModel) { Text("মডেল ফাইল বসান") }
-        }
-        Text((if (hasFiles) "✅" else "ℹ️") + " ফাইল " + (if (hasFiles) "যোগ করা আছে" else "এখনো যোগ করা হয়নি (ঐচ্ছিক — সরাসরি প্রশ্ন/অনুবাদ ফাইল ছাড়াই চলে)"), style = MaterialTheme.typography.bodyMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onChat) { Text("💬 সহকারী (প্রশ্ন / অনুবাদ)") }
-            OutlinedButton(onClick = onDiag) { Text("🩺 ফোন পরীক্ষা") }
-        }
-        Button(onClick = onCall, modifier = Modifier.fillMaxWidth()) { Text("📞 ভয়েস কল (কথা বলে কথোপকথন)") }
-    } }
-}
+private enum class HomeTab { Menu, Files, Model, Voice, Terms, Settings, Status }
 
 @Composable
 private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Float, onFontScale: (Float) -> Unit) {
@@ -155,6 +139,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     var callOpen by remember { mutableStateOf(false) }
     var chatStart by remember { mutableStateOf<String?>(null) }
     var diagOpen by remember { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf(HomeTab.Menu) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val refresh: suspend () -> Unit = { docs = withContext(Dispatchers.IO) { runCatching { vault.list() }.getOrDefault(emptyList()) }; modelList = withContext(Dispatchers.IO) { models.list() } }
@@ -209,6 +194,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     }
     LaunchedEffect(importing) { if (!importing) refresh() }
 
+    androidx.activity.compose.BackHandler(enabled = tab != HomeTab.Menu && openDoc == null && !callOpen && !chatOpen && !diagOpen && !codeOpen) { tab = HomeTab.Menu }
     var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
     openDoc?.let { d -> DocScreen(d, workflow, pendingCmd) { openDoc = null; pendingCmd = null }; return }
     if (callOpen) { VoiceCallScreen(workflow, vault, activity.cacheDir) { callOpen = false }; return }
@@ -216,16 +202,10 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     if (diagOpen) { DiagnosticsScreen(workflow, activity.cacheDir) { diagOpen = false }; return }
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Image(painterResource(R.drawable.home_banner), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
+        Image(painterResource(R.drawable.home_banner), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxWidth().height(if (tab == HomeTab.Menu) 120.dp else 56.dp).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("চৌধুরী সাহেবের পিএস", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = onLock) { Text("🔒 বন্ধ করুন") }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("লেখার আকার", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OutlinedButton(onClick = { onFontScale(fontScale - 0.1f) }, enabled = fontScale > 0.86f) { Text("A−") }
-            Text("${(fontScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick = { onFontScale(fontScale + 0.1f) }, enabled = fontScale < 1.59f) { Text("A+") }
+            if (tab != HomeTab.Menu) OutlinedButton(onClick = { tab = HomeTab.Menu }) { Text("← হোম") } else OutlinedButton(onClick = onLock) { Text("🔒 বন্ধ করুন") }
         }
         app.personal.banglaai.storage.ModelImporter.copiedMb?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("মডেল কপি হচ্ছে… $it MB / প্রায় ৩৪৯০ MB — স্ক্রিন জাগিয়ে রাখা হয়েছে, অ্যাপ বন্ধ করবেন না") }
         app.personal.banglaai.storage.ModelImporter.lastOk?.let { Text("✅ $it", color = MaterialTheme.colorScheme.tertiary) }
@@ -233,11 +213,37 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
 
-        StartCard(hasModel = workflow.usableModel() != null, hasFiles = docs.isNotEmpty(), busy = busy != null || importing,
-            onModel = { pickModel.launch(arrayOf("*/*")) }, onChat = { chatStart = null; chatOpen = true }, onCall = { callOpen = true }, onDiag = { diagOpen = true })
-        HomeVoice(docs, { d, then -> pendingCmd = then; openDoc = d }) { q -> chatStart = q; chatOpen = true }
-
-        Button(onClick = { codeOpen = true }) { Text("কোড বিশ্লেষণ / ছবি থেকে কোড") }
+        when (tab) {
+            HomeTab.Menu -> {
+        val hasModel = workflow.usableModel() != null
+        Text(if (hasModel) "✅ AI মডেল বসানো আছে" else "❌ AI মডেল বসানো নেই — নিচে '🤖 AI মডেল' চেপে বসান", color = if (hasModel) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        val items = listOf<Pair<String, () -> Unit>>(
+            "📞 ভয়েস কল" to { callOpen = true },
+            "💬 সহকারী" to { chatStart = null; chatOpen = true },
+            "📄 PDF/ফাইল যোগ" to { pickDoc.launch(arrayOf("*/*")) },
+            "📁 আমার ফাইল" to { tab = HomeTab.Files },
+            "📷 ছবি তুলুন" to { takeDocPhoto() },
+            "🎤 ভয়েস নির্দেশ" to { tab = HomeTab.Voice },
+            "</> কোড বিশ্লেষণ" to { codeOpen = true },
+            "🤖 AI মডেল" to { tab = HomeTab.Model },
+            "📚 পরিভাষা ও শব্দ" to { tab = HomeTab.Terms },
+            "⚙️ সেটিংস" to { tab = HomeTab.Settings },
+            "🩺 ফোন পরীক্ষা" to { diagOpen = true },
+            "ℹ️ ফিচারের অবস্থা" to { tab = HomeTab.Status },
+        )
+        items.chunked(2).forEach { r ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                r.forEachIndexed { i, (label, act) ->
+                    val primary = label.startsWith("📞") || label.startsWith("💬")
+                    val m = Modifier.weight(1f).height(56.dp)
+                    if (primary) Button(onClick = act, modifier = m, enabled = busy == null || !label.startsWith("📄") && !label.startsWith("📷")) { Text(label) }
+                    else OutlinedButton(onClick = act, modifier = m, enabled = busy == null || !label.startsWith("📄") && !label.startsWith("📷")) { Text(label) }
+                }
+            }
+        }
+        Text("যোগ করার পর নিজে থেকে কোনো অনুবাদ বা AI কাজ শুরু হয় না।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            HomeTab.Files -> {
         SectionTitle("আমার ফাইল (এনক্রিপ্টেড)")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { pickDoc.launch(arrayOf("*/*")) }, enabled = busy == null) { Text("ফাইল যোগ করুন") }
@@ -255,6 +261,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         }
         Text("যোগ করার পর নিজে থেকে কোনো অনুবাদ বা AI কাজ শুরু হয় না।", style = MaterialTheme.typography.bodySmall)
 
+            }
+            HomeTab.Model -> {
         SectionTitle("AI মডেল (ম্যানুয়ালি বসান)")
         Button(onClick = { pickModel.launch(arrayOf("*/*")) }, enabled = busy == null && !importing) { Text("মডেল ফাইল বসান") }
         Text("খালি জায়গা: ${fmtSize(models.freeBytes())}", style = MaterialTheme.typography.bodySmall)
@@ -277,10 +285,25 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         }
         Text("SHA-256 মিলিয়ে নিন মডেলের অফিসিয়াল পাতায় দেওয়া checksum-এর সঙ্গে।", style = MaterialTheme.typography.bodySmall)
 
+            }
+            HomeTab.Voice -> {
+        HomeVoice(docs, { d, then -> pendingCmd = then; openDoc = d }) { q -> chatStart = q; chatOpen = true }
+
+            }
+            HomeTab.Terms -> {
         GlossarySection(workflow)
 
         VocabPanel(workflow, activity.cacheDir)
 
+            }
+            HomeTab.Settings -> {
+        SectionTitle("সেটিংস")
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("লেখার আকার", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = { onFontScale(fontScale - 0.1f) }, enabled = fontScale > 0.86f) { Text("A−") }
+            Text("${(fontScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = { onFontScale(fontScale + 0.1f) }, enabled = fontScale < 1.59f) { Text("A+") }
+        }
         SectionTitle("স্টোরেজ ব্যবহার")
         var stats by remember { mutableStateOf(StorageStats.read(activity)) }
         LaunchedEffect(docs, modelList, busy) { stats = withContext(Dispatchers.IO) { StorageStats.read(activity) } }
@@ -296,6 +319,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             OutlinedButton(enabled = busy == null && backupPass.isNotEmpty(), onClick = { restoreBackup.launch(arrayOf("*/*")) }) { Text("ব্যাকআপ থেকে ফেরান") }
         }
 
+            }
+            HomeTab.Status -> {
         SectionTitle("ফিচারের অবস্থা (সৎ তালিকা)")
         listOf(
             "PIN + বায়োমেট্রিক লক, এনক্রিপ্টেড ফাইল সংরক্ষণ" to "তৈরি; ডিভাইসে পরীক্ষা বাকি",
@@ -312,6 +337,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             "শব্দ/বাক্য ধরে প্রশ্ন (লিখে/পেস্ট করে; পড়ার প্রসঙ্গে), শব্দভান্ডার, অনুশীলনী প্রশ্ন" to "তৈরি; লজিক টেস্টকৃত; AI-উত্তরের মান ফোনে যাচাই বাকি",
             "ছবি-ফাইল (JPG/PNG) আলাদা ডকুমেন্ট হিসেবে import + OCR" to "তৈরি; ফোনে চালানো হয়নি",
         ).forEach { (k, v) -> Text("• $k — $v", style = MaterialTheme.typography.bodySmall) }
+            }
+        }
     }
 }
 
