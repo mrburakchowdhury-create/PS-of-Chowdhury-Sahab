@@ -23,6 +23,10 @@ class ImportRefused(msg: String) : Exception(msg)
 object OfficeImporter {
     private const val MAX_ENTRIES = 2000; private const val MAX_ENTRY = 64L shl 20; private const val MAX_TOTAL = 256L shl 20
     val supported = setOf("docx", "pptx", "xlsx", "epub", "csv")
+    /** Plain-text source files: shown as-is, split by lines so indentation is never altered. Never executed. */
+    val codeExtensions = setOf("py", "js", "ts", "jsx", "tsx", "java", "kt", "kts", "c", "h", "cpp", "cc", "hpp", "cs", "go", "rs", "php", "sql", "html", "htm", "css", "sh", "bash", "swift", "rb", "json", "xml", "yml", "yaml", "md", "ini", "toml", "log")
+    fun splitCode(text: String, linesPerSection: Int = 120): List<Section> =
+        text.lines().chunked(linesPerSection).mapIndexed { i, c -> Section("লাইন ${i * linesPerSection + 1}–${i * linesPerSection + c.size}", c.joinToString("\n")) }
 
     fun extension(name: String) = name.substringAfterLast('.', "").lowercase()
 

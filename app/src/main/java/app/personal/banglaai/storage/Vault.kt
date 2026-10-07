@@ -86,14 +86,18 @@ class Vault(private val context: Context) {
         writeIndex(readIndex().filterNot { it.id == id })
     }
 
+    /** Display name and size from the provider; falls back to the last path segment (e.g. file:// URIs) so the extension — which decides the format — is kept. */
     private fun queryMeta(uri: Uri): Pair<String, Long> {
-        context.contentResolver.query(uri, null, null, null, null)?.use { c ->
-            if (c.moveToFirst()) {
-                val n = c.getColumnIndex(OpenableColumns.DISPLAY_NAME); val s = c.getColumnIndex(OpenableColumns.SIZE)
-                return (if (n >= 0) c.getString(n) else null).orEmpty().ifBlank { "ফাইল" } to (if (s >= 0 && !c.isNull(s)) c.getLong(s) else -1L)
+        val fallback = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "ফাইল"
+        runCatching {
+            context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val n = c.getColumnIndex(OpenableColumns.DISPLAY_NAME); val s = c.getColumnIndex(OpenableColumns.SIZE)
+                    return (if (n >= 0) c.getString(n) else null).orEmpty().ifBlank { fallback } to (if (s >= 0 && !c.isNull(s)) c.getLong(s) else -1L)
+                }
             }
         }
-        return "ফাইল" to -1L
+        return fallback to -1L
     }
 
     private fun readIndex(): List<VaultDoc> {

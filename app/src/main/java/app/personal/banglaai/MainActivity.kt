@@ -34,7 +34,7 @@ class MainActivity : FragmentActivity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
         // A crash or kill mid-extraction can leave a plaintext PDF working copy in the cache; remove any such leftovers at every start.
-        cacheDir.listFiles { f -> f.name.startsWith("pdf-") }?.forEach { it.deleteRecursively() }
+        cacheDir.listFiles { f -> f.name.startsWith("pdf-") || f.name == "photos" }?.forEach { it.deleteRecursively() }
         setContent { App(activity = this, unlocked = unlocked, onUnlocked = { unlocked = true }, onLock = { unlocked = false }) }
     }
 
@@ -52,7 +52,9 @@ class MainActivity : FragmentActivity() {
 
     /** Returns a message to show the user if biometric cannot be used right now (e.g. key invalidated by new enrollment). */
     fun promptBiometric(title: String, negative: String, onSuccess: () -> Unit, onProblem: (String) -> Unit = {}) {
-        val cipher = when (val prep = BiometricGate.prepare()) {
+        val prepared = runCatching { BiometricGate.prepare() }
+        prepared.exceptionOrNull()?.let { return onProblem("এই ফোনে বায়োমেট্রিক চালু করা যায়নি (${it.javaClass.simpleName}); PIN ব্যবহার করুন। ফোনে স্ক্রিন-লক ও আঙুলের ছাপ সেট করা আছে কি না দেখুন।") }
+        val cipher = when (val prep = prepared.getOrThrow()) {
             is BiometricGate.Prep.Ready -> prep.cipher
             BiometricGate.Prep.Invalidated -> return onProblem("ফোনে আঙুলের ছাপ/ফেস বদলেছে, তাই বায়োমেট্রিক বন্ধ হয়েছে। PIN দিয়ে খুলুন; পরের বার আবার বায়োমেট্রিক চলবে।")
         }

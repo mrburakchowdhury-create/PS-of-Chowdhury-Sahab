@@ -188,6 +188,13 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             busy = null; refresh()
         }
     }
+    val takeDocPhoto = rememberPhotoCapture { f ->
+        scope.launch {
+            busy = "ছবি এনক্রিপ্ট করে রাখা হচ্ছে…"; error = null
+            runCatching { withContext(Dispatchers.IO) { try { vault.import(Uri.fromFile(f)) } finally { f.delete() } } }.onFailure { error = it.message ?: "ব্যর্থ" }
+            busy = null; refresh()
+        }
+    }
     val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
         scope.launch {
@@ -223,7 +230,10 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
 
         Button(onClick = { codeOpen = true }) { Text("কোড বিশ্লেষণ / ছবি থেকে কোড") }
         SectionTitle("আমার ফাইল (এনক্রিপ্টেড)")
-        Button(onClick = { pickDoc.launch(arrayOf("*/*")) }, enabled = busy == null) { Text("ফাইল যোগ করুন") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { pickDoc.launch(arrayOf("*/*")) }, enabled = busy == null) { Text("ফাইল যোগ করুন") }
+            OutlinedButton(onClick = { takeDocPhoto() }, enabled = busy == null) { Text("📷 ছবি তুলুন") }
+        }
         if (docs.isEmpty()) Text("এখনো কোনো ফাইল নেই।")
         docs.forEach { d ->
             Card(Modifier.fillMaxWidth()) {

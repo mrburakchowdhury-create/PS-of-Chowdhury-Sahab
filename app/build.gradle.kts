@@ -12,7 +12,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.2.0-dev"
-        ndk { abiFilters += "arm64-v8a" }   // Galaxy S24 Ultra is arm64; keeps the APK smaller
+        // Galaxy S24 Ultra is arm64. `-Pemu` additionally packs x86_64 so the same code can be smoke-tested on an x86 emulator.
+        ndk { abiFilters += if (project.hasProperty("emu")) listOf("arm64-v8a", "x86_64") else listOf("arm64-v8a") }
     }
     buildTypes {
         release {
@@ -26,6 +27,7 @@ android {
     }
     buildFeatures { compose = true }
     testOptions { unitTests.isIncludeAndroidResources = true }
+    defaultConfig { testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
 }
 
 dependencies {
@@ -47,4 +49,8 @@ dependencies {
     testImplementation("androidx.test:core:1.7.0")
     testImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }

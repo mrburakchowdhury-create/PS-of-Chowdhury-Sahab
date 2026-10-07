@@ -20,6 +20,7 @@ import app.personal.banglaai.ai.DiffType
 import app.personal.banglaai.ai.LocalLlm
 import app.personal.banglaai.ai.Prompts
 import app.personal.banglaai.doc.DocWorkflow
+import app.personal.banglaai.importer.readUpTo
 import app.personal.banglaai.ocr.CodeReconstructor
 import app.personal.banglaai.ocr.Doubt
 import app.personal.banglaai.ocr.TesseractOcr
@@ -46,14 +47,13 @@ fun CodeScreen(wf: DocWorkflow, cacheDir: File, noBackupDir: File, onBack: () ->
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
     DisposableEffect(Unit) { onDispose { llm[0]?.close() } }   // free the model's RAM when leaving this screen
 
-    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        uri ?: return@rememberLauncherForActivityResult
+    /** Runs OCR on a bitmap produced by [load] (decoded on a background thread; large pictures are downsampled to bound memory). */
+    fun ocr(load: () -> android.graphics.Bitmap) {
         scope.launch {
             busy = "ছবি থেকে লেখা পড়া হচ্ছে (OCR)…"; error = null
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val opts = BitmapFactory.Options().apply { inSampleSize = 1 }
-                    val bmp = ctx.contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, opts) } ?: error("ছবি পড়া যায়নি")
+                    val bmp = load()
                     TesseractOcr(ctx).use { t ->
                         val r = t.recognize(bmp, listOf(TesseractOcr.Lang.ENG), psm = 6)
                         bmp.recycle(); CodeReconstructor.rebuild(r.words)
@@ -61,6 +61,25 @@ fun CodeScreen(wf: DocWorkflow, cacheDir: File, noBackupDir: File, onBack: () ->
                 }
             }.onSuccess { code = it.text; doubts = it.doubts; answer = null; proposed = null }.onFailure { error = it.message ?: it.javaClass.simpleName }
             busy = null
+        }
+    }
+    fun decode(open: () -> java.io.InputStream?): android.graphics.Bitmap {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        open()!!.use { BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1; while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 4000) sample *= 2
+        return open()!!.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: error("ছবি পড়া যায়নি")
+    }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        ocr { decode { ctx.contentResolver.openInputStream(uri) } }
+    }
+    val takePhoto = rememberPhotoCapture { f -> ocr { try { decode { f.inputStream() } } finally { f.delete() } } }
+    val pickCodeFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { ctx.contentResolver.openInputStream(uri)!!.use { it.readUpTo(1L shl 20).toString(Charsets.UTF_8) } } }
+                .onSuccess { code = it; doubts = emptyList(); answer = null; proposed = null; error = if (it.length >= (1 shl 20)) "ফাইল বড় — প্রথম ১ MB নেওয়া হয়েছে" else null }
+                .onFailure { error = it.message ?: it.javaClass.simpleName }
         }
     }
 
@@ -83,7 +102,11 @@ fun CodeScreen(wf: DocWorkflow, cacheDir: File, noBackupDir: File, onBack: () ->
         Text("কোড কখনো চালানো হয় না; শুধু পড়ে ব্যাখ্যা করা হয়। AI ভুল করতে পারে — বিশেষ করে জটিল কোডে। নিশ্চিত নয় এমন অংশ 'অনুমান' লেখা থাকবে।", style = MaterialTheme.typography.bodySmall)
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
-        OutlinedButton(enabled = busy == null, onClick = { pickImage.launch(arrayOf("image/*")) }) { Text("ছবি থেকে কোড (OCR)") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(enabled = busy == null, onClick = { pickImage.launch(arrayOf("image/*")) }) { Text("🖼 ছবি (OCR)") }
+            OutlinedButton(enabled = busy == null, onClick = { takePhoto() }) { Text("📷 ছবি তুলুন") }
+            OutlinedButton(enabled = busy == null, onClick = { pickCodeFile.launch(arrayOf("text/*", "application/json", "application/xml", "application/x-sh", "*/*")) }) { Text("📄 কোড-ফাইল") }
+        }
         OutlinedTextField(value = code, onValueChange = { code = it; doubts = emptyList() }, label = { Text("কোড (লিখুন, পেস্ট করুন, বা OCR-এর পর সংশোধন করুন)") },
             modifier = Modifier.fillMaxWidth().heightIn(min = 160.dp), textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace))
         if (code.isNotEmpty()) Text("লাইন সংখ্যা: ${code.lines().size} (এই নম্বর আপনার টেক্সট বক্সের; ছবির লাইন নম্বর থেকে আলাদা হতে পারে)", style = MaterialTheme.typography.bodySmall)

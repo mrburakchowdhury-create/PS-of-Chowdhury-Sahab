@@ -28,7 +28,11 @@ class ManifestSecurityTest {
 
     @Test fun onlyLauncherActivityIsExportedAndNoServicesReceiversProviders() {
         assertEquals(1, Regex("android:exported=\"true\"").findAll(manifest).count())
-        listOf("<receiver", "<provider").forEach { assertFalse("$it must not be declared by the app", manifest.contains(it)) }
+        assertFalse("<receiver must not be declared by the app", manifest.contains("<receiver"))
+        val providers = Regex("<provider[^>]*>").findAll(manifest).map { it.value }.toList()
+        assertEquals(1, providers.size)   // only the camera-photo FileProvider
+        assertTrue(providers[0].contains("androidx.core.content.FileProvider") && providers[0].contains("android:exported=\"false\""))
+        assertEquals(1, Regex("<cache-path").findAll(File(main, "res/xml/file_paths.xml").readText()).count())   // one shareable folder, nothing else
         val services = Regex("<service[^>]*>").findAll(manifest).map { it.value }.toList()
         assertEquals(1, services.size)   // only the read-aloud service
         assertTrue(services[0].contains("ReadAloudService") && services[0].contains("android:exported=\"false\"") && services[0].contains("mediaPlayback"))

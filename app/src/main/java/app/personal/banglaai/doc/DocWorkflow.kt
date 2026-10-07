@@ -42,7 +42,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun job(doc: VaultDoc, k: Kind): JobState? = jobs.load(jobId(doc, k))
 
     fun isImage(doc: VaultDoc) = doc.name.lowercase().let { it.endsWith(".jpg") || it.endsWith(".jpeg") || it.endsWith(".png") }
-    fun isSupported(doc: VaultDoc) = isImage(doc) || doc.name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".txt") || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.supported }
+    fun isSupported(doc: VaultDoc) = isImage(doc) || doc.name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".txt") || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.supported || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.codeExtensions }
 
     fun pause() { extraction?.pause(); translation?.pause(); ocrJob?.pause(); llm?.cancel() }
     fun cancel() { extraction?.cancel(); translation?.cancel(); ocrJob?.cancel(); llm?.cancel() }
@@ -53,6 +53,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         try {
             val name = doc.name.lowercase()
             if (isImage(doc)) return extractImage(doc, onProgress)
+            if (app.personal.banglaai.importer.OfficeImporter.extension(name) in app.personal.banglaai.importer.OfficeImporter.codeExtensions) return extractCode(doc, onProgress)
             if (name.endsWith(".txt")) return extractTxt(doc, onProgress)
             if (app.personal.banglaai.importer.OfficeImporter.extension(name) in app.personal.banglaai.importer.OfficeImporter.supported) return extractOffice(doc, onProgress)
             PdfExtractor.init(context)
@@ -123,6 +124,18 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         if (app.personal.banglaai.importer.OfficeImporter.extension(doc.name) == "epub") runCatching { saveChapters(doc, sections.mapIndexed { i, sec -> Chapter(sec.title, i + 1) }) }
         job.status = JobStatus.DONE; jobs.save(job); onProgress(job.total, job.total)
         return job.status
+    }
+
+    /** Source-code file: line-based sections (indentation kept), original untouched, nothing run. */
+    private fun extractCode(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
+        val text = vault.open(doc.id).use { String(it.readBytes(), Charsets.UTF_8) }
+        val sections = app.personal.banglaai.importer.OfficeImporter.splitCode(text).ifEmpty { listOf(app.personal.banglaai.importer.Section("খালি", "")) }
+        val id = jobId(doc, Kind.Extract); val job = JobState(id, doc.id, Kind.Extract.key, sections.size)
+        sections.forEachIndexed { i, sec ->
+            if (sec.text.isBlank()) job.mark(i + 1, app.personal.banglaai.jobs.PageStatus.UNREADABLE)
+            else { texts.put(doc.id, PageText(i + 1, sec.text, sec.title)); job.mark(i + 1, app.personal.banglaai.jobs.PageStatus.DONE) }
+        }
+        job.status = JobStatus.DONE; jobs.save(job); onProgress(job.total, job.total); return job.status
     }
 
     private fun extractTxt(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {

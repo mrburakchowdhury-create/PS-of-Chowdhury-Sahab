@@ -23,6 +23,10 @@
         <!-- Needed only if the owner opts into the GPU backend; optional so the app installs and runs on CPU without them. -->
         <uses-native-library android:name="libOpenCL.so" android:required="false" />
         <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <!-- Receives a photo from the system camera app. No CAMERA permission is requested by this app. Not exported; only this one cache folder is shareable. -->
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.photos" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
+        </provider>
         <service android:name=".speech.ReadAloudService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
         <activity
             android:name=".MainActivity"

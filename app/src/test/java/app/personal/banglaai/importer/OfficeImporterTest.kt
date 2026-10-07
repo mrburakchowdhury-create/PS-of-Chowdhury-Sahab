@@ -68,6 +68,20 @@ class OfficeImporterTest {
         assertEquals(csv, s.joinToString("\n") { it.text })
     }
 
+    @Test fun codeFilesKeepIndentationAndEveryLine() {
+        val code = (1..300).joinToString("\n") { if (it % 2 == 0) "    indented line $it" else "line $it" }
+        val parts = OfficeImporter.splitCode(code)
+        assertEquals(3, parts.size)
+        assertEquals(code, parts.joinToString("\n") { it.text })   // lossless, leading spaces intact
+        assertTrue(parts[0].text.lines()[1].startsWith("    indented"))
+        assertTrue("py" in OfficeImporter.codeExtensions && "exe" !in OfficeImporter.codeExtensions)
+    }
+
+    @Test fun readUpToIsBoundedAndComplete() {
+        assertEquals(10, ByteArrayInputStream(ByteArray(100)).readUpTo(10).size)
+        assertEquals(5, ByteArrayInputStream(ByteArray(5)).readUpTo(10).size)
+    }
+
     @Test fun xxeStyleEntityIsNotResolved() {
         val doc = "<!DOCTYPE d [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><w:document $W><w:p><w:r><w:t>&x;</w:t></w:r></w:p></w:document>"
         val r = runCatching { run("a.docx", zip("word/document.xml" to doc)) }
