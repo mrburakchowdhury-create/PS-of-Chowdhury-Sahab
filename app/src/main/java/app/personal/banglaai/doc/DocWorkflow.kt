@@ -169,7 +169,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
 
     /** The first imported model that is not a known-bad copy. Returns null if none is imported. */
     fun usableModel(): File? = models.list().firstOrNull { it.name.endsWith(".litertlm") &&
-        KnownModels.verdict(it.name, it.size, it.sha256) !is KnownModels.Verdict.Mismatch }
+        KnownModels.verdict(it.name, it.size, it.sha256).let { v -> v !is KnownModels.Verdict.Mismatch && v !is KnownModels.Verdict.Pending } }
         ?.let { File(context.noBackupFilesDir, "models/${it.name}") }
 
     fun translate(doc: VaultDoc, retryFailed: Boolean, onProgress: (Int, Int) -> Unit): JobStatus {

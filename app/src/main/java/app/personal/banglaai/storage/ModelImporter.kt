@@ -30,4 +30,16 @@ object ModelImporter {
             copiedMb = null
         }
     }
+
+    /** Computes the missing checksum of a model file that is already on the phone (no copy needed). */
+    fun startVerify(store: ModelStore, name: String) {
+        if (running) return
+        copiedMb = 0; lastError = null; lastOk = null
+        scope.launch {
+            runCatching { store.rehash(name) { copiedMb = it / (1 shl 20) } }
+                .onSuccess { lastOk = "${it.name} যাচাই শেষ" }
+                .onFailure { lastError = it.message ?: it.javaClass.simpleName }
+            copiedMb = null
+        }
+    }
 }

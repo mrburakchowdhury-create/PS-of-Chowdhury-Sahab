@@ -20,4 +20,15 @@ class ModelStoreTest {
         assertEquals("abc", store.list().single().sha256)
         store.delete("m.litertlm"); assertTrue(store.list().isEmpty()); assertFalse(File(dir, "m.litertlm.sha256").exists())
     }
+
+    @Test fun missingChecksumCanBeComputedWithoutCopying() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>(); val store = ModelStore(ctx)
+        val dir = File(ctx.noBackupFilesDir, "models").apply { mkdirs() }
+        File(dir, "n.litertlm").writeBytes("hello".toByteArray())
+        assertEquals("", store.list().single { it.name == "n.litertlm" }.sha256)
+        val r = store.rehash("n.litertlm") { }
+        assertEquals("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", r.sha256)   // SHA-256("hello")
+        assertEquals(r.sha256, store.list().single { it.name == "n.litertlm" }.sha256)
+        store.delete("n.litertlm")
+    }
 }

@@ -198,6 +198,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         onDispose { activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
     LaunchedEffect(importing) { if (!importing) refresh() }
+    // A model file without a recorded checksum is verified automatically (reads the file once; no copy).
+    LaunchedEffect(modelList, importing) { if (!importing) modelList.firstOrNull { it.sha256.isBlank() && it.name.endsWith(".litertlm") }?.let { app.personal.banglaai.storage.ModelImporter.startVerify(models, it.name) } }
 
     androidx.activity.compose.BackHandler(enabled = tab != HomeTab.Menu && openDoc == null && !callOpen && !chatOpen && !diagOpen && !codeOpen) { tab = HomeTab.Menu }
     var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
@@ -281,9 +283,11 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
                         Text(when (val v = KnownModels.verdict(m.name, m.size, m.sha256)) {
                             is KnownModels.Verdict.Official -> "✅ অফিসিয়াল ফাইলের সঙ্গে মিলেছে: ${v.model.label}"
                             is KnownModels.Verdict.Mismatch -> "❌ নামের সঙ্গে মিললেও ফাইলের কনটেন্ট মেলেনি; ব্যবহার করবেন না। " + KnownModels.explainMismatch(v.expected, m.size, m.sha256)
+                            KnownModels.Verdict.Pending -> "⏳ checksum এখনো হিসাব হয়নি — যাচাই শেষ না হওয়া পর্যন্ত ব্যবহার করা হবে না (নিচের বাটন)"
                             KnownModels.Verdict.Unknown -> "⚠️ আমাদের যাচাই-করা তালিকায় নেই; অফিসিয়াল checksum নিজে মিলিয়ে নিন"
                         }, style = MaterialTheme.typography.bodySmall)
                     }
+                    if (m.sha256.isBlank()) TextButton(enabled = !importing, onClick = { app.personal.banglaai.storage.ModelImporter.startVerify(models, m.name) }) { Text("যাচাই করুন") }
                     TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { models.delete(m.name) }; refresh() } }) { Text("মুছুন") }
                 }
             }

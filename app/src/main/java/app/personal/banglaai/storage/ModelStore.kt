@@ -49,5 +49,15 @@ class ModelStore(private val context: Context) {
         } catch (e: Throwable) { tmp.delete(); throw e }
     }
 
+    /** Computes the SHA-256 of an already-copied model file and records it (used when the sidecar is missing). */
+    fun rehash(name: String, onProgress: (Long) -> Unit): ModelFile {
+        val f = File(dir, File(name).name); require(f.isFile) { "ফাইল পাওয়া যায়নি" }
+        val md = MessageDigest.getInstance("SHA-256"); var total = 0L
+        f.inputStream().use { src -> val buf = ByteArray(1 shl 20); while (true) { val n = src.read(buf); if (n < 0) break; md.update(buf, 0, n); total += n; onProgress(total) } }
+        val hex = md.digest().joinToString("") { "%02x".format(it) }
+        File(dir, f.name + ".sha256").writeText(hex)
+        return ModelFile(f.name, f.length(), hex)
+    }
+
     fun delete(name: String) { File(dir, File(name).name).delete(); File(dir, File(name).name + ".sha256").delete() }
 }

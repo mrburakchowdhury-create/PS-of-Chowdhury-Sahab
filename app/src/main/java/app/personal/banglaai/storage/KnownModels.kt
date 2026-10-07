@@ -11,11 +11,13 @@ object KnownModels {
 
     sealed interface Verdict {
         data class Official(val model: KnownModel) : Verdict
+        data object Pending : Verdict          // no checksum recorded yet (e.g. the copy was interrupted right at the end): must be computed before use
         data object Unknown : Verdict          // not in our list: may be fine, but we cannot vouch for it
         data class Mismatch(val expected: KnownModel) : Verdict   // same name, different content: corrupted or tampered
     }
 
     fun verdict(file: String, size: Long, sha256: String): Verdict {
+        if (sha256.isBlank()) return Verdict.Pending
         all.firstOrNull { it.sha256.equals(sha256, ignoreCase = true) && it.size == size }?.let { return Verdict.Official(it) }
         all.firstOrNull { it.file == file }?.let { return Verdict.Mismatch(it) }
         return Verdict.Unknown

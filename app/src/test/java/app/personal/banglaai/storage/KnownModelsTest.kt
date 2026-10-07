@@ -5,6 +5,7 @@ import org.junit.Test
 
 class KnownModelsTest {
     private val m = KnownModels.all.first { it.file == "gemma-4-E4B-it.litertlm" }
+    @Test fun blankChecksumIsPendingNotMismatch() = assertTrue(KnownModels.verdict(m.file, m.size, "") is KnownModels.Verdict.Pending)
     @Test fun officialFileIsRecognised() = assertTrue(KnownModels.verdict(m.file, m.size, m.sha256) is KnownModels.Verdict.Official)
     @Test fun sameNameOtherContentIsMismatch() = assertTrue(KnownModels.verdict(m.file, m.size, "00".repeat(32)) is KnownModels.Verdict.Mismatch)
     @Test fun mismatchExplanationsTellCutOffFromDamaged() {
