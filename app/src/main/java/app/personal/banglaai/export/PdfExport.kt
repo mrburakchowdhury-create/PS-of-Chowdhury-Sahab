@@ -37,7 +37,7 @@ object PdfExport {
         }
         newPage(); draw(o.title, head)
         for (p in pages) {
-            draw("পৃষ্ঠা ${p.page}${p.printedLabel?.let { " (ছাপা পৃষ্ঠা $it)" } ?: ""}", head)
+            draw("পৃষ্ঠা ${p.page}${p.printedLabel?.let { " (মূল অবস্থান: $it)" } ?: ""}", head)
             if (o.includeOriginal) { draw("মূল${if (p.originalIsOcr) " — OCR, ভুল থাকতে পারে" else ""}", head); draw(p.original ?: "(লেখা নেই)", body, o.originalIsRtl); draw("বাংলা অনুবাদ", head) }
             draw(p.translation?.takeIf { it.isNotBlank() } ?: "(অনুবাদ হয়নি)", body)
         }

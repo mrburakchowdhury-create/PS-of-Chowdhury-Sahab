@@ -9,6 +9,8 @@ jobs/      JobState (per-page status, coverage) · JobStore (encrypted, atomic c
 ocr/       TesseractOcr (bundled tessdata, sha256-verified) · OcrJob (only UNREADABLE pages) · CodeReconstructor (indent from boxes)
 ai/        LocalLlm (LiteRT-LM, Gemma 4) · Prompts (<DOC> data wrapping) · Chunker · TranslationJob · Bm25Index · CodeDiff
 speech/    TtsReader (offline Bengali voice only) · VoiceInput (on-device recognizer only) · VoiceCommands · ReadingPlan
+importer/ OfficeImporter (DOCX, PPTX, XLSX, EPUB, CSV; no macros/formulas; zip-bomb limits)
+userdata/  SealedList · Glossary · Marks (encrypted)
 export/    Exporter (TXT, DOCX) · PdfExport (Android text stack)
 backup/    PassphraseBackup (PBKDF2 → Tink streaming, authenticated header) · BackupService
 ```
@@ -19,4 +21,4 @@ backup/    PassphraseBackup (PBKDF2 → Tink streaming, authenticated header) ·
 - সব দীর্ঘ কাজ বাটন-চালিত, চেকপয়েন্টসহ; নিজে থেকে পুনরায় শুরু হয় না।
 - ডকুমেন্টের লেখা `<DOC>` ট্যাগে তথ্য হিসেবে যায়; ভেতরের `</DOC>` নিষ্ক্রিয় করা হয়; মডেলের কোনো টুল/নেটওয়ার্ক নেই।
 ## এখনো নেই
-ব্যাকগ্রাউন্ড প্লেব্যাক সার্ভিস/নোটিফিকেশন, DOCX/EPUB/XLSX/PPTX/ছবি ফাইল import, glossary, নোট/বুকমার্ক, নির্বাচিত-শব্দ প্রশ্ন, semantic embedding অনুসন্ধান, SQLCipher।
+ব্যাকগ্রাউন্ড প্লেব্যাক সার্ভিস/নোটিফিকেশন, ছবি-ফাইল import, নির্বাচিত-শব্দ প্রশ্ন, semantic embedding অনুসন্ধান, SQLCipher।

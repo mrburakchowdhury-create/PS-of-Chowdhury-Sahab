@@ -24,6 +24,8 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     val jobs = JobStore(File(base, "jobs"), vault::seal, vault::unseal)
     val texts = PageTextStore(File(base, "text"), vault::seal, vault::unseal)
     val translations = PageTextStore(File(base, "bn"), vault::seal, vault::unseal)
+    val glossary = app.personal.banglaai.userdata.Glossary(app.personal.banglaai.userdata.SealedList(File(base, "glossary.enc"), vault::seal, vault::unseal))
+    val marks = app.personal.banglaai.userdata.Marks(app.personal.banglaai.userdata.SealedList(File(base, "marks.enc"), vault::seal, vault::unseal))
 
     @Volatile private var extraction: ExtractionJob? = null
     @Volatile private var translation: TranslationJob? = null
@@ -34,7 +36,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun jobId(doc: VaultDoc, k: Kind) = "${doc.id}-${k.key}"
     fun job(doc: VaultDoc, k: Kind): JobState? = jobs.load(jobId(doc, k))
 
-    fun isSupported(doc: VaultDoc) = doc.name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".txt") }
+    fun isSupported(doc: VaultDoc) = doc.name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".txt") || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.supported }
 
     fun pause() { extraction?.pause(); translation?.pause(); ocrJob?.pause(); llm?.cancel() }
     fun cancel() { extraction?.cancel(); translation?.cancel(); ocrJob?.cancel(); llm?.cancel() }
@@ -45,6 +47,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         try {
             val name = doc.name.lowercase()
             if (name.endsWith(".txt")) return extractTxt(doc, onProgress)
+            if (app.personal.banglaai.importer.OfficeImporter.extension(name) in app.personal.banglaai.importer.OfficeImporter.supported) return extractOffice(doc, onProgress)
             PdfExtractor.init(context)
             val opened = vault.open(doc.id).use { PdfExtractor.open(it, tmp) }
             when (opened) {
@@ -74,6 +77,20 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         } finally { ocrJob = null; tmp.deleteRecursively() }
     }
 
+    /** DOCX/PPTX/XLSX/EPUB/CSV: sections (slide/sheet/chapter/part) become "pages". Refused files raise a clear Bengali message. */
+    private fun extractOffice(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
+        val sections = vault.open(doc.id).use { app.personal.banglaai.importer.OfficeImporter.extract(doc.name, it) }
+        val id = jobId(doc, Kind.Extract)
+        val job = JobState(id, doc.id, Kind.Extract.key, sections.size.coerceAtLeast(1))
+        if (sections.isEmpty()) job.mark(1, app.personal.banglaai.jobs.PageStatus.UNREADABLE)
+        sections.forEachIndexed { i, sec ->
+            if (sec.text.isBlank()) job.mark(i + 1, app.personal.banglaai.jobs.PageStatus.UNREADABLE)
+            else { texts.put(doc.id, PageText(i + 1, sec.text, sec.title)); job.mark(i + 1, app.personal.banglaai.jobs.PageStatus.DONE) }
+        }
+        job.status = JobStatus.DONE; jobs.save(job); onProgress(job.total, job.total)
+        return job.status
+    }
+
     private fun extractTxt(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
         val text = vault.open(doc.id).use { String(it.readBytes(), Charsets.UTF_8) }
         val pages = app.personal.banglaai.ai.Chunker.split(text, 3000).ifEmpty { listOf("") }
@@ -100,7 +117,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         LocalLlm(model, File(context.cacheDir, "llm")).use { m ->
             llm = m
             try {
-                val runner = TranslationJob(job, texts, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it)) }).also { translation = it }
+                val runner = TranslationJob(job, texts, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it, glossary.relevantTo(it).map { g -> g.source to g.bengali })) }).also { translation = it }
                 return runner.run(retryFailed, onProgress)
             } finally { translation = null; llm = null }
         }
@@ -118,5 +135,6 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun deleteDerived(doc: VaultDoc) {
         texts.deleteDoc(doc.id); translations.deleteDoc(doc.id)
         Kind.entries.forEach { jobs.delete(jobId(doc, it)) }
+        marks.deleteDoc(doc.id)
     }
 }

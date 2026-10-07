@@ -17,7 +17,7 @@ class ExporterTest {
 
     @Test fun txtReportsMissingTranslationsAndOcrFlag() {
         val t = Exporter.txt(pages, opt)
-        assertTrue(t.contains("(ছাপা পৃষ্ঠা i)")); assertTrue(t.contains("(অনুবাদ হয়নি)"))
+        assertTrue(t.contains("(মূল অবস্থান: i)")); assertTrue(t.contains("(অনুবাদ হয়নি)"))
         assertTrue(t.contains("OCR, ভুল থাকতে পারে")); assertTrue(t.contains("মোট 3 পৃষ্ঠার মধ্যে অনূদিত 2। অনূদিত নয়: 2।"))
     }
 

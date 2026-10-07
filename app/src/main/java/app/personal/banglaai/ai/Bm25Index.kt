@@ -34,7 +34,10 @@ class Bm25Index(pages: Map<Int, String>, private val k1: Double = 1.5, private v
 
     companion object {
         private val marks = Regex("[\\u064B-\\u065F\\u0670\\u0640\\u06D6-\\u06ED]")   // Arabic vowel marks, tatweel, annotation marks
+        /** Lowercase, strip Arabic vowel/annotation marks, and unify letter variants that readers treat as the same (alef forms; Urdu/Persian yeh and kaf). Applied to both text and query. */
         fun normalize(s: String) = marks.replace(s.lowercase(), "")
+            .replace('\u0671', '\u0627').replace('\u0622', '\u0627').replace('\u0623', '\u0627').replace('\u0625', '\u0627')
+            .replace('\u06CC', '\u064A').replace('\u0649', '\u064A').replace('\u06A9', '\u0643')
         fun tokens(s: String): List<String> = Regex("[\\p{L}\\p{M}\\p{N}]+").findAll(normalize(s)).map { it.value }.filter { it.length > 1 || it[0].isDigit() }.toList()
     }
 }

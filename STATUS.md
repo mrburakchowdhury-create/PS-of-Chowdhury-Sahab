@@ -10,7 +10,7 @@
 | Gradle wrapper 9.8.0 + distribution checksum; AGP 9.4.1, Kotlin 2.4.20, Compose BOM 2026.09.00 (Maven metadata থেকে stable) | বিল্ড সফল |
 | `assembleDebug` (≈ 88 MB) ও `assembleRelease` unsigned, R8 minified (≈ 47 MB, arm64) সফল | বিল্ড লগ |
 | merged manifest-এ `android.permission.INTERNET` নেই (debug ও release); release APK debuggable নয় | `aapt2 dump`, `ManifestSecurityTest` (INTERNET ঢুকিয়ে দেখা গেছে টেস্ট ফেল করে) |
-| ৫৪টি JVM/Robolectric টেস্ট পাস (০ ব্যর্থ) | `./gradlew testDebugUnitTest` |
+| ৬৭টি JVM/Robolectric টেস্ট পাস (০ ব্যর্থ) | `./gradlew testDebugUnitTest` |
 | signing প্রক্রিয়া (zipalign+apksigner, অস্থায়ী চাবিতে; verify পাস) | `tools/sign_release.sh`; **কোনো signed APK রিপোতে নেই** |
 | Gemma 4 E4B ও E2B: লাইসেন্স Apache-2.0, আসল ফাইল নামিয়ে সাইজ+SHA-256 মিলেছে | `docs/MODELS.md` |
 | আসল E4B মডেলে (ডেস্কটপ CPU) ইংরেজি/আরবি/উর্দু/হিন্দি→বাংলা নমুনা, কোড-ব্যাখ্যা, প্রম্পট-ইনজেকশন, QA | `docs/MODEL_EVAL.md` |
@@ -23,6 +23,8 @@
 | PIN (PBKDF2, ক্রমবর্ধমান অপেক্ষা, ডেটা মোছে না) | ✅ | ✅ ৩টি টেস্ট | ঘড়ি বদলে অপেক্ষা এড়ানো যায় (জানা সীমা) |
 | বায়োমেট্রিক (Keystore CryptoObject; নতুন ছাপে চাবি বাতিল) | ✅ | কম্পাইল মাত্র | সবটাই ডিভাইসে |
 | এনক্রিপ্টেড Vault (Tink + Keystore), FLAG_SECURE, ইনঅ্যাক্টিভিটি লক | ✅ | আংশিক (Tink AEAD জব/টেক্সটে টেস্টকৃত; Keystore নয়) | Keystore, recents/স্ক্রিনশট |
+| DOCX/PPTX/XLSX/EPUB/CSV লেখা বের করা (ম্যাক্রো/ফর্মুলা/স্ক্রিপ্ট চলে না; cached মান; zip-bomb সীমা; XXE নেই) | ✅ | ✅ synthetic ফাইলে ৮ টেস্ট | **আসল Word/PowerPoint/Excel-এ তৈরি ফাইলে চালানো হয়নি**; টেবিল/ফুটনোট চ্যাপ্টা টেক্সট হয় |
+| পরিভাষা (glossary), বুকমার্ক, ব্যক্তিগত নোট (এনক্রিপ্টেড) | ✅ | ✅ ৫ টেস্ট (প্রম্পটে শুধু প্রাসঙ্গিক শব্দ যায়) | UI ফোনে |
 | PDF/TXT লেখা বের করা, পৃষ্ঠা-ম্যাপ, printed-label, চেকপয়েন্ট, pause/cancel/resume, coverage | ✅ | ✅ synthetic ৫০০/১০০০ পৃষ্ঠা (JVM: ≈ 0.7s / 1.6s — **ফোন নয়**), ফাঁকা পৃষ্ঠা UNREADABLE, রিস্টার্টে PAUSED | বাস্তব বই, নষ্ট/পাসওয়ার্ডযুক্ত PDF, RAM, low-memory |
 | OCR (Tesseract, bundled eng/ben/ara/urd/hin, sha256-যাচাই) | ✅ | ডেস্কটপে synthetic | ফোনে, বাস্তব স্ক্যান, ঝাপসা ছবি, নাস্তালিক উর্দু, হরকত |
 | কোড-স্ক্রিনশট: indentation পুনর্গঠন + সন্দেহজনক অক্ষর চিহ্ন | ✅ | ✅ আসল Tesseract box-এ ০/৪/৮ কলাম ঠিক | বাস্তব স্ক্রিনশট; শব্দের ভেতরের ফাঁক পুনর্গঠন **অসম্ভব** (শুধু অনিশ্চিত চিহ্ন) |
@@ -39,8 +41,8 @@
 
 ## ❌ এখনো নেই (সৎ তালিকা)
 - ব্যাকগ্রাউন্ড/স্ক্রিন-অফ প্লেব্যাক, foreground notification, ইয়ারফোন কন্ট্রোল, অডিও ক্যাশ-সীমা
-- DOCX/EPUB/XLSX/PPTX/ছবি-ফাইল import (শুধু PDF, TXT); ছবি import শুধু কোড-স্ক্রিনে
-- glossary, নোট, বুকমার্ক, শব্দভান্ডার, নির্বাচিত শব্দ/লাইন ধরে প্রশ্ন, practice questions
+- ছবি-ফাইল (JPG/PNG) আলাদা ডকুমেন্ট হিসেবে import (ছবি শুধু কোড-স্ক্রিনে OCR হয়)
+- শব্দভান্ডার, নির্বাচিত শব্দ/লাইন ধরে প্রশ্ন, practice questions
 - semantic (embedding) অনুসন্ধান; SQLCipher; হাইলাইটসহ মূল PDF viewer
 - ক্যামেরা দিয়ে ছবি তোলা; ছবির zoom/crop/rotate
 - TTS/STT-এর জন্য sherpa-onnx/Whisper-জাতীয় নিজস্ব অফলাইন মডেল (ফোনের বাংলা voice না থাকলে বিকল্প নেই)

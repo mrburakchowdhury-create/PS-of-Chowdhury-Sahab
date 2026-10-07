@@ -19,7 +19,10 @@ object Prompts {
 
     fun sanitize(doc: String) = doc.replace("</DOC>", "< /DOC>").replace("<DOC>", "< DOC>")
 
-    fun translate(text: String) = "<DOC>${sanitize(text)}</DOC>\nউপরের লেখা বাংলায় অনুবাদ করো।"
+    fun translate(text: String, glossary: List<Pair<String, String>> = emptyList()) =
+        "<DOC>${sanitize(text)}</DOC>\n" +
+            (if (glossary.isEmpty()) "" else "ব্যবহারকারীর পরিভাষা (এই শব্দগুলো হুবহু এভাবে ব্যবহার করো):\n" + glossary.joinToString("\n") { "- ${it.first} → ${it.second}" } + "\n") +
+            "উপরের লেখা বাংলায় অনুবাদ করো।"
 
     fun explainCode(code: String, question: String) =
         "<DOC>\n${sanitize(code)}\n</DOC>\n$question"

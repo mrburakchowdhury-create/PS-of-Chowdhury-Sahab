@@ -209,6 +209,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
         }
         Text("SHA-256 মিলিয়ে নিন মডেলের অফিসিয়াল পাতায় দেওয়া checksum-এর সঙ্গে।", style = MaterialTheme.typography.bodySmall)
 
+        GlossarySection(workflow)
+
         SectionTitle("স্টোরেজ ব্যবহার")
         var stats by remember { mutableStateOf(StorageStats.read(activity)) }
         LaunchedEffect(docs, modelList, busy) { stats = withContext(Dispatchers.IO) { StorageStats.read(activity) } }
@@ -236,7 +238,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
             "পাসফ্রেজ-এনক্রিপ্টেড ব্যাকআপ/রিকভারি" to "তৈরি; এনক্রিপশন কন্টেইনার টেস্টকৃত (ভুল পাসফ্রেজ/বদল ধরা পড়ে); পূর্ণ create→restore ফোনে চালানো হয়নি",
             "ব্যাকগ্রাউন্ড/স্ক্রিন-অফ প্লেব্যাক, headphone কন্ট্রোল" to "এখনো তৈরি হয়নি",
             "প্রশ্নোত্তর (কীওয়ার্ড অনুসন্ধান + AI, উৎস পৃষ্ঠা-লিঙ্ক)" to "তৈরি; অনুসন্ধান টেস্টকৃত; AI-উত্তরের মান ফোনে/বাস্তব বইয়ে যাচাই বাকি",
-            "পড়ার মাঝে প্রশ্ন (নির্বাচিত শব্দ/লাইন), নোট, বুকমার্ক, শব্দভান্ডার, glossary" to "এখনো তৈরি হয়নি",
+            "পরিভাষা (glossary), বুকমার্ক, ব্যক্তিগত নোট" to "তৈরি; লজিক টেস্টকৃত, ফোনে চালানো হয়নি",
+            "নির্বাচিত শব্দ/লাইন ধরে প্রশ্ন, শব্দভান্ডার, practice questions" to "এখনো তৈরি হয়নি",
         ).forEach { (k, v) -> Text("• $k — $v", style = MaterialTheme.typography.bodySmall) }
     }
 }

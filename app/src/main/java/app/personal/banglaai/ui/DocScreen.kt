@@ -60,7 +60,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row { TextButton(onClick = onBack) { Text("← ফিরে যান") }; Text(doc.name, Modifier.padding(top = 12.dp)) }
         if (!wf.isSupported(doc)) {
-            Text("এই ফরম্যাট (${doc.name.substringAfterLast('.', "?")}) এখনো সমর্থিত নয়। এখন শুধু PDF ও TXT-এর লেখা বের করা যায়।")
+            Text("এই ফরম্যাট (${doc.name.substringAfterLast('.', "?")}) এখনো সমর্থিত নয়। এখন PDF, TXT, DOCX, PPTX, XLSX, EPUB ও CSV-এর লেখা বের করা যায়।")
             return@Column
         }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
@@ -115,11 +115,12 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
             if (page == null) Text("১ থেকে ${ext.total}-এর মধ্যে লিখুন") else {
                 val src = remember(page, tick) { wf.texts.get(doc.id, page) }
                 val bn = remember(page, tick) { wf.translations.get(doc.id, page) }
-                Text("মূল লেখা (পৃষ্ঠা $page${src?.printedLabel?.let { " · ছাপা পৃষ্ঠা $it" } ?: ""})${if (src?.ocr == true) " — OCR থেকে, ভুল থাকতে পারে" else ""}", style = MaterialTheme.typography.titleSmall)
+                Text("মূল লেখা (পৃষ্ঠা $page${src?.printedLabel?.let { " · মূল অবস্থান: $it" } ?: ""})${if (src?.ocr == true) " — OCR থেকে, ভুল থাকতে পারে" else ""}", style = MaterialTheme.typography.titleSmall)
                 SelectionContainer { Text(src?.text ?: "(এই পৃষ্ঠায় বের করা লেখা নেই)") }
                 Text("বাংলা অনুবাদ", style = MaterialTheme.typography.titleSmall)
                 SelectionContainer { Text(bn?.text ?: "(এখনো অনুবাদ হয়নি)") }
             }
+            MarksSection(doc, wf, pageInput.toIntOrNull()?.takeIf { it in 1..ext.total }) { pageInput = it.toString() }
         }
     }
 }

@@ -28,7 +28,7 @@ object Exporter {
     fun txt(pages: List<ExportPage>, o: ExportOptions): String = buildString {
         append(o.title).append("\n").append("=".repeat(o.title.length.coerceAtMost(60))).append("\n\n")
         for (p in pages) {
-            append("--- পৃষ্ঠা ${p.page}${p.printedLabel?.let { " (ছাপা পৃষ্ঠা $it)" } ?: ""} ---\n")
+            append("--- পৃষ্ঠা ${p.page}${p.printedLabel?.let { " (মূল অবস্থান: $it)" } ?: ""} ---\n")
             if (o.includeOriginal) append("[মূল${if (p.originalIsOcr) " — OCR, ভুল থাকতে পারে" else ""}]\n").append(p.original ?: "(লেখা নেই)").append("\n\n[বাংলা]\n")
             append(p.translation?.takeIf { it.isNotBlank() } ?: "(অনুবাদ হয়নি)").append("\n\n")
         }
@@ -50,7 +50,7 @@ object Exporter {
         val body = buildString {
             append(para(o.title, bold = true, size = 36))
             for (p in pages) {
-                append(para("পৃষ্ঠা ${p.page}${p.printedLabel?.let { " (ছাপা পৃষ্ঠা $it)" } ?: ""}", bold = true, size = 28))
+                append(para("পৃষ্ঠা ${p.page}${p.printedLabel?.let { " (মূল অবস্থান: $it)" } ?: ""}", bold = true, size = 28))
                 if (o.includeOriginal) {
                     append(para("মূল${if (p.originalIsOcr) " — OCR, ভুল থাকতে পারে" else ""}", bold = true))
                     append(para(p.original ?: "(লেখা নেই)", rtl = o.originalIsRtl))
