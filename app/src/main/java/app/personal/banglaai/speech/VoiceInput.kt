@@ -18,7 +18,7 @@ class VoiceInput(private val context: Context) {
 
     private var rec: SpeechRecognizer? = null
 
-    fun listen(onText: (String) -> Unit, onError: (String) -> Unit) {
+    fun listen(onText: (String) -> Unit, onError: (String) -> Unit, onLevel: ((Float) -> Unit)? = null) {
         if (!available()) return onError("এই ফোনে অফলাইন (on-device) বাংলা ভয়েস চেনা পাওয়া যায়নি। ইন্টারনেট-ভিত্তিক বিকল্পে নিজে থেকে যাওয়া হয় না। লিখে নির্দেশ দিন।")
         stop()
         val r = SpeechRecognizer.createOnDeviceSpeechRecognizer(context); rec = r
@@ -36,7 +36,7 @@ class VoiceInput(private val context: Context) {
                     else -> "ভয়েস চেনা ব্যর্থ (কোড $error)"
                 }); stop()
             }
-            override fun onReadyForSpeech(p: Bundle?) {}; override fun onBeginningOfSpeech() {}; override fun onRmsChanged(v: Float) {}
+            override fun onReadyForSpeech(p: Bundle?) {}; override fun onBeginningOfSpeech() {}; override fun onRmsChanged(v: Float) { onLevel?.invoke(((v + 2f) / 12f).coerceIn(0f, 1f)) }
             override fun onBufferReceived(b: ByteArray?) {}; override fun onEndOfSpeech() {}
             override fun onPartialResults(b: Bundle?) {}; override fun onEvent(t: Int, b: Bundle?) {}
         })

@@ -125,7 +125,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () 
 
 /** First thing on Home: says plainly what is missing (usually the AI model) and gives one-tap access to the assistant and the phone check. */
 @Composable
-private fun StartCard(hasModel: Boolean, hasFiles: Boolean, busy: Boolean, onModel: () -> Unit, onChat: () -> Unit, onDiag: () -> Unit) {
+private fun StartCard(hasModel: Boolean, hasFiles: Boolean, busy: Boolean, onModel: () -> Unit, onChat: () -> Unit, onCall: () -> Unit, onDiag: () -> Unit) {
     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("শুরুর ধাপ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         Text((if (hasModel) "✅" else "❌") + " AI মডেল " + (if (hasModel) "বসানো আছে" else "বসানো নেই — এটি ছাড়া অনুবাদ, উত্তর, ব্যাখ্যা কিছুই চলবে না"), style = MaterialTheme.typography.bodyMedium)
@@ -138,6 +138,7 @@ private fun StartCard(hasModel: Boolean, hasFiles: Boolean, busy: Boolean, onMod
             Button(onClick = onChat) { Text("💬 সহকারী (প্রশ্ন / অনুবাদ)") }
             OutlinedButton(onClick = onDiag) { Text("🩺 ফোন পরীক্ষা") }
         }
+        Button(onClick = onCall, modifier = Modifier.fillMaxWidth()) { Text("📞 ভয়েস কল (কথা বলে কথোপকথন)") }
     } }
 }
 
@@ -151,6 +152,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     var openDoc by remember { mutableStateOf<VaultDoc?>(null) }
     var codeOpen by remember { mutableStateOf(false) }
     var chatOpen by remember { mutableStateOf(false) }
+    var callOpen by remember { mutableStateOf(false) }
     var chatStart by remember { mutableStateOf<String?>(null) }
     var diagOpen by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<String?>(null) }
@@ -206,6 +208,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
 
     var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
     openDoc?.let { d -> DocScreen(d, workflow, pendingCmd) { openDoc = null; pendingCmd = null }; return }
+    if (callOpen) { VoiceCallScreen(workflow, vault, activity.cacheDir) { callOpen = false }; return }
     if (chatOpen) { ChatScreen(workflow, activity.cacheDir, chatStart) { chatOpen = false; chatStart = null }; return }
     if (diagOpen) { DiagnosticsScreen(workflow, activity.cacheDir) { diagOpen = false }; return }
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
@@ -225,7 +228,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
 
         StartCard(hasModel = workflow.usableModel() != null, hasFiles = docs.isNotEmpty(), busy = busy != null,
-            onModel = { pickModel.launch(arrayOf("*/*")) }, onChat = { chatStart = null; chatOpen = true }, onDiag = { diagOpen = true })
+            onModel = { pickModel.launch(arrayOf("*/*")) }, onChat = { chatStart = null; chatOpen = true }, onCall = { callOpen = true }, onDiag = { diagOpen = true })
         HomeVoice(docs, { d, then -> pendingCmd = then; openDoc = d }) { q -> chatStart = q; chatOpen = true }
 
         Button(onClick = { codeOpen = true }) { Text("কোড বিশ্লেষণ / ছবি থেকে কোড") }

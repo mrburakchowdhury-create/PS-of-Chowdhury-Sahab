@@ -58,6 +58,11 @@ class ScreenshotTest {
         rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
         rule.onNodeWithText("🩺 ফোন পরীক্ষা").performScrollTo().performClick(); rule.waitForIdle(); shot("8_diagnostics")
         rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
+        rule.onNodeWithText("📞 ভয়েস কল (কথা বলে কথোপকথন)").performScrollTo().performClick(); rule.waitForIdle()
+        rule.mainClock.autoAdvance = false   // the orb animates forever; step the clock by hand
+        rule.mainClock.advanceTimeBy(900); shot("9_voice_call_idle")
+        rule.mainClock.autoAdvance = true
+        rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
         rule.onNodeWithText("🔒 বন্ধ করুন").performScrollTo().performClick(); rule.waitForIdle(); shot("6_locked")
     }
 }
