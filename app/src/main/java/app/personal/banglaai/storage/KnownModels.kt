@@ -20,4 +20,11 @@ object KnownModels {
         all.firstOrNull { it.file == file }?.let { return Verdict.Mismatch(it) }
         return Verdict.Unknown
     }
+
+    /** Plain-Bengali reason for a Mismatch, so the owner can tell a cut-off download/copy from a damaged one. */
+    fun explainMismatch(m: KnownModel, size: Long, sha256: String): String = when {
+        size < m.size -> "ফাইল ছোট: আছে $size বাইট, হওয়া উচিত ${m.size} বাইট (${(m.size - size) / (1 shl 20)} MB কম) — ডাউনলোড বা কপি মাঝপথে থেমেছে। ফাইলটা মুছে আবার নামান/কপি করুন।"
+        size > m.size -> "ফাইল বড়: আছে $size বাইট, হওয়া উচিত ${m.size} বাইট — এটি অন্য ফাইল বা ভুল সংস্করণ হতে পারে।"
+        else -> "আকার ঠিক (${m.size} বাইট) কিন্তু ভেতরের বিট মেলেনি (checksum ${sha256.take(12)}… ≠ ${m.sha256.take(12)}…) — ডাউনলোড/কপির সময় নষ্ট হয়েছে। ফাইলটা মুছে আবার নামান।"
+    }
 }

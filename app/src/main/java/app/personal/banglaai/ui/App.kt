@@ -277,7 +277,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
                         Text("SHA-256: ${m.sha256}", style = MaterialTheme.typography.bodySmall.merge(Ps.Mono))
                         Text(when (val v = KnownModels.verdict(m.name, m.size, m.sha256)) {
                             is KnownModels.Verdict.Official -> "✅ অফিসিয়াল ফাইলের সঙ্গে মিলেছে: ${v.model.label}"
-                            is KnownModels.Verdict.Mismatch -> "❌ নামের সঙ্গে মিললেও ফাইলের কনটেন্ট মেলেনি — নষ্ট বা বদলানো হতে পারে; ব্যবহার করবেন না"
+                            is KnownModels.Verdict.Mismatch -> "❌ নামের সঙ্গে মিললেও ফাইলের কনটেন্ট মেলেনি; ব্যবহার করবেন না। " + KnownModels.explainMismatch(v.expected, m.size, m.sha256)
                             KnownModels.Verdict.Unknown -> "⚠️ আমাদের যাচাই-করা তালিকায় নেই; অফিসিয়াল checksum নিজে মিলিয়ে নিন"
                         }, style = MaterialTheme.typography.bodySmall)
                     }
