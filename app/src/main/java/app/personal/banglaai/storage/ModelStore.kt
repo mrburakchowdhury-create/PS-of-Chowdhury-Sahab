@@ -16,7 +16,7 @@ data class ModelFile(val name: String, val size: Long, val sha256: String)
 class ModelStore(private val context: Context) {
     private val dir = File(context.noBackupFilesDir, "models").apply { mkdirs() }
 
-    fun list(): List<ModelFile> = dir.listFiles { f -> f.isFile && !f.name.endsWith(".tmp") }.orEmpty()
+    fun list(): List<ModelFile> = dir.listFiles { f -> f.isFile && !f.name.endsWith(".tmp") && !f.name.endsWith(".sha256") }.orEmpty()
         .sortedBy { it.name }.map { ModelFile(it.name, it.length(), File(dir, it.name + ".sha256").takeIf(File::exists)?.readText().orEmpty()) }
 
     fun freeBytes() = dir.usableSpace

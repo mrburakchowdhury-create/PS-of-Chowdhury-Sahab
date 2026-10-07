@@ -12,6 +12,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Install Android SDK platform 37 (compileSdk)
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null; "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;35.0.0"
+      - name: Android lint (errors fail the build)
+        run: ./gradlew --no-daemon lintDebug
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
       - name: Build debug and release (unsigned)

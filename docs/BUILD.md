@@ -8,7 +8,7 @@
 sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"
 export ANDROID_HOME=<sdk path>
 ```
-(`compileSdk = 37` — কারণ androidx.core 1.18 ইত্যাদি এটি দাবি করে; `targetSdk = 35`, `minSdk = 29`।)
+(`minSdk = 31` (Android 12+; S24 Ultra-র জন্য যথেষ্ট), `compileSdk = 37` — কারণ androidx.core 1.18 ইত্যাদি এটি দাবি করে; `targetSdk = 35`, `minSdk = 29`।)
 
 ## বিল্ড ও টেস্ট
 ```
@@ -30,3 +30,8 @@ ANDROID_HOME=... tools/sign_release.sh ~/banglaai-release.jks banglaai
 
 ## ফোনে ইনস্টল
 `adb install -r ChoudhurySahebsPS-release.apk` অথবা ফাইলটি ফোনে নিয়ে "অজানা উৎস থেকে ইনস্টল" অনুমতি দিয়ে খুলুন।
+
+## আসল-Android পরীক্ষা (instrumented)
+`app/src/androidTest/` — `SmokeCoreTest` (Keystore + Tink Vault, PDF নিষ্কাশন, অধ্যায়, এক্সপোর্ট TXT/DOCX/PDF, ব্যাকআপ→মুছে→ফেরত, Tesseract-এর আসল native লাইব্রেরি, PIN, বায়োমেট্রিক-কী) ও `SmokeUiTest` (প্রথম চালু → PIN → হোম → সহকারী → ফোন-পরীক্ষা)।
+চালাতে: ফোন USB-তে (developer options + USB debugging) বা KVM-সহ ইমুলেটরে `./gradlew connectedDebugAndroidTest` (x86_64 ইমুলেটরে `-Pemu` যোগ করুন)।
+**এগুলো এখনো কোনো আসল Android-এ চালানো হয়নি**: এই বিল্ড-মেশিনে KVM নেই; সফটওয়্যার-ইমুলেটরে Android 14 প্রতিবার watchdog-এ ভেঙে পড়েছে।
