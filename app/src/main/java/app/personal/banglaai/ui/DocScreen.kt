@@ -60,7 +60,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row { TextButton(onClick = onBack) { Text("← ফিরে যান") }; Text(doc.name, Modifier.padding(top = 12.dp)) }
         if (!wf.isSupported(doc)) {
-            Text("এই ফরম্যাট (${doc.name.substringAfterLast('.', "?")}) এখনো সমর্থিত নয়। এখন PDF, TXT, DOCX, PPTX, XLSX, EPUB ও CSV-এর লেখা বের করা যায়।")
+            Text("এই ফরম্যাট (${doc.name.substringAfterLast('.', "?")}) এখনো সমর্থিত নয়। এখন PDF, TXT, DOCX, PPTX, XLSX, EPUB, CSV এবং ছবি (JPG/PNG, OCR-সহ)-এর লেখা বের করা যায়।")
             return@Column
         }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
@@ -75,7 +75,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
             }
         }
         val emptyPages = ext?.count(app.personal.banglaai.jobs.PageStatus.UNREADABLE) ?: 0
-        if (emptyPages > 0 && doc.name.lowercase().endsWith(".pdf")) {
+        if (emptyPages > 0 && (doc.name.lowercase().endsWith(".pdf") || wf.isImage(doc))) {
             Text("লেখা পাওয়া যায়নি এমন $emptyPages টি পৃষ্ঠার জন্য OCR (ভাষা বেছে নিন; একাধিক হলে ধীর ও কম নির্ভুল):", style = MaterialTheme.typography.bodySmall)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TesseractOcr.Lang.entries.forEach { l -> FilterChip(selected = l in langs, onClick = { langs = if (l in langs) langs - l else langs + l }, label = { Text(l.label) }) }

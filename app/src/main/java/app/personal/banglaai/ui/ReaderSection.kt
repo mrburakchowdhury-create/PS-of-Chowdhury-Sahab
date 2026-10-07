@@ -100,6 +100,8 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int) {
     }
     voiceMsg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
+    WordQuestion(doc, wf, current?.page ?: pageInput.toIntOrNull(), current?.text, ctx.cacheDir)
+
     Text("ভয়েস কমান্ড (চেপে বলুন; শুধু ফোনের ভেতরে চেনা হয়)", style = MaterialTheme.typography.titleSmall)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Button(enabled = !listening, onClick = { micPerm.launch(Manifest.permission.RECORD_AUDIO) }) { Text(if (listening) "🎤 শুনছি…" else "🎤 চেপে বলুন") }

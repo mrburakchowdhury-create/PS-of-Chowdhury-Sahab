@@ -10,7 +10,7 @@
 | Gradle wrapper 9.8.0 + distribution checksum; AGP 9.4.1, Kotlin 2.4.20, Compose BOM 2026.09.00 (Maven metadata থেকে stable) | বিল্ড সফল |
 | `assembleDebug` (≈ 88 MB) ও `assembleRelease` unsigned, R8 minified (≈ 47 MB, arm64) সফল | বিল্ড লগ |
 | merged manifest-এ `android.permission.INTERNET` নেই (debug ও release); release APK debuggable নয় | `aapt2 dump`, `ManifestSecurityTest` (INTERNET ঢুকিয়ে দেখা গেছে টেস্ট ফেল করে) |
-| ৬৭টি JVM/Robolectric টেস্ট পাস (০ ব্যর্থ) | `./gradlew testDebugUnitTest` |
+| ৬৯টি JVM/Robolectric টেস্ট পাস (০ ব্যর্থ) | `./gradlew testDebugUnitTest` |
 | signing প্রক্রিয়া (zipalign+apksigner, অস্থায়ী চাবিতে; verify পাস) | `tools/sign_release.sh`; **কোনো signed APK রিপোতে নেই** |
 | Gemma 4 E4B ও E2B: লাইসেন্স Apache-2.0, আসল ফাইল নামিয়ে সাইজ+SHA-256 মিলেছে | `docs/MODELS.md` |
 | আসল E4B মডেলে (ডেস্কটপ CPU) ইংরেজি/আরবি/উর্দু/হিন্দি→বাংলা নমুনা, কোড-ব্যাখ্যা, প্রম্পট-ইনজেকশন, QA | `docs/MODEL_EVAL.md` |
@@ -24,6 +24,8 @@
 | বায়োমেট্রিক (Keystore CryptoObject; নতুন ছাপে চাবি বাতিল) | ✅ | কম্পাইল মাত্র | সবটাই ডিভাইসে |
 | এনক্রিপ্টেড Vault (Tink + Keystore), FLAG_SECURE, ইনঅ্যাক্টিভিটি লক | ✅ | আংশিক (Tink AEAD জব/টেক্সটে টেস্টকৃত; Keystore নয়) | Keystore, recents/স্ক্রিনশট |
 | DOCX/PPTX/XLSX/EPUB/CSV লেখা বের করা (ম্যাক্রো/ফর্মুলা/স্ক্রিপ্ট চলে না; cached মান; zip-bomb সীমা; XXE নেই) | ✅ | ✅ synthetic ফাইলে ৮ টেস্ট | **আসল Word/PowerPoint/Excel-এ তৈরি ফাইলে চালানো হয়নি**; টেবিল/ফুটনোট চ্যাপ্টা টেক্সট হয় |
+| ছবি-ফাইল (JPG/PNG) ডকুমেন্ট হিসেবে import → OCR (বড় ছবি ডাউনস্যাম্পল) | ✅ | কম্পাইল মাত্র | ফোনে ও বাস্তব ছবিতে |
+| শব্দ/বাক্যের অর্থ (পড়ার প্রসঙ্গে), শব্দভান্ডার, অনুশীলনী (AI-তৈরি, ডকুমেন্টের অংশ নয়) | ✅ | ✅ আসল মডেলে ডেস্কটপে একটি নমুনা; স্টোর/প্রম্পট টেস্ট | ফোনে; **নির্বাচিত টেক্সট ট্যাপ করে প্রশ্ন নেই — শব্দ লিখতে/পেস্ট করতে হয়** |
 | পরিভাষা (glossary), বুকমার্ক, ব্যক্তিগত নোট (এনক্রিপ্টেড) | ✅ | ✅ ৫ টেস্ট (প্রম্পটে শুধু প্রাসঙ্গিক শব্দ যায়) | UI ফোনে |
 | PDF/TXT লেখা বের করা, পৃষ্ঠা-ম্যাপ, printed-label, চেকপয়েন্ট, pause/cancel/resume, coverage | ✅ | ✅ synthetic ৫০০/১০০০ পৃষ্ঠা (JVM: ≈ 0.7s / 1.6s — **ফোন নয়**), ফাঁকা পৃষ্ঠা UNREADABLE, রিস্টার্টে PAUSED | বাস্তব বই, নষ্ট/পাসওয়ার্ডযুক্ত PDF, RAM, low-memory |
 | OCR (Tesseract, bundled eng/ben/ara/urd/hin, sha256-যাচাই) | ✅ | ডেস্কটপে synthetic | ফোনে, বাস্তব স্ক্যান, ঝাপসা ছবি, নাস্তালিক উর্দু, হরকত |
@@ -42,7 +44,6 @@
 
 ## ❌ এখনো নেই (সৎ তালিকা)
 - অডিও ক্যাশ-সীমা (অডিও ফাইল জমা হয় না — পড়া সরাসরি TTS থেকে, তাই ক্যাশ নেই)
-- ছবি-ফাইল (JPG/PNG) আলাদা ডকুমেন্ট হিসেবে import (ছবি শুধু কোড-স্ক্রিনে OCR হয়)
 - শব্দভান্ডার, নির্বাচিত শব্দ/লাইন ধরে প্রশ্ন, practice questions
 - semantic (embedding) অনুসন্ধান; SQLCipher; হাইলাইটসহ মূল PDF viewer
 - ক্যামেরা দিয়ে ছবি তোলা; ছবির zoom/crop/rotate

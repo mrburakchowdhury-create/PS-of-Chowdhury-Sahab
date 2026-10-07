@@ -25,6 +25,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     val texts = PageTextStore(File(base, "text"), vault::seal, vault::unseal)
     val translations = PageTextStore(File(base, "bn"), vault::seal, vault::unseal)
     val glossary = app.personal.banglaai.userdata.Glossary(app.personal.banglaai.userdata.SealedList(File(base, "glossary.enc"), vault::seal, vault::unseal))
+    val vocab = app.personal.banglaai.userdata.Vocab(app.personal.banglaai.userdata.SealedList(File(base, "vocab.enc"), vault::seal, vault::unseal))
     val marks = app.personal.banglaai.userdata.Marks(app.personal.banglaai.userdata.SealedList(File(base, "marks.enc"), vault::seal, vault::unseal))
 
     @Volatile private var extraction: ExtractionJob? = null
@@ -36,7 +37,8 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun jobId(doc: VaultDoc, k: Kind) = "${doc.id}-${k.key}"
     fun job(doc: VaultDoc, k: Kind): JobState? = jobs.load(jobId(doc, k))
 
-    fun isSupported(doc: VaultDoc) = doc.name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".txt") || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.supported }
+    fun isImage(doc: VaultDoc) = doc.name.lowercase().let { it.endsWith(".jpg") || it.endsWith(".jpeg") || it.endsWith(".png") }
+    fun isSupported(doc: VaultDoc) = isImage(doc) || doc.name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".txt") || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.supported }
 
     fun pause() { extraction?.pause(); translation?.pause(); ocrJob?.pause(); llm?.cancel() }
     fun cancel() { extraction?.cancel(); translation?.cancel(); ocrJob?.cancel(); llm?.cancel() }
@@ -46,6 +48,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         val tmp = File(context.cacheDir, "pdf-${doc.id}")
         try {
             val name = doc.name.lowercase()
+            if (isImage(doc)) return extractImage(doc, onProgress)
             if (name.endsWith(".txt")) return extractTxt(doc, onProgress)
             if (app.personal.banglaai.importer.OfficeImporter.extension(name) in app.personal.banglaai.importer.OfficeImporter.supported) return extractOffice(doc, onProgress)
             PdfExtractor.init(context)
@@ -65,7 +68,8 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
 
     /** OCR only for pages the text extraction found empty. Explicit button only. PDF documents only. */
     fun ocr(doc: VaultDoc, langs: List<TesseractOcr.Lang>, onProgress: (Int, Int) -> Unit): JobStatus {
-        require(doc.name.lowercase().endsWith(".pdf")) { "OCR এখন শুধু PDF-এর জন্য (ছবি import পরের ধাপ)" }
+        if (isImage(doc)) return ocrImage(doc, langs)
+        require(doc.name.lowercase().endsWith(".pdf")) { "OCR শুধু PDF ও ছবির জন্য" }
         val job = job(doc, Kind.Extract) ?: error("আগে 'লেখা বের করুন' চালান")
         val tmp = File(context.cacheDir, "pdf-${doc.id}")
         try {
@@ -75,6 +79,30 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
                 return OcrJob(job, ex, t, langs, texts, jobs).also { ocrJob = it }.run(onProgress)
             } }
         } finally { ocrJob = null; tmp.deleteRecursively() }
+    }
+
+    /** A picture has no text layer: it becomes a 1-page document whose page waits for OCR (never guessed). */
+    private fun extractImage(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
+        val job = JobState(jobId(doc, Kind.Extract), doc.id, Kind.Extract.key, 1)
+        job.mark(1, app.personal.banglaai.jobs.PageStatus.UNREADABLE); job.status = JobStatus.DONE; jobs.save(job); onProgress(1, 1)
+        return job.status
+    }
+
+    /** OCR of an imported picture (decoded in memory, downsampled to keep RAM bounded). */
+    private fun ocrImage(doc: VaultDoc, langs: List<TesseractOcr.Lang>): JobStatus {
+        val job = job(doc, Kind.Extract) ?: error("আগে 'লেখা বের করুন' চালান")
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        vault.open(doc.id).use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1; while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 4000) sample *= 2
+        val bmp = vault.open(doc.id).use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) } ?: error("ছবি পড়া যায়নি")
+        try {
+            TesseractOcr(context).use { t ->
+                val r = t.recognize(bmp, langs)
+                if (r.text.isNotBlank()) { texts.put(doc.id, PageText(1, r.text, null, ocr = true)); job.mark(1, app.personal.banglaai.jobs.PageStatus.DONE) }
+                jobs.save(job)
+            }
+        } finally { bmp.recycle() }
+        return JobStatus.DONE
     }
 
     /** DOCX/PPTX/XLSX/EPUB/CSV: sections (slide/sheet/chapter/part) become "pages". Refused files raise a clear Bengali message. */
@@ -135,6 +163,6 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun deleteDerived(doc: VaultDoc) {
         texts.deleteDoc(doc.id); translations.deleteDoc(doc.id)
         Kind.entries.forEach { jobs.delete(jobId(doc, it)) }
-        marks.deleteDoc(doc.id)
+        marks.deleteDoc(doc.id); vocab.deleteDoc(doc.id)
     }
 }

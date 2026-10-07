@@ -54,3 +54,17 @@ class Marks(private val store: SealedList) {
     fun deleteDoc(docId: String) = store.write(store.read().filterNot { it.getString("d") == docId })
     private fun toJson(m: Mark) = JSONObject().put("id", m.id).put("d", m.docId).put("p", m.page).put("k", m.kind.name).put("t", m.text).put("a", m.at)
 }
+
+data class VocabEntry(val term: String, val meaning: String, val docId: String, val page: Int, val at: Long)
+
+/** Words the user chose to keep (with the AI's explanation they accepted). Practice questions are generated only from these, on request. */
+class Vocab(private val store: SealedList) {
+    fun all(): List<VocabEntry> = store.read().map { VocabEntry(it.getString("t"), it.getString("m"), it.getString("d"), it.getInt("p"), it.getLong("a")) }
+    fun add(term: String, meaning: String, docId: String, page: Int, now: Long = System.currentTimeMillis()) {
+        require(term.isNotBlank() && meaning.isNotBlank()) { "শব্দ ও অর্থ দুটিই লাগবে" }
+        val rest = store.read().filterNot { it.getString("t").equals(term.trim(), true) && it.getString("d") == docId }
+        store.write(rest + JSONObject().put("t", term.trim()).put("m", meaning.trim()).put("d", docId).put("p", page).put("a", now))
+    }
+    fun remove(term: String, docId: String) = store.write(store.read().filterNot { it.getString("t") == term && it.getString("d") == docId })
+    fun deleteDoc(docId: String) = store.write(store.read().filterNot { it.getString("d") == docId })
+}
