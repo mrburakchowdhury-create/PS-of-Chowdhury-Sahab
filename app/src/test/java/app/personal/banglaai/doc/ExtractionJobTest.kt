@@ -127,6 +127,21 @@ class ExtractionJobTest {
         assertEquals(JobStatus.PAUSED, jobs.load("jr")!!.status)
     }
 
+    @Test fun pdfOutlineGivesChaptersAndNoOutlineGivesEmptyList() {
+        val f = tmp.newFile("outline.pdf")
+        PDDocument().use { d ->
+            val pages = (1..12).map { PDPage().also { p -> d.addPage(p) } }
+            val outline = com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.outline.PDDocumentOutline(); d.documentCatalog.documentOutline = outline
+            fun item(title: String, page: PDPage) = com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.outline.PDOutlineItem().also {
+                it.title = title
+                it.destination = com.tom_roush.pdfbox.pdmodel.interactive.documentnavigation.destination.PDPageFitDestination().also { dst -> dst.page = page } }
+            outline.addLast(item("অধ্যায় ১", pages[0])); outline.addLast(item("অধ্যায় ২", pages[4])); outline.addLast(item("Chapter 3", pages[9]))
+            d.save(f)
+        }
+        open(f).use { assertEquals(listOf("অধ্যায় ১" to 1, "অধ্যায় ২" to 5, "Chapter 3" to 10), it.outline()) }
+        open(makePdf(3)).use { assertTrue(it.outline().isEmpty()) }
+    }
+
     @Test fun garbageFileIsReportedMalformedNotCrash() {
         val r = PdfExtractor.open("not a pdf at all".byteInputStream(), tmp.newFolder())
         assertTrue(r is PdfExtractor.OpenResult.Malformed)

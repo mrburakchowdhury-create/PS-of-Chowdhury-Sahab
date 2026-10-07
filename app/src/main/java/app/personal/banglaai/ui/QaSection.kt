@@ -31,7 +31,7 @@ fun QaSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, cacheDir: File, o
     DisposableEffect(Unit) { onDispose { llm[0]?.close() } }
 
     HorizontalDivider()
-    Text("প্রশ্ন করুন (ডকুমেন্ট থেকে, উৎস-সহ)", style = MaterialTheme.typography.titleSmall)
+    Text("প্রশ্ন করুন (ডকুমেন্ট থেকে, উৎস-সহ)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
     OutlinedTextField(value = q, onValueChange = { q = it }, label = { Text("প্রশ্ন") }, modifier = Modifier.fillMaxWidth())
     Button(enabled = !busy && q.isNotBlank(), onClick = {
         busy = true; error = null; answer = null; hits = emptyList()
@@ -54,9 +54,9 @@ fun QaSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, cacheDir: File, o
     }) { Text(if (busy) "খোঁজা ও উত্তর তৈরি হচ্ছে…" else "খুঁজে উত্তর দাও") }
     error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
     note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-    answer?.let { a -> Text("উত্তর (AI; উদ্ধৃতি ও অনুমান আলাদা — নিচের উৎস পৃষ্ঠায় মিলিয়ে নিন)", style = MaterialTheme.typography.titleSmall); SelectionContainer { Text(a) } }
+    answer?.let { a -> Text("উত্তর (AI; উদ্ধৃতি ও অনুমান আলাদা — নিচের উৎস পৃষ্ঠায় মিলিয়ে নিন)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary); SelectionContainer { Text(a) } }
     if (hits.isNotEmpty()) {
-        Text("উৎস পৃষ্ঠা (ট্যাপ করলে মূল লেখা খুলবে)", style = MaterialTheme.typography.titleSmall)
+        Text("উৎস পৃষ্ঠা (ট্যাপ করলে মূল লেখা খুলবে)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         hits.forEach { h -> OutlinedButton(onClick = { onOpenPage(h.page) }, modifier = Modifier.fillMaxWidth()) { Text("পৃষ্ঠা ${h.page}: ${h.snippet.replace('\n', ' ').take(80)}…") } }
     }
 }

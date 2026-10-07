@@ -32,6 +32,16 @@ class PdfExtractor private constructor(private val doc: PDDocument) : AutoClosea
         }
     }
 
+    /** Top-level bookmarks of the PDF (title, 1-based physical page). Empty if the PDF has no outline. Nothing is guessed from headings. */
+    fun outline(): List<Pair<String, Int>> = runCatching {
+        val o = doc.documentCatalog.documentOutline ?: return emptyList()
+        val pages = doc.pages
+        generateSequence(o.firstChild) { it.nextSibling }.mapNotNull { item ->
+            val pg = runCatching { item.findDestinationPage(doc) }.getOrNull() ?: return@mapNotNull null
+            val idx = pages.indexOf(pg); if (idx < 0 || item.title.isNullOrBlank()) null else item.title.trim() to idx + 1
+        }.toList()
+    }.getOrDefault(emptyList())
+
     /** Renders a page to a bitmap for OCR (in memory only; nothing is written to disk). */
     fun renderPage(n: Int, dpi: Float = 200f): android.graphics.Bitmap {
         require(n in 1..pageCount)

@@ -26,6 +26,10 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     val translations = PageTextStore(File(base, "bn"), vault::seal, vault::unseal)
     val glossary = app.personal.banglaai.userdata.Glossary(app.personal.banglaai.userdata.SealedList(File(base, "glossary.enc"), vault::seal, vault::unseal))
     val vocab = app.personal.banglaai.userdata.Vocab(app.personal.banglaai.userdata.SealedList(File(base, "vocab.enc"), vault::seal, vault::unseal))
+    data class Chapter(val title: String, val page: Int)
+    private fun chapterStore(doc: VaultDoc) = app.personal.banglaai.userdata.SealedList(File(File(base, "chapters").apply { mkdirs() }, "${doc.id}.enc"), vault::seal, vault::unseal)
+    fun chapters(doc: VaultDoc): List<Chapter> = runCatching { chapterStore(doc).read().map { Chapter(it.getString("t"), it.getInt("p")) } }.getOrDefault(emptyList())
+    private fun saveChapters(doc: VaultDoc, list: List<Chapter>) = chapterStore(doc).write(list.map { org.json.JSONObject().put("t", it.title).put("p", it.page) })
     val marks = app.personal.banglaai.userdata.Marks(app.personal.banglaai.userdata.SealedList(File(base, "marks.enc"), vault::seal, vault::unseal))
 
     @Volatile private var extraction: ExtractionJob? = null
@@ -59,6 +63,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
                 is PdfExtractor.OpenResult.Ok -> opened.extractor.use { ex ->
                     val id = jobId(doc, Kind.Extract)
                     val job = jobs.load(id) ?: JobState(id, doc.id, Kind.Extract.key, ex.pageCount)
+                    runCatching { saveChapters(doc, ex.outline().map { (t, p) -> Chapter(t, p) }) }
                     val runner = ExtractionJob(job, ex, texts, jobs).also { extraction = it }
                     return runner.run(retryFailed, onProgress)
                 }
@@ -115,6 +120,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
             if (sec.text.isBlank()) job.mark(i + 1, app.personal.banglaai.jobs.PageStatus.UNREADABLE)
             else { texts.put(doc.id, PageText(i + 1, sec.text, sec.title)); job.mark(i + 1, app.personal.banglaai.jobs.PageStatus.DONE) }
         }
+        if (app.personal.banglaai.importer.OfficeImporter.extension(doc.name) == "epub") runCatching { saveChapters(doc, sections.mapIndexed { i, sec -> Chapter(sec.title, i + 1) }) }
         job.status = JobStatus.DONE; jobs.save(job); onProgress(job.total, job.total)
         return job.status
     }
@@ -163,6 +169,6 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun deleteDerived(doc: VaultDoc) {
         texts.deleteDoc(doc.id); translations.deleteDoc(doc.id)
         Kind.entries.forEach { jobs.delete(jobId(doc, it)) }
-        marks.deleteDoc(doc.id); vocab.deleteDoc(doc.id)
+        marks.deleteDoc(doc.id); vocab.deleteDoc(doc.id); File(File(base, "chapters"), "${doc.id}.enc").delete()
     }
 }

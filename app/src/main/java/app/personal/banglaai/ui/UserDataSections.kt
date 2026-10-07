@@ -16,7 +16,7 @@ fun GlossarySection(wf: DocWorkflow) {
     var items by remember { mutableStateOf<List<GlossaryEntry>>(emptyList()) }
     var src by remember { mutableStateOf("") }; var bn by remember { mutableStateOf("") }; var err by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { items = runCatching { wf.glossary.all() }.getOrDefault(emptyList()) }
-    Text("পরিভাষা (glossary) — অনুবাদে একই শব্দের একই বাংলা", style = MaterialTheme.typography.titleMedium)
+    Text("পরিভাষা (glossary) — অনুবাদে একই শব্দের একই বাংলা", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedTextField(src, { src = it }, label = { Text("মূল শব্দ") }, singleLine = true, modifier = Modifier.weight(1f))
         OutlinedTextField(bn, { bn = it }, label = { Text("বাংলা") }, singleLine = true, modifier = Modifier.weight(1f))
@@ -34,7 +34,7 @@ fun MarksSection(doc: VaultDoc, wf: DocWorkflow, page: Int?, onOpenPage: (Int) -
     var note by remember { mutableStateOf("") }
     LaunchedEffect(doc.id) { items = runCatching { wf.marks.forDoc(doc.id) }.getOrDefault(emptyList()) }
     HorizontalDivider()
-    Text("বুকমার্ক ও নোট", style = MaterialTheme.typography.titleSmall)
+    Text("বুকমার্ক ও নোট", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
     if (page == null) Text("উপরে একটি বৈধ পৃষ্ঠা নম্বর দিন", style = MaterialTheme.typography.bodySmall) else {
         OutlinedTextField(note, { note = it }, label = { Text("পৃষ্ঠা $page-এর জন্য নোট") }, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -19,9 +19,9 @@ import androidx.compose.ui.unit.dp
 import app.personal.banglaai.MainActivity
 import app.personal.banglaai.R
 import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.graphics.Color
 import app.personal.banglaai.security.PinStore
 import app.personal.banglaai.backup.BackupService
 import app.personal.banglaai.backup.PassphraseBackup
@@ -38,8 +38,10 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun App(activity: MainActivity, unlocked: Boolean, onUnlocked: () -> Unit, onLock: () -> Unit) {
-    MaterialTheme(colorScheme = if (androidx.compose.foundation.isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-        Surface(Modifier.fillMaxSize()) {
+    val settings = remember { activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE) }
+    var fontScale by remember { mutableFloatStateOf(settings.getFloat("font_scale", 1.0f).coerceIn(0.85f, 1.6f)) }
+    PsTheme(fontScale) {
+        Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = Ps.Ice) {
             val pins = remember { PinStore(activity) }
             var pinSet by remember { mutableStateOf(pins.isSet()) }
             var splashDone by rememberSaveable { mutableStateOf(false) }
@@ -48,7 +50,7 @@ fun App(activity: MainActivity, unlocked: Boolean, onUnlocked: () -> Unit, onLoc
                 !splashDone -> Image(painterResource(R.drawable.splash_art), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 !pinSet -> SetupScreen(pins) { pinSet = true; onUnlocked() }
                 !unlocked -> UnlockScreen(activity, pins, onUnlocked)
-                else -> HomeScreen(activity, onLock)
+                else -> HomeScreen(activity, onLock, fontScale) { v -> fontScale = v.coerceIn(0.85f, 1.6f); settings.edit().putFloat("font_scale", fontScale).apply() }
             }
         }
     }
@@ -94,7 +96,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () 
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait = pins.lockedSeconds() } }
     val bio = remember { activity.canUseStrongBiometric() }
     Column(Modifier.fillMaxSize().padding(24.dp).systemBarsPadding(), verticalArrangement = Arrangement.Center) {
-        Image(painterResource(R.drawable.logo_ps), contentDescription = null, modifier = Modifier.size(96.dp).align(Alignment.CenterHorizontally))
+        Image(painterResource(R.drawable.logo_ps), contentDescription = null, modifier = Modifier.size(104.dp).clip(androidx.compose.foundation.shape.CircleShape).align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(12.dp))
         Text("🔒 অ্যাপ বন্ধ আছে", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
@@ -122,7 +124,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () 
 }
 
 @Composable
-private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
+private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Float, onFontScale: (Float) -> Unit) {
     val scope = rememberCoroutineScope()
     val vault = remember { Vault(activity) }; val models = remember { ModelStore(activity) }
     var docs by remember { mutableStateOf<List<VaultDoc>>(emptyList()) }
@@ -174,7 +176,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
         }
     }
 
-    openDoc?.let { d -> DocScreen(d, workflow) { openDoc = null }; return }
+    var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
+    openDoc?.let { d -> DocScreen(d, workflow, pendingCmd) { openDoc = null; pendingCmd = null }; return }
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Image(painterResource(R.drawable.home_banner), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
@@ -182,8 +185,16 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
             Text("চৌধুরী সাহেবের পিএস", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = onLock) { Text("🔒 বন্ধ করুন") }
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("লেখার আকার", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = { onFontScale(fontScale - 0.1f) }, enabled = fontScale > 0.86f) { Text("A−") }
+            Text("${(fontScale * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = { onFontScale(fontScale + 0.1f) }, enabled = fontScale < 1.59f) { Text("A+") }
+        }
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
+
+        HomeVoice(docs) { d, then -> pendingCmd = then; openDoc = d }
 
         Button(onClick = { codeOpen = true }) { Text("কোড বিশ্লেষণ / ছবি থেকে কোড") }
         SectionTitle("আমার ফাইল (এনক্রিপ্টেড)")
@@ -209,7 +220,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(m.name); Text(fmtSize(m.size), style = MaterialTheme.typography.bodySmall)
-                        Text("SHA-256: ${m.sha256}", style = MaterialTheme.typography.bodySmall)
+                        Text("SHA-256: ${m.sha256}", style = MaterialTheme.typography.bodySmall.merge(Ps.Mono))
                         Text(when (val v = KnownModels.verdict(m.name, m.size, m.sha256)) {
                             is KnownModels.Verdict.Official -> "✅ অফিসিয়াল ফাইলের সঙ্গে মিলেছে: ${v.model.label}"
                             is KnownModels.Verdict.Mismatch -> "❌ নামের সঙ্গে মিললেও ফাইলের কনটেন্ট মেলেনি — নষ্ট বা বদলানো হতে পারে; ব্যবহার করবেন না"
@@ -260,7 +271,14 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit) {
     }
 }
 
-@Composable private fun SectionTitle(t: String) = Text(t, style = MaterialTheme.typography.titleMedium)
+/** Section heading in "terminal prompt" style: cyan chevron + bold title + thin cyan rule. */
+@Composable fun SectionTitle(t: String) = Column {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("❯ ", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+        Text(t, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), modifier = Modifier.padding(top = 4.dp))
+}
 
 private fun fmtSize(b: Long) = when {
     b >= 1L shl 30 -> "%.2f GB".format(b / (1L shl 30).toDouble())

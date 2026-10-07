@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import app.personal.banglaai.MainActivity
@@ -48,5 +49,9 @@ class ScreenshotTest {
         rule.onNodeWithText("আবার PIN লিখুন").performTextInput("123456")
         rule.onNodeWithText("PIN সেট করুন").performClick(); rule.waitForIdle()
         shot("3_home")
+        rule.onNodeWithText("নির্দেশ (লিখেও দিতে পারেন / শোনা লেখা ঠিক করুন)").performTextInput("ইতিহাস ফাইলটা খোলো এবং পনেরো নম্বর পৃষ্ঠা থেকে পড়া শুরু করো")
+        rule.onNodeWithText("নির্দেশ বুঝে নিন").performClick(); rule.waitForIdle(); shot("4_home_voice")
+        rule.onNodeWithText("ফিচারের অবস্থা (সৎ তালিকা)").performScrollTo(); rule.waitForIdle(); shot("5_home_status")
+        rule.onNodeWithText("🔒 বন্ধ করুন").performScrollTo().performClick(); rule.waitForIdle(); shot("6_locked")
     }
 }

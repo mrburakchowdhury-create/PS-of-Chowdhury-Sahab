@@ -24,7 +24,7 @@ fun WordQuestion(doc: VaultDoc, wf: DocWorkflow, page: Int?, context: String?, c
     var term by remember { mutableStateOf("") }; var answer by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }; var err by remember { mutableStateOf<String?>(null) }; var saved by remember { mutableStateOf(false) }
     HorizontalDivider()
-    Text("শব্দ/বাক্যের অর্থ জানুন (পড়ার প্রসঙ্গে)", style = MaterialTheme.typography.titleSmall)
+    Text("শব্দ/বাক্যের অর্থ জানুন (পড়ার প্রসঙ্গে)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
     OutlinedTextField(term, { term = it; saved = false }, label = { Text("কোন শব্দ বা বাক্য? (লিখুন বা কপি-পেস্ট)") }, modifier = Modifier.fillMaxWidth())
     Text(if (context.isNullOrBlank()) "প্রসঙ্গ: কোনো অংশ পড়া হচ্ছে না — প্রসঙ্গ ছাড়া সাধারণ অর্থ দেওয়া হবে।" else "প্রসঙ্গ: এখন পড়া অংশ (পৃষ্ঠা ${page ?: "?"})।", style = MaterialTheme.typography.bodySmall)
     Button(enabled = !busy && term.isNotBlank(), onClick = {
@@ -51,7 +51,7 @@ fun VocabPanel(wf: DocWorkflow, cacheDir: File) {
     var items by remember { mutableStateOf<List<VocabEntry>>(emptyList()) }
     var out by remember { mutableStateOf<String?>(null) }; var busy by remember { mutableStateOf(false) }; var err by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { items = runCatching { wf.vocab.all() }.getOrDefault(emptyList()) }
-    Text("শব্দভান্ডার ও অনুশীলনী", style = MaterialTheme.typography.titleMedium)
+    Text("শব্দভান্ডার ও অনুশীলনী", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
     if (items.isEmpty()) Text("এখনো কোনো শব্দ রাখা হয়নি। ডকুমেন্টে 'শব্দ/বাক্যের অর্থ' থেকে রাখুন।", style = MaterialTheme.typography.bodySmall)
     items.forEach { e -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Text("${e.term} — ${e.meaning.lines().firstOrNull { it.isNotBlank() }.orEmpty().take(70)}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)

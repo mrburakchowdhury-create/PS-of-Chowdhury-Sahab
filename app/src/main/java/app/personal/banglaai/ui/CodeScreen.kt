@@ -99,12 +99,12 @@ fun CodeScreen(wf: DocWorkflow, cacheDir: File, noBackupDir: File, onBack: () ->
             }) { Text("ভুল খোঁজো") }
         }
         answer?.let { a ->
-            HorizontalDivider(); Text("AI-র উত্তর (সাধারণ ব্যাখ্যা/অনুমান — যাচাইকৃত নয়)", style = MaterialTheme.typography.titleSmall)
+            HorizontalDivider(); Text("AI-র উত্তর (সাধারণ ব্যাখ্যা/অনুমান — যাচাইকৃত নয়)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             SelectionContainer { Text(a) }
         }
         proposed?.let { p ->
             val d = CodeDiff.diff(code, p)
-            HorizontalDivider(); Text("প্রস্তাবিত পরিবর্তন (diff আপনার কোডের সঙ্গে অ্যাপ নিজে হিসাব করেছে; কিছু নিজে থেকে বদলানো হয়নি)", style = MaterialTheme.typography.titleSmall)
+            HorizontalDivider(); Text("প্রস্তাবিত পরিবর্তন (diff আপনার কোডের সঙ্গে অ্যাপ নিজে হিসাব করেছে; কিছু নিজে থেকে বদলানো হয়নি)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             if (!CodeDiff.changed(d)) Text("প্রস্তাবিত কোড মূল কোডের হুবহু একই।") else d.forEach { l ->
                 val (bg, mark) = when (l.type) { DiffType.ADDED -> Color(0x3328A745) to "+" ; DiffType.REMOVED -> Color(0x33DC3545) to "−"; else -> Color.Transparent to " " }
                 Box(Modifier.fillMaxWidth().background(bg)) {

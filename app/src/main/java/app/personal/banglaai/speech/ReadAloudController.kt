@@ -13,6 +13,8 @@ import androidx.compose.runtime.setValue
 object ReadAloudController {
     var state by mutableStateOf(TtsReader.State.Initialising); private set
     var current by mutableStateOf<Segment?>(null); private set
+    /** True while the app speaks its own explanation (not the document); the saved reading position is then left untouched. */
+    var adHoc by mutableStateOf(false); private set
     private var reader: TtsReader? = null
     private var onPosition: ((ReadingPosition) -> Unit)? = null
     /** Called whenever state changes; the foreground service uses it to refresh the notification. */
@@ -20,7 +22,12 @@ object ReadAloudController {
 
     fun get(context: Context): TtsReader = reader ?: TtsReader(context.applicationContext,
         { state = it; listener?.invoke() },
-        { seg, pos -> current = seg; pos?.let { p -> onPosition?.invoke(p) }; listener?.invoke() }).also { reader = it }
+        { seg, pos -> current = seg; if (!adHoc) pos?.let { p -> onPosition?.invoke(p) }; listener?.invoke() }).also { reader = it }
+
+    fun play(context: Context, plan: ReadingPlan, from: ReadingPosition) { adHoc = false; get(context).play(plan, from) }
+
+    /** Speaks the app's own explanation text (the user asked for it); never saved as a reading position. */
+    fun speakExplanation(context: Context, text: String) { adHoc = true; get(context).play(ReadingPlan({ text }, 1), ReadingPosition(1, 0)) }
 
     fun setPositionSaver(f: ((ReadingPosition) -> Unit)?) { onPosition = f }
 

@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
 
 /** One document: explicit-command buttons for extraction/translation, progress, pause/cancel/resume, coverage and side-by-side viewer. */
 @Composable
-fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
+fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.banglaai.speech.VoiceCommand? = null, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var running by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableStateOf(0 to 0) }
@@ -63,6 +63,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
             Text("এই ফরম্যাট (${doc.name.substringAfterLast('.', "?")}) এখনো সমর্থিত নয়। এখন PDF, TXT, DOCX, PPTX, XLSX, EPUB, CSV এবং ছবি (JPG/PNG, OCR-সহ)-এর লেখা বের করা যায়।")
             return@Column
         }
+        if (initialCommand != null && ext == null) Text("ভয়েস নির্দেশ ধরা হয়নি: এই ফাইলের লেখা এখনো বের করা হয়নি। আগে 'লেখা বের করুন' চালান, তারপর আবার বলুন।", color = MaterialTheme.colorScheme.tertiary)
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
         running?.let { Text("চলছে: $it — ${progress.first}/${progress.second}"); LinearProgressIndicator(progress = { if (progress.second == 0) 0f else progress.first / progress.second.toFloat() }, modifier = Modifier.fillMaxWidth()) }
 
@@ -95,7 +96,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
 
         if (tr != null) {
             HorizontalDivider()
-            Text("এক্সপোর্ট (আপনার বেছে নেওয়া জায়গায়, ফোনের ভেতরেই; কোথাও আপলোড হয় না)", style = MaterialTheme.typography.titleSmall)
+            Text("এক্সপোর্ট (আপনার বেছে নেওয়া জায়গায়, ফোনের ভেতরেই; কোথাও আপলোড হয় না)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(selected = rtlOriginal, onClick = { rtlOriginal = !rtlOriginal }, label = { Text("মূল ডান-থেকে-বাঁ (আরবি/উর্দু)") })
             }
@@ -107,7 +108,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
             Text("এক্সপোর্টে অনুবাদ-না-হওয়া পৃষ্ঠার তালিকা থাকে। পৃষ্ঠা-বিন্যাস মূলের সঙ্গে হুবহু মিলবে না।", style = MaterialTheme.typography.bodySmall)
         }
         if (ext != null) {
-            ReaderSection(doc, wf, ext.total)
+            ReaderSection(doc, wf, ext.total, initialCommand)
             QaSection(doc, wf, ext.total, ctx.cacheDir) { pageInput = it.toString() }
             HorizontalDivider()
             OutlinedTextField(value = pageInput, onValueChange = { pageInput = it.filter(Char::isDigit).take(5) }, label = { Text("পৃষ্ঠা নম্বর (ফাইলের ভৌত পৃষ্ঠা)") }, singleLine = true)
@@ -115,9 +116,9 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
             if (page == null) Text("১ থেকে ${ext.total}-এর মধ্যে লিখুন") else {
                 val src = remember(page, tick) { wf.texts.get(doc.id, page) }
                 val bn = remember(page, tick) { wf.translations.get(doc.id, page) }
-                Text("মূল লেখা (পৃষ্ঠা $page${src?.printedLabel?.let { " · মূল অবস্থান: $it" } ?: ""})${if (src?.ocr == true) " — OCR থেকে, ভুল থাকতে পারে" else ""}", style = MaterialTheme.typography.titleSmall)
+                Text("মূল লেখা (পৃষ্ঠা $page${src?.printedLabel?.let { " · মূল অবস্থান: $it" } ?: ""})${if (src?.ocr == true) " — OCR থেকে, ভুল থাকতে পারে" else ""}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 SelectionContainer { Text(src?.text ?: "(এই পৃষ্ঠায় বের করা লেখা নেই)") }
-                Text("বাংলা অনুবাদ", style = MaterialTheme.typography.titleSmall)
+                Text("বাংলা অনুবাদ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 SelectionContainer { Text(bn?.text ?: "(এখনো অনুবাদ হয়নি)") }
             }
             MarksSection(doc, wf, pageInput.toIntOrNull()?.takeIf { it in 1..ext.total }) { pageInput = it.toString() }
