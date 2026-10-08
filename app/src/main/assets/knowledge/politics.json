@@ -9,7 +9,17 @@
       "ক্ষমতা",
       "বৈধতা"
     ],
-    "ref": "সূত্র: ম্যাক্স ভেবারের কর্তৃত্ব-তত্ত্বের সাধারণ আলোচনা"
+    "ref": "সূত্র: ম্যাক্স ভেবারের কর্তৃত্ব-তত্ত্বের সাধারণ আলোচনা",
+    "sources": [
+      {
+        "url": "https://plato.stanford.edu/entries/legitimacy/",
+        "publisher": "Stanford Encyclopedia of Philosophy",
+        "title": "Political Legitimacy",
+        "pageDate": "2023-12-11",
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "SEP-র Political Legitimacy নিবন্ধে ওয়েবার-ভিত্তিক বৈধতার ধারণা (ঐতিহ্য, ক্যারিশমা, বৈধ-আইনি) এবং 'কর্তৃত্ব = শাসনের অধিকার' ধারণা আছে। কিন্তু ওয়েবারের 'ক্ষমতা' সংজ্ঞা সরাসরি পড়া যায়নি (UCLA-র ওয়েবার পাতা খালি, উইকিসোর্সে শুধু স্টাব)। কার্ডের সংজ্ঞাগুলো পাঠ্যপুস্তকীয় সরলীকরণ।"
   },
   {
     "id": "prince",
@@ -21,7 +31,24 @@
       "দ্য প্রিন্স",
       "বাস্তববাদ"
     ],
-    "ref": "সূত্র: দ্য প্রিন্স (সর্বজনীন-ডোমেইন বই); অনুবাদভেদে শব্দ ভিন্ন হয়"
+    "ref": "সূত্র: দ্য প্রিন্স (সর্বজনীন-ডোমেইন বই); অনুবাদভেদে শব্দ ভিন্ন হয়",
+    "sources": [
+      {
+        "url": "https://plato.stanford.edu/entries/machiavelli/",
+        "publisher": "Stanford Encyclopedia of Philosophy",
+        "title": "Niccolò Machiavelli",
+        "pageDate": "2023-12-06",
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://www.gutenberg.org/cache/epub/1232/pg1232.txt",
+        "publisher": "Project Gutenberg",
+        "title": "The Prince (Machiavelli; W. K. Marriott translation)",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "SEP থেকে: ম্যাকিয়াভেলি ফ্লোরেন্সের সরকারি কর্মকর্তা (১৪৬৯-এ জন্ম), বইটি ১৫১৩-র শেষে লেখা ও ১৫৩২-এ মরণোত্তর প্রকাশিত, virtù ও Fortuna কেন্দ্রীয় ধারণা। গুটেনবার্গ পাঠে ভাড়াটে সৈন্য 'useless and dangerous' (অধ্যায় ১২)। 'উদ্দেশ্য উপায়কে সিদ্ধ করে' হুবহু নেই — গুটেনবার্গ পাঠে এ বাক্য পাইনি।"
   },
   {
     "id": "feared",
@@ -33,7 +60,17 @@
       "ঘৃণা",
       "ম্যাকিয়াভেলি"
     ],
-    "ref": "সূত্র: দ্য প্রিন্স, অধ্যায় ১৭"
+    "ref": "সূত্র: দ্য প্রিন্স, অধ্যায় ১৭",
+    "sources": [
+      {
+        "url": "https://www.gutenberg.org/cache/epub/1232/pg1232.txt",
+        "publisher": "Project Gutenberg",
+        "title": "The Prince (Machiavelli; W. K. Marriott translation)",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "গুটেনবার্গের Marriott অনুবাদ, অধ্যায় ১৭: 'it is much safer to be feared than loved, when, of the two, either must be dispensed with'; এবং 'he can endure very well being feared whilst he is not hated, which will always be as long as he abstains from the property of his citizens and subjects and from their women'। কার্ডের বক্তব্য প্রায় পুরোপুরি সমর্থিত। অনুবাদভেদে শব্দ ভিন্ন।"
   },
   {
     "id": "sunzu",
@@ -45,7 +82,17 @@
       "যুদ্ধ",
       "কৌশল"
     ],
-    "ref": "সূত্র: The Art of War (সর্বজনীন-ডোমেইন অনুবাদ আছে)"
+    "ref": "সূত্র: The Art of War (সর্বজনীন-ডোমেইন অনুবাদ আছে)",
+    "sources": [
+      {
+        "url": "https://www.gutenberg.org/cache/epub/132/pg132.txt",
+        "publisher": "Project Gutenberg",
+        "title": "The Art of War (Sun Tzu; Lionel Giles translation)",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "গিলেস অনুবাদ (গুটেনবার্গ): 'supreme excellence consists in breaking the enemy's resistance without fighting'; 'If you know the enemy and know yourself...'; দীর্ঘ যুদ্ধে রাষ্ট্রের সম্পদ ক্ষয়ের কথা (অধ্যায় ২); অধ্যায় ৬ Weak Points and Strong, অধ্যায় ১৩ গুপ্তচর। ব্যবসা-আলোচনায় প্রয়োগ বইয়ের বিষয় নয়।"
   },
   {
     "id": "kautilya",
@@ -57,7 +104,24 @@
       "অর্থশাস্ত্র",
       "মণ্ডল"
     ],
-    "ref": "সূত্র: অর্থশাস্ত্রের সাধারণ পাঠ-ব্যাখ্যা"
+    "ref": "সূত্র: অর্থশাস্ত্রের সাধারণ পাঠ-ব্যাখ্যা",
+    "sources": [
+      {
+        "url": "https://en.wikisource.org/wiki/Arthashastra/Book_VI",
+        "publisher": "Wikisource (R. Shamasastry translation, 1915)",
+        "title": "Arthashastra/Book VI: The Source of Sovereign States",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://en.wikisource.org/wiki/Arthashastra",
+        "publisher": "Wikisource (R. Shamasastry translation, 1915)",
+        "title": "Arthashastra (table of contents)",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "শামাশাস্ত্রীর ১৯১৫ অনুবাদ, Book VI: 'The king who is situated anywhere immediately on the circumference of the conqueror's territory is termed the enemy. The king ... close to the enemy, but separated from the conqueror only by the enemy, is termed the friend' এবং 'circle of states' (১২ রাজা) — মণ্ডল-তত্ত্ব সমর্থিত। সূচিপত্রে শাসনব্যবস্থা, আইন, যুদ্ধ, চর ইত্যাদি বিষয় আছে (কর/অর্থনীতি Book II)। রচনাকাল/রচয়িতা বিতর্ক সূত্র থেকে যাচাই হয়নি।"
   },
   {
     "id": "balance",
@@ -69,7 +133,17 @@
       "জোট",
       "আন্তর্জাতিক সম্পর্ক"
     ],
-    "ref": "সূত্র: আন্তর্জাতিক সম্পর্ক তত্ত্বের সাধারণ আলোচনা"
+    "ref": "সূত্র: আন্তর্জাতিক সম্পর্ক তত্ত্বের সাধারণ আলোচনা",
+    "sources": [
+      {
+        "url": "https://plato.stanford.edu/entries/realism-intl-relations/",
+        "publisher": "Stanford Encyclopedia of Philosophy",
+        "title": "Political Realism in International Relations",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "SEP-র Political Realism নিবন্ধে 'states try to increase their power and engage in power-balancing for the purpose of deterring potential aggressors' আছে — কার্ডের মূল ধারণার আংশিক সমর্থন। 'balance of power' নামে স্বতন্ত্র সংজ্ঞা-পাতা (Britannica ইত্যাদি) খোলা যায়নি (403)।"
   },
   {
     "id": "systems",
@@ -81,7 +155,9 @@
       "কর্তৃত্ববাদ",
       "রাজতন্ত্র"
     ],
-    "ref": "সূত্র: রাজনীতি-বিজ্ঞানের পাঠ্য আলোচনা"
+    "ref": "সূত্র: রাজনীতি-বিজ্ঞানের পাঠ্য আলোচনা",
+    "sources": [],
+    "uncertainty": "কোনো খোলা-যাওয়া নির্ভরযোগ্য পাতা পাইনি যা তিন ব্যবস্থার পার্থক্য সরাসরি ব্যাখ্যা করে (Britannica 403, Freedom House/OWID 404)। SEP 'Democracy' পাতা খোলা গেছে কিন্তু কর্তৃত্ববাদ-রাজতন্ত্রের সংজ্ঞা নেই। তাই সূত্রহীন রাখা হলো।"
   },
   {
     "id": "propaganda",
@@ -93,7 +169,17 @@
       "গণমাধ্যম",
       "সচেতনতা"
     ],
-    "ref": "সূত্র: গণমাধ্যম-সাক্ষরতার সাধারণ নীতি"
+    "ref": "সূত্র: গণমাধ্যম-সাক্ষরতার সাধারণ নীতি",
+    "sources": [
+      {
+        "url": "https://unwritten-record.blogs.archives.gov/2019/07/09/spotlight-propoganda/",
+        "publisher": "US National Archives (The Unwritten Record)",
+        "title": "Spotlight: Propaganda",
+        "pageDate": "2019-07-09",
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "ন্যাশনাল আর্কাইভসের ব্লগে বার্নেজ (১৯২৮)-এর সংজ্ঞা ও '১৬০০-এর দশকে ধর্মীয় প্রচারে উৎপত্তি, বিংশ শতকের যুদ্ধে বর্তমান অর্থ' আছে। কার্ডের 'চেনার লক্ষণ' ও 'প্রতিরক্ষা' অংশের জন্য কোনো সূত্র পাইনি। সূত্রটি দুর্বল/আংশিক।"
   },
   {
     "id": "misinfo",
@@ -106,19 +192,53 @@
       "অ্যালগরিদম",
       "ফ্যাক্ট-চেক"
     ],
-    "ref": "সূত্র: ফ্যাক্ট-চেকিং সংস্থাগুলোর সাধারণ পদ্ধতি"
+    "ref": "সূত্র: ফ্যাক্ট-চেকিং সংস্থাগুলোর সাধারণ পদ্ধতি",
+    "sources": [
+      {
+        "url": "https://news.mit.edu/2018/study-twitter-false-news-travels-faster-true-stories-0308",
+        "publisher": "MIT News",
+        "title": "Study: On Twitter, false news travels faster than true stories",
+        "pageDate": "2018-03-08",
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=EXT_ID:29590045%20AND%20SRC:MED&format=json&resultType=core",
+        "publisher": "Europe PMC (PubMed record, Science 2018)",
+        "title": "The spread of true and false news online (Vosoughi, Roy, Aral)",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://www.factcheck.org/2016/11/how-to-spot-fake-news/",
+        "publisher": "FactCheck.org",
+        "title": "How to Spot Fake News",
+        "pageDate": "2016-11-18",
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "MIT News (২০১৮): মিথ্যা খবর সত্য খবরের চেয়ে ৭০% বেশি রিটুইট হওয়ার সম্ভাবনা, ১৫০০ জনের কাছে পৌঁছাতে সত্য খবরের ছয়গুণ সময় লাগে। Science নিবন্ধের সারাংশ Europe PMC-তে পাওয়া। FactCheck.org-এ উৎস দেখা, শিরোনামের বাইরে পড়া, লেখক যাচাই ইত্যাদি আছে। রিভার্স-ইমেজ সার্চ, ফ্যাক্ট-চেক সাইট ব্যবহার, দুই স্বতন্ত্র উৎস — আংশিকভাবে বা যাচাই হয়নি। গবেষণাটি শুধু টুইটার সম্পর্কিত।"
   },
   {
     "id": "echo",
     "topic": "গণমাধ্যম",
     "q": "ইকো-চেম্বার ও ফিল্টার-বাবল কী?",
-    "a": "যে পরিবেশে আপনি শুধু নিজের মতের সঙ্গে মিলে যাওয়া কথা শোনেন, তাকে ইকো-চেম্বার বলে। প্ল্যাটফর্মের সুপারিশ-ব্যবস্থা আপনার আগের পছন্দ দেখে আরও একই ধরনের কনটেন্ট দেখায় — একে ফিল্টার-বাবল বলে। সম্ভাব্য ফল: মতের মেরুকরণ (এর মাত্রা নিয়ে গবেষকদের মতভেদ আছে), বিপরীত মত নিয়ে ভুল ধারণা। প্রতিকার: ভিন্ন মতের নির্ভরযোগ্য উৎস পড়া, ব্যক্তিগত দেখা-সাক্ষাৎ, মতবিরোধে শত্রু না ভেবে যুক্তি শোনা।",
+    "a": "যে পরিবেশে আপনি শুধু নিজের মতের সঙ্গে মিলে যাওয়া কথা শোনেন, তাকে ইকো-চেম্বার বলে। ফিল্টার-বাবল তত্ত্ব বলে, প্ল্যাটফর্মের সুপারিশ-ব্যবস্থা আগের পছন্দ দেখে একই ধরনের কনটেন্ট দেখায়; তবে একটি পর্যালোচনায় এই তত্ত্বের পক্ষে সমর্থন মেলেনি — একে প্রমাণিত ঘটনা ধরবেন না। সম্ভাব্য ফল: মতের মেরুকরণ (এর মাত্রা নিয়ে গবেষকদের মতভেদ আছে), বিপরীত মত নিয়ে ভুল ধারণা। প্রতিকার: ভিন্ন মতের নির্ভরযোগ্য উৎস পড়া, ব্যক্তিগত দেখা-সাক্ষাৎ, মতবিরোধে শত্রু না ভেবে যুক্তি শোনা।",
     "tags": [
       "ইকো চেম্বার",
       "ফিল্টার বাবল",
       "মেরুকরণ"
     ],
-    "ref": "সূত্র: ইন্টারনেট-সমাজবিজ্ঞানের আলোচনা"
+    "ref": "সূত্র: ইন্টারনেট-সমাজবিজ্ঞানের আলোচনা",
+    "sources": [
+      {
+        "url": "https://reutersinstitute.politics.ox.ac.uk/echo-chambers-filter-bubbles-and-polarisation-literature-review",
+        "publisher": "Reuters Institute for the Study of Journalism",
+        "title": "Echo chambers, filter bubbles, and polarisation: a literature review",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "Reuters Institute (Arguedas et al. 2022) পর্যালোচনা: 'echo chambers are much less widespread than is commonly assumed, finds no support for the filter bubble hypothesis and offers a very mixed picture on polarisation'। ফিল্টার-বাবল শব্দ Eli Pariser-এর। কার্ডের সতর্কবাণী ('মাত্রা নিয়ে মতভেদ') সমর্থিত; কিন্তু কার্ডের 'সম্ভাব্য ফল' অংশ সূত্রের চেয়ে জোরালো।"
   },
   {
     "id": "corrupt",
@@ -152,7 +272,9 @@
       "অস্থিরতা",
       "রাষ্ট্র"
     ],
-    "ref": "সূত্র: রাজনৈতিক সমাজবিজ্ঞানের সাধারণ আলোচনা"
+    "ref": "সূত্র: রাজনৈতিক সমাজবিজ্ঞানের সাধারণ আলোচনা",
+    "sources": [],
+    "uncertainty": "রাষ্ট্রীয় অস্থিরতার কারণ নিয়ে কোনো একক নির্ভরযোগ্য খোলা-পাতা পাইনি যা কার্ডের তালিকা সমর্থন করে। SEP legitimacy শুধু বৈধতা-সংকট অংশে প্রাসঙ্গিক, কিন্তু সরাসরি 'অস্থিরতার কারণ' বলে না। তাই সূত্রহীন।"
   },
   {
     "id": "greene",
@@ -165,6 +287,8 @@
       "ক্ষমতা",
       "ম্যানিপুলেশন"
     ],
-    "ref": "সূত্র: বইটির সাধারণ পর্যালোচনা-আলোচনা; মূল বই সরাসরি পড়ুন"
+    "ref": "সূত্র: বইটির সাধারণ পর্যালোচনা-আলোচনা; মূল বই সরাসরি পড়ুন",
+    "sources": [],
+    "uncertainty": "রবার্ট গ্রিনের '৪৮ ল'জ অব পাওয়ার' বিষয়ে কোনো প্রকাশক/লেখক পাতা খোলা যায়নি (Penguin Random House 404, লেখকের সাইট প্রক্সি-ব্লকড)। বইয়ের প্রকাশের বছর/ক্যাটালগ রেকর্ড কেবল সার্চ-ফলাফলে দেখা, নিজে খুলিনি।"
   }
 ]

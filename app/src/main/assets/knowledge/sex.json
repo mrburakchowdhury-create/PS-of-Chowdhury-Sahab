@@ -227,8 +227,23 @@
       "জীববিজ্ঞান"
     ],
     "ref": "সূত্র: মৌলিক প্রজনন-শারীরতত্ত্ব",
-    "sources": [],
-    "uncertainty": "কোনো খোলা উৎসে এই কার্ডের নির্দিষ্ট সংখ্যা (ডিম্বাণু ১২–২৪ ঘণ্টা, শুক্রাণু কয়েক দিন) যাচাই করতে পারিনি (ACOG/NHS গর্ভধারণ পাতা পাইনি/ব্লকড)। NHS 'natural family planning' পাতা বলে অনিয়মিত মাসিকে ফার্টিলিটি-অ্যাওয়ারনেস পদ্ধতি উপযুক্ত নাও হতে পারে — এটি কেবল আংশিকভাবে সংশ্লিষ্ট, তাই তালিকাভুক্ত করিনি।"
+    "sources": [
+      {
+        "url": "https://www.acog.org/womens-health/faqs/fertility-awareness-based-methods-of-family-planning",
+        "publisher": "ACOG",
+        "title": "Fertility Awareness-Based Methods of Family Planning",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://womenshealth.gov/pregnancy/you-get-pregnant/trying-conceive",
+        "publisher": "Office on Women's Health (US HHS)",
+        "title": "Trying to conceive",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "ACOG: ডিম্বাণু ডিম্বস্ফোটনের পর প্রায় ২৪ ঘণ্টা টিকে; শুক্রাণু প্রায় ৩ দিন (কখনো ৫ দিন); ডিম্বস্ফোটনের ৫ দিন আগে থেকে ১ দিন পর পর্যন্ত গর্ভধারণ সম্ভব। Women's Health.gov: উর্বরতম সময় ডিম্বস্ফোটনের ২-৩ দিন আগে ও ১২-২৪ ঘণ্টা পর; শুক্রাণু ৩ দিন পর্যন্ত। দুই সূত্রে সংখ্যা সামান্য ভিন্ন (১২-২৪ ঘণ্টা বনাম ~২৪ ঘণ্টা)। কার্ডের '১২-২৪ ঘণ্টা' WH-এর সঙ্গে মেলে।"
   },
   {
     "id": "contraception",
@@ -420,8 +435,30 @@
       "আপস"
     ],
     "ref": "সূত্র: দাম্পত্য-থেরাপির সাধারণ নীতি",
-    "sources": [],
-    "uncertainty": "দাম্পত্য যোগাযোগের পরামর্শ ('আমি অনুভব করি' বাক্যগঠন ইত্যাদি) কোনো খোলা কর্তৃপক্ষীয় পাতায় যাচাই করিনি। এটি সাধারণ কাউন্সেলিং-পরামর্শ; সূত্র ছাড়া উপস্থাপন করাই ভালো।"
+    "sources": [
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7261674/",
+        "publisher": "PubMed Central (J Sex Med / ESSM position statement)",
+        "title": "Sexual Desire Discrepancy: A Position Statement of the European Society for Sexual Medicine",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC6699928/",
+        "publisher": "PubMed Central",
+        "title": "Couples’ sexual communication and dimensions of sexual function: A meta-analysis",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://www.gottman.com/blog/the-art-of-sensual-communication/",
+        "publisher": "The Gottman Institute",
+        "title": "The Art of Sensual Communication",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "ESSM অবস্থানপত্র: ইচ্ছার অসামঞ্জস্য 'dyadic ও relative' ধারণা, 'promote open sexual communication', 'joint sexual scripts' ও সম্পর্কের সমস্যা মোকাবিলা। মেটা-বিশ্লেষণ (৪৮ গবেষণা): যৌন যোগাযোগ বেশি থাকলে ইচ্ছা, তৃপ্তি ও যৌন-কার্যকারিতা ভালো (সম্পর্ক, কার্যকারণ নয়)। Gottman: 'I feel...' বাক্য-কাঠামোর উদাহরণ (চিকিৎসক-লিখিত, পরীক্ষা নয়)। 'I-statements' কার্যকর — এর কোনো নিয়ন্ত্রিত পরীক্ষা পাইনি।"
   },
   {
     "id": "premarital",
@@ -486,8 +523,44 @@
       "বাস্তবতা"
     ],
     "ref": "সূত্র: মনোবিজ্ঞান ও জনস্বাস্থ্যের সাধারণ আলোচনা",
-    "sources": [],
-    "uncertainty": "পর্নোগ্রাফির প্রভাব ও 'আসক্তি' নিয়ে কর্তৃপক্ষীয় পাতা আমি সফলভাবে খুলিনি। বাংলাদেশের পর্নোগ্রাফি নিয়ন্ত্রণ আইনের জন্য আমার bdlaws চেষ্টা ভুল আইন (গ্যাস আইন) খুলেছে, তাই বাদ। কার্ড নিজেই 'চিকিৎসাশাস্ত্রে মতভেদ আছে' স্বীকার করেছে — এটি সততার দিক থেকে ঠিক।"
+    "sources": [
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11214846/",
+        "publisher": "PubMed Central (ISSM review committee)",
+        "title": "Assessment and treatment of compulsive sexual behavior disorder: a sexual medicine perspective",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9853222/",
+        "publisher": "PubMed Central",
+        "title": "Pornography use among adolescents and the role of primary care",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://bdlaws.minlaw.gov.bd/act-1091/section-41877.html",
+        "publisher": "Legislative and Parliamentary Affairs Division, Bangladesh (bdlaws)",
+        "title": "পর্নোগ্রাফি নিয়ন্ত্রণ আইন, ২০১২ — ধারা ৪ (পর্নোগ্রাফি সংরক্ষণ ও বাজারজাতকরণ ইত্যাদি নিষিদ্ধ)",
+        "pageDate": "2012-03-08",
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://bdlaws.minlaw.gov.bd/act-1091/section-41881.html",
+        "publisher": "Legislative and Parliamentary Affairs Division, Bangladesh (bdlaws)",
+        "title": "পর্নোগ্রাফি নিয়ন্ত্রণ আইন, ২০১২ — ধারা ৮ (দণ্ড)",
+        "pageDate": "2012-03-08",
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://bdlaws.minlaw.gov.bd/act-1091/section-41883.html",
+        "publisher": "Legislative and Parliamentary Affairs Division, Bangladesh (bdlaws)",
+        "title": "পর্নোগ্রাফি নিয়ন্ত্রণ আইন, ২০১২ — ধারা ১০ (অপরাধের আমলযোগ্যতা)",
+        "pageDate": "2012-03-08",
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "পর্নোগ্রাফি নিয়ন্ত্রণ আইন ২০১২ (bdlaws, ধারা পড়া): ধারা ৪ — উৎপাদন, সংরক্ষণ, বাজারজাতকরণ, বহন, সরবরাহ, ক্রয়, বিক্রয়, ধারণ বা প্রদর্শন নিষিদ্ধ; ধারা ৮ — জোর/প্রলোভনে অংশগ্রহণ করানো (সর্বোচ্চ ৭ বছর), ভয় দেখিয়ে অর্থ আদায়/মানসিক নির্যাতন (সর্বোচ্চ ৫ বছর), অনলাইনে সরবরাহ (সর্বোচ্চ ৫ বছর); ধারা ১০ — আমলযোগ্য ও অ-জামিনযোগ্য। আইন তাই কার্ডের চেয়ে বিস্তৃত: 'কিছু কনটেন্ট অবৈধ' নয়, আইনি সংজ্ঞার পর্নোগ্রাফির ধারণ/প্রদর্শনও নিষিদ্ধ। ISSM পর্যালোচনা: CSBD ICD-11-এ impulse-control হিসেবে, 'sex/porn addiction' বিতর্কিত। কিশোর-পর্নোগ্রাফি পর্যালোচনা: অবাস্তব প্রত্যাশা তৈরির সম্ভাবনা, তবে ফল 'contradictory and inconclusive'।"
   },
   {
     "id": "assault",
@@ -611,8 +684,23 @@
       "অভিভাবক"
     ],
     "ref": "সূত্র: শিশু-মনোবিজ্ঞানের সাধারণ পরামর্শ",
-    "sources": [],
-    "uncertainty": "এই কার্ডের জন্য আমি কোনো কর্তৃপক্ষীয় সূত্র খুলে পাইনি (UNICEF পেরেন্টিং পাতাগুলো 404)। এটি শিশু-মনোবিজ্ঞানের সাধারণ পরামর্শ; সূত্র ছাড়া ছেড়ে দেওয়া হলো।"
+    "sources": [
+      {
+        "url": "https://kidshealth.org/en/parents/questions-sex.html",
+        "publisher": "Nemours KidsHealth",
+        "title": "Answering Questions About Sex",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://www.healthychildren.org/English/ages-stages/preschool/Pages/Talking-to-Your-Young-Child-About-Sex.aspx",
+        "publisher": "HealthyChildren.org (American Academy of Pediatrics)",
+        "title": "When & How to Talk With Your Child About Sex",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "KidsHealth (Nemours): ছোট শিশুকে বলা যায় 'a baby grows from an egg in a mom's womb'; যৌনক্রিয়া ব্যাখ্যার দরকার নেই; ধীরে ধীরে, প্রশ্ন এলে উত্তর। HealthyChildren.org (AAP): 'Be honest', 'Answer in simple terms', 'Use proper names for all body parts'। কার্ডের সৎ ও সংক্ষিপ্ত উত্তরের পরামর্শ সমর্থিত।"
   },
   {
     "id": "teentalk",
@@ -625,8 +713,23 @@
       "পরিবার"
     ],
     "ref": "সূত্র: কিশোর-স্বাস্থ্য ও মনোবিজ্ঞানের সাধারণ পরামর্শ",
-    "sources": [],
-    "uncertainty": "কিশোরদের সঙ্গে আলাপের পরামর্শ সাধারণ অভিভাবকত্ব-পরামর্শ; কোনো কর্তৃপক্ষীয় পাতা পাইনি। WHO শিশু-নির্যাতন ফ্যাক্টশিটে সম্মতি-শিক্ষা কর্মসূচির উল্লেখ আছে, কিন্তু কার্ডের নির্দিষ্ট পরামর্শের সঙ্গে সরাসরি মেলে না।"
+    "sources": [
+      {
+        "url": "https://www.cdc.gov/healthy-youth-parent-resources/conversation-tips/index.html",
+        "publisher": "CDC",
+        "title": "Talking with Your Teens About Sex",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://www.healthychildren.org/English/ages-stages/teen/dating-sex/Pages/Helping-Teens-Resist-Sexual-Pressure.aspx",
+        "publisher": "HealthyChildren.org (American Academy of Pediatrics)",
+        "title": "Helping Teens Make Choices About Sex: Parent Tips",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "CDC: কিশোর-কিশোরীর সঙ্গে যৌনতা নিয়ে অভিভাবকের কথাবার্তা বলা তাদের যৌনতা বিলম্বিত ও কনডম ব্যবহারে সহায়ক; আলোচনা শুধু ঝুঁকি-পরিণতিতে সীমাবদ্ধ না রাখা, সম্মানজনক সম্পর্ক ও প্রতিরোধ নিয়ে বলা। HealthyChildren (AAP): সম্মতি = 'saying yes — different than just not saying no', চাপ ছাড়া, প্রতিবার, মত বদলানো যায়। কার্ডের মূল পরামর্শ আংশিক সমর্থিত।"
   },
   {
     "id": "menopause",

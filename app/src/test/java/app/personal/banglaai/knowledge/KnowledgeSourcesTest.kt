@@ -21,12 +21,12 @@ class KnowledgeSourcesTest {
 
     @Test fun healthCardsWithASourceStateTheirLimitsAndTheOthersAreFlagged() {
         val sex = items.filter { it.category == "sex" }
-        assertTrue("sources present on most health cards", sex.count { it.sources.isNotEmpty() } >= 18)
+        assertTrue("sources present on most health cards", sex.count { it.sources.isNotEmpty() } >= 20)
         assertTrue(sex.all { it.uncertainty.isNotBlank() })
     }
 
     @Test fun exportShowsSourcesOrAnHonestWarning() {
-        val t = KnowledgeBase.exportText(items.filter { it.category == "sex" }.take(30))
+        val t = KnowledgeBase.exportText(items)
         assertTrue(t.contains("[উৎস: ")); assertTrue(t.contains("নির্দিষ্ট উৎস যাচাই হয়নি")); assertTrue(t.contains("[অনিশ্চয়তা: "))
     }
 }
