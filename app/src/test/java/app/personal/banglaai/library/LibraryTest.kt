@@ -27,6 +27,18 @@ class LibraryTest {
         assertTrue(c.any { it.book.startsWith("The Art of War") && it.text.contains("spies", ignoreCase = true) })
     }
 
+    @Test fun everyBundledBookLoadsAndIsFindable() {
+        Library.bundled.forEach { b ->
+            val ps = load(b); assertTrue("${b.id} too small", ps.size > 40)
+            assertTrue("${b.id} licence boilerplate indexed", ps.none { it.text.contains("START OF THE PROJECT GUTENBERG") || it.text.contains("END OF THE PROJECT GUTENBERG") })
+            assertTrue("${b.id} passage size", ps.all { it.text.length <= 4000 })
+        }
+        val all = Library.bundled.flatMap { load(it) }; val idx = Library.Index(all)
+        assertTrue(idx.search("ambassador negotiator secrecy of negotiation", 4).any { it.book.startsWith("On the Manner") })
+        assertTrue(idx.search("crowds are credulous leaders prestige", 4).any { it.book.startsWith("The Crowd") })
+        assertTrue(idx.search("war is the continuation of policy by other means", 4).any { it.book.startsWith("On War") })
+    }
+
     @Test fun smallInputChunking() {
         val p = Library.chunk("T", "intro text\n\nCHAPTER I. ONE\n\nalpha beta\n\nCHAPTER II.\n\ngamma")
         assertEquals(listOf("ভূমিকা", "CHAPTER I. ONE", "CHAPTER II"), p.map { it.label.substringBefore(" · ") })

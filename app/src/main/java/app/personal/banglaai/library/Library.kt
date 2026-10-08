@@ -17,9 +17,13 @@ object Library {
     val bundled = listOf(
         BundledBook("prince", "The Prince (দ্য প্রিন্স)", "নিকোলো ম্যাকিয়াভেলি", "library/the_prince.txt", "অনুবাদ: W. K. Marriott (১৯০৮), সর্বজনীন-ডোমেইন"),
         BundledBook("artofwar", "The Art of War (যুদ্ধের কৌশল)", "সান জু", "library/art_of_war.txt", "অনুবাদ: Lionel Giles (১৯১০), সর্বজনীন-ডোমেইন"),
+        BundledBook("callieres", "On the Manner of Negotiating with Princes (কূটনীতির ক্লাসিক)", "ফ্রাঁসোয়া দ্য ক্যালিয়ের (১৭১৬)", "library/callieres.txt", "অনুবাদ: A. F. Whyte (১৯১৯), সর্বজনীন-ডোমেইন"),
+        BundledBook("discourses", "Discourses on Livy (লিভির আলোচনা)", "নিকোলো ম্যাকিয়াভেলি", "library/discourses.txt", "অনুবাদ: Ninian Hill Thomson (১৮৮৩), সর্বজনীন-ডোমেইন"),
+        BundledBook("crowd", "The Crowd (জনতার মনোবিজ্ঞান)", "গুস্তাভ লে বঁ", "library/the_crowd.txt", "ইংরেজি অনুবাদ (১৮৯৬), সর্বজনীন-ডোমেইন"),
+        BundledBook("onwar", "On War (যুদ্ধ ও রাষ্ট্রনীতি)", "কার্ল ফন ক্লাউজেভিৎস", "library/on_war.txt", "অনুবাদ: J. J. Graham (১৮৭৩), সর্বজনীন-ডোমেইন"),
     )
 
-    private val heading = Regex("(?i)^\\s*chapter\\s+[ivxlc]+\\b.*$")
+    private val heading = Regex("(?i)^\\s*(chapter|book)\\s+[ivxlc]+\\b.*$")
 
     /** Splits a plain-text book into passages of about [max] characters on paragraph borders; the label is the latest "CHAPTER …" heading seen. */
     fun chunk(book: String, raw: String, max: Int = 1400): List<Passage> {

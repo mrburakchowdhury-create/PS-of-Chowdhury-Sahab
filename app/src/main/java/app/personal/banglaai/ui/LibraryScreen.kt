@@ -135,6 +135,6 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
         Button(enabled = JobRunner.label == null, onClick = { add.launch(arrayOf("*/*")) }) { Text("➕ নিজের বই যোগ করুন (PDF / EPUB / TXT)") }
         Text("বই ফোনে এনক্রিপ্ট হয়ে থাকে, কোথাও যায় না। কপিরাইটযুক্ত বই শুধু আপনার বৈধ কপি যোগ করুন। যোগ করলে নিজে থেকে কোনো AI কাজ শুরু হয় না।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         SectionTitle("কোন বই আছে, কোনটা আপনাকে দিতে হবে")
-        Text("• The Prince — অ্যাপে আছে\n• The Art of War — অ্যাপে আছে\n• 48 Laws of Power, Influence (Cialdini), How to Win Friends and Influence People — কপিরাইটযুক্ত; আপনার নিজের PDF যোগ করুন\n• On Diplomacy — কোন বই (লেখক কে) জানালে দেখব; Kissinger-এর Diplomacy হলে কপিরাইটযুক্ত, আপনার PDF যোগ করুন", style = MaterialTheme.typography.bodySmall)
+        Text("অ্যাপে আছে (সর্বজনীন-ডোমেইন, বৈধ): The Prince, Discourses on Livy, The Art of War, On War, On the Manner of Negotiating with Princes (কূটনীতি), The Crowd (জনতার মনোবিজ্ঞান)।\n\nআপনাকে নিজে যোগ করতে হবে (কপিরাইটযুক্ত): 48 Laws of Power, Influence (Cialdini), How to Win Friends and Influence People, Kissinger-এর Diplomacy ইত্যাদি। বৈধ কপি কিনে বা লাইব্রেরি থেকে নিয়ে PDF/EPUB যোগ করুন।", style = MaterialTheme.typography.bodySmall)
     }
 }
