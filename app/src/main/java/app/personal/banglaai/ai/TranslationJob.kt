@@ -18,7 +18,7 @@ fun interface Translator { fun translate(text: String): String }
  * Pages with no extracted text (OCR pending) stay in the report as UNREADABLE — they are not counted as translated.
  */
 class TranslationJob(
-    private val job: JobState, private val source: PageTextStore, private val target: PageTextStore,
+    private val job: JobState, private val source: app.personal.banglaai.doc.PageSource, private val target: PageTextStore,
     private val jobs: JobStore, private val translator: Translator, private val maxChunk: Int = 1200,
     private val checkpointEvery: Int = 5, private val pauseCheck: () -> String? = { null },
     /** Pages whose text is already in the target language are copied, not sent to the model. */

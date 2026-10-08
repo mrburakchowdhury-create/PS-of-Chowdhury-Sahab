@@ -65,7 +65,7 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
                 val all = ArrayList<Passage>()
                 Library.bundled.forEach { all += Library.bundledPassages(ctx, it) }
                 userDocs.forEach { d -> val total = wf.job(d, DocWorkflow.Kind.Extract)?.total ?: 0
-                    for (p in 1..total) wf.texts.get(d.id, p)?.text?.takeIf { it.isNotBlank() }?.let { t -> all += Library.chunk(d.name, t).map { c -> c.copy(label = "পৃষ্ঠা $p") } } }
+                    for (p in 1..total) wf.effective(d.id, p)?.text?.takeIf { it.isNotBlank() }?.let { t -> all += Library.chunk(d.name, t).map { c -> c.copy(label = "পৃষ্ঠা $p") } } }
                 val index = Library.Index(all)
                 val model = wf.usableModel()
                 var query = q
@@ -107,6 +107,7 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
             Text("উত্তর (AI; মূলত নিচের উৎস-অংশের ভিত্তিতে — ‘আমার মন্তব্য/অনুমান’ অংশ বইয়ের কথা নয়; উৎসের সঙ্গে মিলিয়ে নিন)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             SelectionContainer { Text(a) }
             TextButton(onClick = { ReadAloudController.speakExplanation(ctx, a) }) { Text("🔊 শুনুন") }
+            SaveQaButton(wf, "library", q, a, sources.map { "${it.book} — ${it.label}" })
         }
         if (sources.isNotEmpty()) {
             Text("উৎস (ট্যাপ করলে মূল অংশ দেখা যাবে)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)

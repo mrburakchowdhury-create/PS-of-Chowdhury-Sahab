@@ -48,7 +48,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     var initialDone by remember { mutableStateOf(false) }
     val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    fun plan() = ReadingPlan({ p -> (if (useTranslation) wf.translations.get(doc.id, p) else wf.texts.get(doc.id, p))?.text }, endInput.toIntOrNull()?.coerceIn(1, totalPages) ?: totalPages)
+    fun plan() = ReadingPlan({ p -> (if (useTranslation) wf.translations.get(doc.id, p) else wf.effective(doc.id, p))?.text }, endInput.toIntOrNull()?.coerceIn(1, totalPages) ?: totalPages)
     fun play(page: Int, seg: Int = 0) {
         val pl = plan(); val start = if (seg == 0) pl.startAt(page) else ReadingPosition(page, seg)
         val sample = start?.let { pl.segmentAt(it)?.text }
@@ -64,7 +64,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
         if (seg == null) { voiceMsg = "বোঝানোর মতো কোনো অংশ নেই — আগে পড়া শুরু করুন বা পৃষ্ঠা বাছুন"; return }
         val model = wf.usableModel() ?: run { voiceMsg = "কোনো AI মডেল বসানো নেই — আগে মডেল import করুন"; return }
         val pg = ReadAloudController.current?.takeIf { !ReadAloudController.adHoc }?.page ?: (pageInput.toIntOrNull() ?: 1)
-        val pageCtx = (if (useTranslation) wf.translations.get(doc.id, pg) else wf.texts.get(doc.id, pg))?.text
+        val pageCtx = (if (useTranslation) wf.translations.get(doc.id, pg) else wf.effective(doc.id, pg))?.text
         ReadAloudController.pause(); explaining = true; voiceMsg = null; explanation = null
         scope.launch {
             runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { LocalLlm(model, java.io.File(ctx.cacheDir, "llm")).use { it.ask(Prompts.EXPLAIN_SYSTEM, Prompts.explain(seg, pageCtx)) } } }

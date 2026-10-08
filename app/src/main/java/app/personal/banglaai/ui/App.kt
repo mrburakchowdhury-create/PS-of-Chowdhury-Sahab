@@ -149,6 +149,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     var modelList by remember { mutableStateOf(models.list()) }
     val workflow = remember { AppGraph.workflow(activity) }
     var openDoc by remember { mutableStateOf<VaultDoc?>(null) }
+    var openPage by remember { mutableStateOf<Int?>(null) }
     var codeOpen by remember { mutableStateOf(false) }
     var chatOpen by remember { mutableStateOf(false) }
     var callOpen by remember { mutableStateOf(false) }
@@ -228,11 +229,11 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     androidx.activity.compose.BackHandler(enabled = tab != HomeTab.Menu && openDoc == null && !callOpen && !kbOpen && !libOpen && !chatOpen && !diagOpen && !codeOpen) { tab = HomeTab.Menu }
     var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
     androidx.activity.compose.BackHandler(enabled = openDoc != null || libOpen || kbOpen || liveOpen || callOpen || chatOpen || diagOpen || codeOpen) {
-        when { openDoc != null -> { openDoc = null; pendingCmd = null }; libOpen -> libOpen = false; kbOpen -> kbOpen = false; liveOpen -> liveOpen = false
+        when { openDoc != null -> { openDoc = null; pendingCmd = null; openPage = null }; libOpen -> libOpen = false; kbOpen -> kbOpen = false; liveOpen -> liveOpen = false
             callOpen -> callOpen = false; chatOpen -> { chatOpen = false; chatStart = null }; diagOpen -> diagOpen = false; else -> codeOpen = false }
     }
     DisposableEffect(Unit) { onDispose { app.personal.banglaai.ai.LocalLlm.cancelInteractive() } }   // leaving Home (lock / close) stops any answer still being written for a screen that is gone
-    openDoc?.let { d -> DocScreen(d, workflow, pendingCmd) { openDoc = null; pendingCmd = null }; return }
+    openDoc?.let { d -> DocScreen(d, workflow, pendingCmd, openPage) { openDoc = null; pendingCmd = null; openPage = null }; return }
     if (libOpen) { LibraryScreen(workflow, vault, activity.cacheDir) { libOpen = false }; return }
     if (kbOpen) { KnowledgeScreen(workflow, activity.cacheDir) { kbOpen = false }; return }
     if (liveOpen) { LiveTranslateScreen(workflow, activity.cacheDir) { liveOpen = false }; return }
@@ -261,6 +262,17 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
 
         when (tab) {
             HomeTab.Menu -> {
+        val pendingJobs by produceState(emptyList<Triple<app.personal.banglaai.storage.VaultDoc, String, String>>(), docs, JobRunner.tick, JobRunner.label) {
+            value = withContext(Dispatchers.IO) { runCatching {
+                // only PAUSED jobs (a job that was running when the app died comes back as PAUSED); CANCELLED jobs are never listed and never restart by themselves
+                docs.flatMap { d -> listOf(DocWorkflow.Kind.Extract to "লেখা বের করা", DocWorkflow.Kind.Translate to "বাংলা অনুবাদ").mapNotNull { (k, n) ->
+                    workflow.job(d, k)?.takeIf { it.status == app.personal.banglaai.jobs.JobStatus.PAUSED }?.let { Triple(d, n, "${it.count(app.personal.banglaai.jobs.PageStatus.DONE)}/${it.total} পৃষ্ঠা সম্পন্ন") } } }
+            }.getOrDefault(emptyList()) }
+        }
+        if (pendingJobs.isNotEmpty() && JobRunner.label == null) {
+            Text("⏸ অসমাপ্ত কাজ (নিজে থেকে চলবে না — আপনি ফাইল খুলে 'চালিয়ে যান' চাপলে বাকি অংশ চলবে):", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.tertiary)
+            pendingJobs.forEach { (d, n, c) -> TextButton(onClick = { openPage = null; openDoc = d }) { Text("${d.name} — $n থামানো ($c)") } }
+        }
         val hasModel = remember(modelList, workflow.chosenModel) { workflow.usableModel() != null }
         Text(if (hasModel) "✅ AI মডেল বসানো আছে" else "❌ AI মডেল বসানো নেই — নিচে '🤖 AI মডেল' চেপে বসান", color = if (hasModel) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         val ic = androidx.compose.material.icons.Icons.Rounded; val st = TileStyle
@@ -340,6 +352,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             }
             HomeTab.Terms -> {
         GlossarySection(workflow)
+        SavedQaSection(workflow, null) { id, p -> docs.firstOrNull { it.id == id }?.let { openPage = p; openDoc = it } }
 
         VocabPanel(workflow, activity.cacheDir)
 

@@ -25,6 +25,9 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     val jobs = JobStore(File(base, "jobs"), vault::seal, vault::unseal)
     val texts = PageTextStore(File(base, "text"), vault::seal, vault::unseal)
     val translations = PageTextStore(File(base, "bn"), vault::seal, vault::unseal)
+    /** The owner's corrections of extracted/OCR text, kept as a SEPARATE version; the extracted text itself is never overwritten. */
+    val fixes = PageTextStore(File(base, "fix"), vault::seal, vault::unseal)
+    val savedQa = app.personal.banglaai.userdata.SavedQa(app.personal.banglaai.userdata.SealedList(File(base, "savedqa.enc"), vault::seal, vault::unseal))
     val glossary = app.personal.banglaai.userdata.Glossary(app.personal.banglaai.userdata.SealedList(File(base, "glossary.enc"), vault::seal, vault::unseal))
     val vocab = app.personal.banglaai.userdata.Vocab(app.personal.banglaai.userdata.SealedList(File(base, "vocab.enc"), vault::seal, vault::unseal))
     data class Chapter(val title: String, val page: Int)
@@ -48,6 +51,23 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     enum class Kind(val key: String) { Extract("extract"), Translate("translate") }
     fun jobId(doc: VaultDoc, k: Kind) = "${doc.id}-${k.key}"
     fun job(doc: VaultDoc, k: Kind): JobState? = jobs.load(jobId(doc, k))
+
+    /** The text everything else works from (reading, questions, translation, export): the owner's correction if there is one, otherwise the extracted text. */
+    fun effective(docId: String, page: Int): PageText? = fixes.get(docId, page) ?: texts.get(docId, page)
+    private val effectiveSource = PageSource { d, p -> effective(d, p) }
+
+    /** Saves the owner's corrected text for [page]. The translation of that page (made from the old text) is put back to "pending" so a resume redoes ONLY that page. */
+    fun saveFix(doc: VaultDoc, page: Int, text: String) {
+        val orig = texts.get(doc.id, page) ?: PageText(page, "", null)
+        fixes.put(doc.id, PageText(page, text, orig.printedLabel, ocr = false))
+        markTranslationStale(doc, page)
+    }
+    fun clearFix(doc: VaultDoc, page: Int) { fixes.delete(doc.id, page); markTranslationStale(doc, page) }
+    private fun markTranslationStale(doc: VaultDoc, page: Int) {
+        val j = job(doc, Kind.Translate) ?: return
+        if (page in 1..j.total && j.pageStatus(page) == app.personal.banglaai.jobs.PageStatus.DONE) { j.mark(page, app.personal.banglaai.jobs.PageStatus.PENDING); if (j.status == JobStatus.DONE) j.status = JobStatus.PAUSED; jobs.save(j) }
+        translations.delete(doc.id, page)
+    }
 
     fun isImage(doc: VaultDoc) = doc.name.lowercase().let { it.endsWith(".jpg") || it.endsWith(".jpeg") || it.endsWith(".png") }
     fun isSupported(doc: VaultDoc) = isImage(doc) || doc.name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".txt") || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.supported || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.codeExtensions }
@@ -208,7 +228,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         LocalLlm(model, File(context.cacheDir, "llm"), background = true).use { m ->
             llm = m
             try {
-                val runner = TranslationJob(job, texts, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it, glossary.relevantTo(it).map { g -> g.source to g.bengali })) },
+                val runner = TranslationJob(job, effectiveSource, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it, glossary.relevantTo(it).map { g -> g.source to g.bengali })) },
                     pauseCheck = guard(), alreadyTarget = { t -> t.count { c -> c.isLetter() } >= 20 && app.personal.banglaai.speech.SpeechText.isMostlyBengali(t) }).also { translation = it }
                 pauseReason = null
                 return runner.run(retryFailed, onProgress).also { pauseReason = runner.pausedBecause }
@@ -220,13 +240,13 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun exportPages(doc: VaultDoc): List<app.personal.banglaai.export.ExportPage> {
         val total = job(doc, Kind.Extract)?.total ?: 0
         return (1..total).map { p ->
-            val src = texts.get(doc.id, p); val bn = translations.get(doc.id, p)
+            val src = effective(doc.id, p); val bn = translations.get(doc.id, p)
             app.personal.banglaai.export.ExportPage(p, src?.printedLabel, src?.text, bn?.text, src?.ocr == true)
         }
     }
 
     fun deleteDerived(doc: VaultDoc) {
-        texts.deleteDoc(doc.id); translations.deleteDoc(doc.id)
+        texts.deleteDoc(doc.id); translations.deleteDoc(doc.id); fixes.deleteDoc(doc.id); savedQa.deleteDoc(doc.id)
         Kind.entries.forEach { jobs.delete(jobId(doc, it)) }
         marks.deleteDoc(doc.id); vocab.deleteDoc(doc.id); reading.delete(doc.id); app.personal.banglaai.library.LibraryStore(context).remove(doc.id); File(File(base, "chapters"), "${doc.id}.enc").delete()
     }

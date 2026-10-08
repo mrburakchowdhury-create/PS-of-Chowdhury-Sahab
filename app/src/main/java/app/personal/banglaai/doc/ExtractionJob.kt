@@ -8,7 +8,10 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Encrypted per-page text store (derived data, separate from the untouched original). */
-class PageTextStore(private val dir: File, private val seal: (ByteArray, ByteArray) -> ByteArray, private val unseal: (ByteArray, ByteArray) -> ByteArray) {
+/** Anything that can give the text of a page (the extracted text, or the extracted text with the owner's corrections laid over it). */
+fun interface PageSource { fun get(docId: String, page: Int): PageText? }
+
+class PageTextStore(private val dir: File, private val seal: (ByteArray, ByteArray) -> ByteArray, private val unseal: (ByteArray, ByteArray) -> ByteArray) : PageSource {
     init { dir.mkdirs() }
     private fun f(docId: String, page: Int) = File(File(dir, docId).apply { mkdirs() }, "$page.txt.enc")
     fun put(docId: String, p: PageText) {
@@ -17,11 +20,12 @@ class PageTextStore(private val dir: File, private val seal: (ByteArray, ByteArr
         tmp.writeBytes(seal(body.toByteArray(Charsets.UTF_8), "$docId/${p.page}".toByteArray()))
         check(tmp.renameTo(f(docId, p.page)))
     }
-    fun get(docId: String, page: Int): PageText? {
+    override fun get(docId: String, page: Int): PageText? {
         val x = f(docId, page); if (!x.exists()) return null
         val o = org.json.JSONObject(String(unseal(x.readBytes(), "$docId/$page".toByteArray()), Charsets.UTF_8))
         return PageText(page, o.getString("t"), if (o.isNull("l")) null else o.getString("l"), ocr = o.optBoolean("o", false))
     }
+    fun delete(docId: String, page: Int) { f(docId, page).delete() }
     fun deleteDoc(docId: String) { File(dir, docId).deleteRecursively() }
 }
 

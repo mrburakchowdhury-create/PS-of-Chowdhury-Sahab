@@ -64,6 +64,7 @@ class BackupServiceTest {
         }
         wf.marks.add(a.id, 2, app.personal.banglaai.userdata.Mark.Kind.NOTE, "আমার নোট"); wf.marks.add(b.id, 1, app.personal.banglaai.userdata.Mark.Kind.BOOKMARK, "")
         wf.glossary.add("sultan", "সুলতান"); wf.vocab.add("zakat", "যাকাত", a.id, 2); wf.reading.put(a.id, 2, 3)
+        wf.saveFix(a, 2, "সংশোধিত পৃষ্ঠা দুই"); wf.savedQa.add("doc", "সংরক্ষিত প্রশ্ন?", "সংরক্ষিত উত্তর", listOf("এক.pdf — পৃষ্ঠা ২"), a.id, 2)
         return a to b
     }
 
@@ -81,6 +82,8 @@ class BackupServiceTest {
             for (p in 1..5) { wf.texts.get(d.id, p)?.let { sb.append("  t$p ${it.text}|${it.printedLabel}|${it.ocr}\n") }; wf.translations.get(d.id, p)?.let { sb.append("  b$p ${it.text}|${it.printedLabel}\n") } }
             wf.marks.forDoc(d.id).sortedBy { it.page }.forEach { sb.append("  mark ${it.page} ${it.kind} ${it.text}\n") }
             wf.reading.get(d.id)?.let { sb.append("  read $it\n") }
+            for (p in 1..5) wf.fixes.get(d.id, p)?.let { sb.append("  fix$p ${it.text}|${it.printedLabel}\n") }
+            wf.savedQa.forDoc(d.id).forEach { sb.append("  qa ${it.question}|${it.answer}|${it.sources}|${it.page}\n") }
         }
         wf.glossary.all().forEach { sb.append("GL ${it.source}=${it.bengali}\n") }; wf.vocab.all().forEach { sb.append("VOC ${it.term}=${it.meaning}@${it.page}\n") }
         return sb.toString()
@@ -96,7 +99,8 @@ class BackupServiceTest {
         val bytes = backupBytes()
         wipe(); assertEquals(0, vault.list().size)
         val r = svc.restore(ByteArrayInputStream(bytes), pass)
-        assertEquals(2, r.restored); assertEquals(0, r.skipped); assertTrue(r.userItems >= 4)
+        assertTrue(before.contains("fix2 সংশোধিত পৃষ্ঠা দুই")); assertTrue(before.contains("qa সংরক্ষিত প্রশ্ন?"))
+        assertEquals(2, r.restored); assertEquals(0, r.skipped); assertTrue(r.userItems >= 5)
         assertEquals(before.replace(Regex("job (extract|translate) .*\\n"), ""), snapshot().replace(Regex("job (extract|translate) .*\\n"), ""))   // content equal ...
         // ... and job coverage equal too (restored jobs come back PAUSED so nothing runs by itself)
         for (d in vault.list()) { assertEquals(listOf(1, 1, 3), wf.job(d, DocWorkflow.Kind.Extract)!!.pages.toList()); assertEquals(JobStatus.PAUSED, wf.job(d, DocWorkflow.Kind.Extract)!!.status) }

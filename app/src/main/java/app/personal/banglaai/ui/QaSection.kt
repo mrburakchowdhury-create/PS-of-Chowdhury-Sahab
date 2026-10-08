@@ -40,7 +40,7 @@ fun QaSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, cacheDir: File, o
         var cutNote: String? = null
         scope.launch {
             runCatching { withContext(Dispatchers.IO) {
-                val pages = (1..totalPages).mapNotNull { p -> wf.texts.get(doc.id, p)?.text?.takeIf { it.isNotBlank() }?.let { p to it } }.toMap()
+                val pages = (1..totalPages).mapNotNull { p -> wf.effective(doc.id, p)?.text?.takeIf { it.isNotBlank() }?.let { p to it } }.toMap()
                 var query = q
                 if (wide && pages.isNotEmpty()) {
                     val model0 = wf.usableModel() ?: error("কোনো AI মডেল বসানো নেই — আগে মডেল import করুন")
@@ -66,6 +66,7 @@ fun QaSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, cacheDir: File, o
     error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
     note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     answer?.let { a -> Text("উত্তর (AI; উদ্ধৃতি ও অনুমান আলাদা — নিচের উৎস পৃষ্ঠায় মিলিয়ে নিন)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary); SelectionContainer { Text(a) } }
+    SaveQaButton(wf, "doc", q, answer, hits.map { "${doc.name} — পৃষ্ঠা ${it.page}" }, doc.id, hits.firstOrNull()?.page ?: 0)
     if (hits.isNotEmpty()) {
         Text("উৎস পৃষ্ঠা (ট্যাপ করলে মূল লেখা খুলবে)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         hits.forEach { h -> OutlinedButton(onClick = { onOpenPage(h.page) }, modifier = Modifier.fillMaxWidth()) { Text("পৃষ্ঠা ${h.page}: ${h.snippet.replace('\n', ' ').take(80)}…") } }

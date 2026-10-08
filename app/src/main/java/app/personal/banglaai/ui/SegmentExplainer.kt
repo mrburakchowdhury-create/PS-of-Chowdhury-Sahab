@@ -27,7 +27,7 @@ import java.io.File
 fun SegmentExplainer(doc: VaultDoc, wf: DocWorkflow, page: Int, total: Int) {
     val ctx = LocalContext.current; val scope = rememberCoroutineScope()
     var useTr by remember { mutableStateOf(false) }
-    val segs = remember(page, useTr) { ReadingPlan({ p -> (if (useTr) wf.translations.get(doc.id, p) else wf.texts.get(doc.id, p))?.text }, total).segments(page) }
+    val segs = remember(page, useTr) { ReadingPlan({ p -> (if (useTr) wf.translations.get(doc.id, p) else wf.effective(doc.id, p))?.text }, total).segments(page) }
     var sel by remember(page, useTr) { mutableIntStateOf(-1) }
     var q by remember(page, useTr) { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }

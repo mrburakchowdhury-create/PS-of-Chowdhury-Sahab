@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
 
 /** One document: explicit-command buttons for extraction/translation, progress, pause/cancel/resume, coverage and side-by-side viewer. */
 @Composable
-fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.banglaai.speech.VoiceCommand? = null, onBack: () -> Unit) {
+fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.banglaai.speech.VoiceCommand? = null, initialPage: Int? = null, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val running = JobRunner.label            // jobs live in the process, not in this screen (see JobRunner)
     val progress = JobRunner.progress
@@ -31,7 +31,10 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
     val tick = JobRunner.tick
     var langs by remember { mutableStateOf(setOf(TesseractOcr.Lang.ENG)) }
     var editImage by remember { mutableStateOf(false) }
-    var pageInput by remember { mutableStateOf("1") }
+    var pageInput by remember { mutableStateOf(initialPage?.toString() ?: "1") }
+    var fixTick by remember { mutableIntStateOf(0) }
+    var editing by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf("") }
     val ext = remember(tick) { wf.job(doc, DocWorkflow.Kind.Extract) }
     val tr = remember(tick) { wf.job(doc, DocWorkflow.Kind.Translate) }
 
@@ -109,14 +112,31 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
         if (ext != null) {
             ReaderSection(doc, wf, ext.total, initialCommand)
             QaSection(doc, wf, ext.total, ctx.cacheDir) { pageInput = it.toString() }
+            SavedQaSection(wf, doc) { _, p -> pageInput = p.toString() }
             HorizontalDivider()
             OutlinedTextField(value = pageInput, onValueChange = { pageInput = it.filter(Char::isDigit).take(5) }, label = { Text("পৃষ্ঠা নম্বর (ফাইলের ভৌত পৃষ্ঠা)") }, singleLine = true)
             val page = pageInput.toIntOrNull()?.takeIf { it in 1..ext.total }
             if (page == null) Text("১ থেকে ${ext.total}-এর মধ্যে লিখুন") else {
-                val src = remember(page, tick) { wf.texts.get(doc.id, page) }
+                val src = remember(page, tick, fixTick) { wf.texts.get(doc.id, page) }
+                val fix = remember(page, tick, fixTick) { wf.fixes.get(doc.id, page) }
                 val bn = remember(page, tick) { wf.translations.get(doc.id, page) }
                 Text("মূল লেখা (পৃষ্ঠা $page${src?.printedLabel?.let { " · মূল অবস্থান: $it" } ?: ""})${if (src?.ocr == true) " — OCR থেকে, ভুল থাকতে পারে" else ""}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 SelectionContainer { Text(src?.text ?: "(এই পৃষ্ঠায় বের করা লেখা নেই)") }
+                if (fix != null) {
+                    Text("✏️ আপনার সংশোধিত লেখা — পড়া, অনুবাদ, প্রশ্নোত্তর ও এক্সপোর্ট এটি থেকেই হয়; উপরের নিষ্কাশিত লেখা অক্ষত আছে", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.tertiary)
+                    SelectionContainer { Text(fix.text) }
+                }
+                if (!editing) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(enabled = running == null, onClick = { draft = fix?.text ?: src?.text.orEmpty(); editing = true }) { Text(if (fix == null) "✏️ লেখা সংশোধন করুন" else "✏️ সংশোধন বদলান") }
+                    if (fix != null) OutlinedButton(enabled = running == null, onClick = { scope.launch { withContext(Dispatchers.IO) { wf.clearFix(doc, page) }; fixTick++ } }) { Text("সংশোধন বাতিল (নিষ্কাশিত লেখায় ফিরুন)") }
+                } else {
+                    OutlinedTextField(value = draft, onValueChange = { draft = it }, label = { Text("সংশোধিত লেখা (পৃষ্ঠা $page)") }, modifier = Modifier.fillMaxWidth().heightIn(min = 140.dp))
+                    Text("সংরক্ষণ করলে এই পৃষ্ঠার পুরোনো অনুবাদটি 'বাকি' হয়ে যায় (পুরোনো লেখার অনুবাদ ছিল); অনুবাদে 'চালিয়ে যান' চাপলে শুধু এই পৃষ্ঠাই আবার অনুবাদ হবে।", style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(enabled = draft.isNotBlank(), onClick = { scope.launch { withContext(Dispatchers.IO) { wf.saveFix(doc, page, draft) }; editing = false; fixTick++ } }) { Text("সংরক্ষণ") }
+                        OutlinedButton(onClick = { editing = false }) { Text("বাতিল") }
+                    }
+                }
                 Text("বাংলা অনুবাদ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 SelectionContainer { Text(bn?.text ?: "(এখনো অনুবাদ হয়নি)") }
             }

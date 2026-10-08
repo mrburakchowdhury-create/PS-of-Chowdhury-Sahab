@@ -53,12 +53,14 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
                 for (p in 1..(ext?.total ?: 0)) {
                     wf.texts.get(d.id, p)?.let { entry("d/${d.id}/t/$p.json", pageJson(it)) }
                     wf.translations.get(d.id, p)?.let { entry("d/${d.id}/b/$p.json", pageJson(it)) }
+                    wf.fixes.get(d.id, p)?.let { entry("d/${d.id}/f/$p.json", pageJson(it)) }   // the owner's corrected text (kept apart from the extracted text)
                 }
             }
             entry("u/marks.json", JSONArray(wf.marks.exportJson()).toString().toByteArray(Charsets.UTF_8))
             entry("u/glossary.json", JSONArray(wf.glossary.exportJson()).toString().toByteArray(Charsets.UTF_8))
             entry("u/vocab.json", JSONArray(wf.vocab.exportJson()).toString().toByteArray(Charsets.UTF_8))
             entry("u/reading.json", JSONArray(wf.reading.exportJson()).toString().toByteArray(Charsets.UTF_8))
+            entry("u/savedqa.json", JSONArray(wf.savedQa.exportJson()).toString().toByteArray(Charsets.UTF_8))
             z.putNextEntry(ZipEntry("end.json")); z.write(JSONObject().put("entries", entries).put("docs", docs.size).put("origBytes", origBytes).toString().toByteArray()); z.closeEntry()
         }
     }
@@ -69,7 +71,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
 
     private class StagedDoc(val id: String) {
         var meta: JSONObject? = null; var origFile: File? = null; var origSize = -1L
-        val texts = HashMap<Int, PageText>(); val trans = HashMap<Int, PageText>()
+        val texts = HashMap<Int, PageText>(); val trans = HashMap<Int, PageText>(); val fixes = HashMap<Int, PageText>()
         var extract: IntArray? = null; var translate: IntArray? = null
     }
     private class Staged { val docs = LinkedHashMap<String, StagedDoc>(); val user = HashMap<String, List<JSONObject>>(); var manifestDocs = -1; var version = 0; var end: JSONObject? = null; var entries = 0; var origBytes = 0L }
@@ -118,7 +120,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
                     if (st.manifestDocs !in 0..MAX_DOCS) throw bad("ব্যাকআপে ডকুমেন্ট-সংখ্যা অগ্রহণযোগ্য")
                 }
                 name == "end.json" -> { st.end = parseObj(small(z, MAX_SMALL)); st.entries-- }   // the end marker is not counted in its own total
-                parts.size == 2 && parts[0] == "u" && parts[1] in USER_FILES.map { "$it.json" } && st.version >= 2 -> {
+                parts.size == 2 && parts[0] == "u" && parts[1] in userFilesFor(st.version).map { "$it.json" } -> {
                     val b = small(z, MAX_USER); smallBytes += b.size
                     st.user[parts[1].removeSuffix(".json")] = runCatching { JSONArray(String(b, Charsets.UTF_8)).let { a -> (0 until a.length()).map { a.getJSONObject(it) } } }.getOrElse { throw bad("ব্যাকআপের ব্যবহারকারী-ডেটা পড়া যায়নি") }
                 }
@@ -137,13 +139,13 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
                             d.origFile = f; st.origBytes += d.origSize
                             if (st.origBytes > MAX_TOTAL_BYTES) throw bad("ব্যাকআপের মোট আকার সীমার বেশি")
                         }
-                        parts.size == 4 && (parts[2] == "t" || parts[2] == "b") && PAGE.matches(parts[3]) -> {
+                        parts.size == 4 && (parts[2] == "t" || parts[2] == "b" || (parts[2] == "f" && st.version >= 3)) && PAGE.matches(parts[3]) -> {
                             if (d.meta == null) throw bad("ডকুমেন্টের তথ্য (meta) আগে আসেনি")
                             val n = parts[3].removeSuffix(".json").toInt()
                             val raw = small(z, MAX_SMALL); smallBytes += raw.size
                             if (smallBytes > MAX_TEXT_TOTAL) throw bad("ব্যাকআপের লেখা অংশ সীমার বেশি বড়")
                             val page = parsePage(raw, n) ?: throw bad("একটি পৃষ্ঠার লেখা পড়া যায়নি")
-                            (if (parts[2] == "t") d.texts else d.trans)[n] = page
+                            (when (parts[2]) { "t" -> d.texts; "f" -> d.fixes; else -> d.trans })[n] = page
                         }
                         else -> throw bad("ব্যাকআপে অজানা এন্ট্রি: ${parts.drop(2).joinToString("/").take(40)}")
                     }
@@ -163,14 +165,14 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
         for (d in st.docs.values) {
             if (d.meta == null || d.origFile == null) throw bad("একটি ডকুমেন্টের তথ্য বা মূল ফাইল অনুপস্থিত")
             val total = d.extract?.size ?: 0
-            if (d.texts.keys.any { it !in 1..maxOf(total, 1) }) throw bad("একটি পৃষ্ঠা-নম্বর সীমার বাইরে")
+            if (d.texts.keys.any { it !in 1..maxOf(total, 1) } || d.fixes.keys.any { it !in 1..maxOf(total, 1) }) throw bad("একটি পৃষ্ঠা-নম্বর সীমার বাইরে")
             val tt = d.translate?.size ?: total
             if (d.trans.keys.any { it !in 1..maxOf(tt, total, 1) }) throw bad("একটি অনুবাদ-পৃষ্ঠার নম্বর সীমার বাইরে")
         }
         if (st.version >= 2) {
             val e = st.end ?: throw bad("ব্যাকআপ অসম্পূর্ণ (শেষ-চিহ্ন নেই)")
             if (e.optInt("entries", -1) != st.entries || e.optInt("docs", -1) != st.docs.size || e.optLong("origBytes", -1) != st.origBytes) throw bad("ব্যাকআপের মোট হিসাব মেলেনি — ফাইল অসম্পূর্ণ বা পরিবর্তিত")
-            if (USER_FILES.any { it !in st.user }) throw bad("ব্যাকআপে ব্যবহারকারী-ডেটা অংশ অনুপস্থিত")
+            if (userFilesFor(st.version).any { it !in st.user }) throw bad("ব্যাকআপে ব্যবহারকারী-ডেটা অংশ অনুপস্থিত")
         }
     }
 
@@ -184,6 +186,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
             for (d in fresh) {
                 d.texts.forEach { (p, t) -> wf.texts.put(d.id, t.copy(page = p)) }
                 d.trans.forEach { (p, t) -> wf.translations.put(d.id, t.copy(page = p)) }
+                d.fixes.forEach { (p, t) -> wf.fixes.put(d.id, t.copy(page = p)) }
                 for ((arr, kind) in listOf(d.extract to DocWorkflow.Kind.Extract, d.translate to DocWorkflow.Kind.Translate)) if (arr != null)
                     wf.jobs.save(JobState("${d.id}-${kind.key}", d.id, kind.key, arr, JobStatus.PAUSED))
             }
@@ -202,6 +205,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
         runCatching { n += wf.glossary.mergeJson(st.user["glossary"].orEmpty()) }
         runCatching { n += wf.vocab.mergeJson(st.user["vocab"].orEmpty(), ids) }
         runCatching { n += wf.reading.mergeJson(st.user["reading"].orEmpty(), ids) }
+        runCatching { n += wf.savedQa.mergeJson(st.user["savedqa"].orEmpty(), ids) }
         return n
     }
 
@@ -262,7 +266,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
     }
 
     companion object {
-        const val VERSION = 2
+        const val VERSION = 3
         const val MAX_DOCS = 5_000; const val MAX_ENTRIES = 1_000_000; const val MAX_PAGES = 100_000
         const val MAX_SMALL = 1 shl 20                       // one page / meta / manifest
         const val MAX_USER = 16 shl 20                       // notes, glossary, vocabulary, positions
@@ -271,6 +275,8 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
         const val MAX_TRAILER = 64L shl 20
         const val MIN_FREE = 200L shl 20
         private val USER_FILES = listOf("marks", "glossary", "vocab", "reading")
+        /** v2 backups have four owner-data parts, v3 adds saved Q&A (and corrected page texts under d/<id>/f/). v1 has none. */
+        private fun userFilesFor(version: Int) = when { version >= 3 -> USER_FILES + "savedqa"; version == 2 -> USER_FILES; else -> emptyList() }
         private val ID = Regex("[A-Za-z0-9-]{8,64}"); private val PAGE = Regex("[0-9]{1,6}\\.json")
         private val JOURNAL_AAD = "restore-journal".toByteArray()
         private val RUNNING = AtomicBoolean(false); private val CANCEL = AtomicBoolean(false)
