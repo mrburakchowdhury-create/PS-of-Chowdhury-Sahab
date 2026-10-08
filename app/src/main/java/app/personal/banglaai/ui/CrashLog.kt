@@ -13,7 +13,9 @@ import java.io.File
 object CrashLog {
     private fun file(c: Context) = File(c.filesDir, "last_crash.txt")
 
-    fun install(c: Context) {
+    @Volatile private var installed = false
+    @Synchronized fun install(c: Context) {
+        if (installed) return; installed = true   // once per process (the Activity can be recreated many times)
         val app = c.applicationContext; val old = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->
             runCatching {

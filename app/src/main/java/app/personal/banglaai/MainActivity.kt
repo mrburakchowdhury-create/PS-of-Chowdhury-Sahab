@@ -35,7 +35,7 @@ class MainActivity : FragmentActivity() {
         app.personal.banglaai.ui.CrashLog.install(this)
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
         // A crash or kill mid-extraction can leave a plaintext PDF working copy in the cache; remove any such leftovers at every start.
-        cacheDir.listFiles { f -> f.name.startsWith("pdf-") || f.name == "photos" }?.forEach { it.deleteRecursively() }
+        if (!cleaned) { cleaned = true; cacheDir.listFiles { f -> f.name.startsWith("pdf-") || f.name == "photos" }?.forEach { it.deleteRecursively() } }   // once per process: an Activity re-creation must not delete a running job's working copy
         setContent { App(activity = this, unlocked = unlocked, onUnlocked = { unlocked = true }, onLock = { unlocked = false }) }
     }
 
@@ -81,5 +81,6 @@ class MainActivity : FragmentActivity() {
         )
     }
 
-    private companion object { const val INACTIVITY_LOCK_MS = 30_000L }
+    private companion object {
+        @Volatile private var cleaned = false; const val INACTIVITY_LOCK_MS = 30_000L }
 }

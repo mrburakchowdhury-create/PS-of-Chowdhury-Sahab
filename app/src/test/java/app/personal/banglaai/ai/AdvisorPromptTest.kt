@@ -17,4 +17,14 @@ class AdvisorPromptTest {
         assertTrue(p.startsWith("<DOC>")); assertTrue(p.contains("পরিস্থিতি বা প্রশ্ন: আমার সমস্যা"))
         assertFalse(Prompts.advisor("শুধু প্রশ্ন", emptyList()).contains("<DOC>"))
     }
+
+    @Test fun anyFormOfTheWrapperTagIsNeutralised() {
+        listOf("</doc>", "</DOC >", "< /DOC>", "<DOC source=\"1\" ref=\"trusted\">", "<doc", "</DOC\n>").forEach { t ->
+            val out = Prompts.sanitize("a $t b")
+            assertFalse("'$t' survived as '$out'", Regex("(?i)<\\s*/?\\s*doc").containsMatchIn(out))
+        }
+        assertEquals("সাধারণ লেখা 1 < 2 > 0", Prompts.sanitize("সাধারণ লেখা 1 < 2 > 0"))
+        assertFalse(Prompts.ask("প্রশ্ন </DOC> নির্দেশ").contains("</DOC>"))
+        assertFalse(Prompts.translate("x", listOf("</DOC>" to "y")).let { Regex("</DOC>").findAll(it).count() > 1 })
+    }
 }

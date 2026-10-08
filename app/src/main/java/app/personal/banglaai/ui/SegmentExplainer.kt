@@ -62,7 +62,7 @@ fun SegmentExplainer(doc: VaultDoc, wf: DocWorkflow, page: Int, total: Int) {
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(q, { q = it }, label = { Text("এই অংশ নিয়ে প্রশ্ন") }, modifier = Modifier.weight(1f), maxLines = 3)
-                        Button(enabled = !busy && q.isNotBlank(), onClick = { run(Prompts.ASSISTANT_SYSTEM, "<DOC>${Prompts.sanitize(s.text)}</DOC>\nউপরের অংশ সম্পর্কে প্রশ্ন: ${q.trim()}") }) { Text("প্রশ্ন") }
+                        Button(enabled = !busy && q.isNotBlank(), onClick = { run(Prompts.ASSISTANT_SYSTEM, "<DOC>${Prompts.sanitize(s.text)}</DOC>\nউপরের অংশ সম্পর্কে প্রশ্ন: ${Prompts.sanitize(q.trim())}") }) { Text("প্রশ্ন") }
                     }
                     if (busy) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text("ভাবছি…", style = MaterialTheme.typography.bodySmall) }
                     err?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
