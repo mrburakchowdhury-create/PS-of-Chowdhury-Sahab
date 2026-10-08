@@ -33,9 +33,16 @@ class KeystorePepper : Pepper {
         init(KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).build())
     }.generateKey()
-    override fun wrap(b: ByteArray) = gcmSeal(key(), b, ALIAS.toByteArray())
-    override fun unwrap(b: ByteArray) = gcmOpen(key(), b, ALIAS.toByteArray())
-    private companion object { const val ALIAS = "banglaai_pin_pepper" }
+    // The Keystore insists on choosing the IV itself (a caller-made IV is refused), so: init without IV, read the IV it made, store it in front.
+    override fun wrap(b: ByteArray): ByteArray {
+        val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()); updateAAD(ALIAS.toByteArray()) }
+        return c.iv + c.doFinal(b)
+    }
+    override fun unwrap(b: ByteArray): ByteArray {
+        val c = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, b.copyOfRange(0, 12))); updateAAD(ALIAS.toByteArray()) }
+        return c.doFinal(b, 12, b.size - 12)
+    }
+    private companion object { const val ALIAS = "banglaai_pin_pepper2" }
 }
 
 internal fun gcmSeal(key: SecretKey, plain: ByteArray, aad: ByteArray): ByteArray {
@@ -74,7 +81,7 @@ class KeyVault(private val ctx: Context, private val pepper: Pepper = KeystorePe
         if (!prefs.contains(P_KEYSET)) { if (!prefs.contains(P_PIN)) { createOrMigrate(pin); return true } }
         val s = runCatching {
             val salt = d(prefs.getString(P_SALT, null)!!)
-            gcmOpen(kek(pin, salt), pepper.unwrap(d(prefs.getString(P_PIN, null)!!)), AAD_PIN)
+            gcmOpen(kek(pin, salt), outerOpen(d(prefs.getString(P_PIN, null)!!)), AAD_PIN)
         }.getOrNull() ?: return false
         adopt(s); return true
     }
@@ -95,6 +102,8 @@ class KeyVault(private val ctx: Context, private val pepper: Pepper = KeystorePe
         val h = KeysetHandle.read(BinaryKeysetReader.withBytes(d(prefs.getString(P_KEYSET, null)!!)), GcmAead(SecretKeySpec(s, "AES")))
         return h.getPrimitive(StreamingAead::class.java).also { cached = it }
     }
+
+    private fun outerOpen(b: ByteArray) = if (prefs.getBoolean(P_NOPEPPER, false)) b else pepper.unwrap(b)
 
     private fun adopt(s: ByteArray) {
         require(s.size == 32)
@@ -123,8 +132,10 @@ class KeyVault(private val ctx: Context, private val pepper: Pepper = KeystorePe
 
     private fun storePin(s: ByteArray, pin: CharArray) {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
-        val wrapped = pepper.wrap(gcmSeal(kek(pin, salt), s, AAD_PIN))
-        prefs.edit().putString(P_SALT, e(salt)).putString(P_PIN, e(wrapped)).apply()
+        val inner = gcmSeal(kek(pin, salt), s, AAD_PIN)
+        // If this phone's Keystore cannot do the outer layer, fall back to PIN-only protection (still PIN-bound) instead of locking the owner out; the choice is remembered.
+        val outer = runCatching { pepper.wrap(inner) }.getOrNull()
+        prefs.edit().putString(P_SALT, e(salt)).putString(P_PIN, e(outer ?: inner)).putBoolean(P_NOPEPPER, outer == null).apply()
     }
 
     private fun kek(pin: CharArray, salt: ByteArray): SecretKey {
@@ -136,7 +147,7 @@ class KeyVault(private val ctx: Context, private val pepper: Pepper = KeystorePe
     private fun d(s: String) = Base64.decode(s, Base64.NO_WRAP)
 
     private companion object {
-        const val P_KEYSET = "keyset"; const val P_SALT = "salt"; const val P_PIN = "pinwrap"; const val P_BIO = "biowrap"
+        const val P_KEYSET = "keyset"; const val P_SALT = "salt"; const val P_PIN = "pinwrap"; const val P_BIO = "biowrap"; const val P_NOPEPPER = "nopepper"
         const val LEGACY_NAME = "vault_keyset"; const val LEGACY_PREFS = "vault_keyset_prefs"
         val AAD_PIN = "banglaai-pin-wrap".toByteArray()
     }

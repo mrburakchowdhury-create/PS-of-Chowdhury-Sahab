@@ -79,7 +79,7 @@ private fun SetupScreen(pins: PinStore, keys: app.personal.banglaai.security.Key
             when {
                 a.length < 6 -> err = "PIN কমপক্ষে ৬ সংখ্যার হতে হবে"
                 a != b -> err = "দুটি PIN মেলেনি"
-                else -> { pins.set(a.toCharArray()); runCatching { keys.unlockWithPin(a.toCharArray()) }; done() }
+                else -> { pins.set(a.toCharArray()); runCatching { keys.unlockWithPin(a.toCharArray()) }.onFailure { err = "ভল্ট চালু করা যায়নি (${it.javaClass.simpleName}); PIN দিয়ে আবার খুলে দেখুন" }; done() }
             }
         }, Modifier.fillMaxWidth()) { Text("PIN সেট করুন") }
     }
@@ -113,12 +113,12 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
             val pinChars = pin.toCharArray()
             when (val r = pins.verify(pinChars)) {
                 PinStore.Result.Ok -> {
-                    val ok = runCatching { keys.unlockWithPin(pinChars) }.getOrDefault(false)
-                    if (ok) {
+                    val res = runCatching { keys.unlockWithPin(pinChars) }
+                    if (res.getOrDefault(false)) {
                         // arm biometric unlock (best effort; the PIN always works)
                         if (activity.canUseStrongBiometric() && !keys.hasBio()) runCatching { keys.masterForWrapping()?.let { m -> keys.setBioBlob(app.personal.banglaai.security.BiometricGate.wrap(m)) } }
                         onUnlocked()
-                    } else msg = "ভল্ট খোলা যায়নি — আবার চেষ্টা করুন (PIN বদলানো থাকলে পুরনো PIN লাগতে পারে)"
+                    } else msg = "ভল্ট খোলা যায়নি" + (res.exceptionOrNull()?.let { " (ত্রুটি: ${it.javaClass.simpleName})" } ?: " (PIN মেলেনি — অ্যাপ আনইনস্টল করে নতুন করে সেটআপ করুন)")
                 }
                 is PinStore.Result.Wrong -> msg = "ভুল PIN (আর ${r.attemptsBeforeDelay}বার পর অপেক্ষা শুরু হবে)"
                 is PinStore.Result.Locked -> { wait = r.seconds; msg = null }
