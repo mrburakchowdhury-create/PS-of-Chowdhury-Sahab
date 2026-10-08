@@ -27,7 +27,7 @@ object ReadAloudController {
     fun play(context: Context, plan: ReadingPlan, from: ReadingPosition) { adHoc = false; get(context).play(plan, from) }
 
     /** Speaks the app's own explanation text (the user asked for it); never saved as a reading position. */
-    fun speakExplanation(context: Context, text: String) { adHoc = true; get(context).play(ReadingPlan({ text }, 1), ReadingPosition(1, 0)) }
+    fun speakExplanation(context: Context, text: String) { adHoc = true; get(context).play(ReadingPlan({ SpeechText.clean(text) }, 1), ReadingPosition(1, 0)) }
 
     fun setPositionSaver(f: ((ReadingPosition) -> Unit)?) { onPosition = f }
 

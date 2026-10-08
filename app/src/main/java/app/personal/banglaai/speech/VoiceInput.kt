@@ -20,6 +20,45 @@ class VoiceInput(private val context: Context) {
 
     fun listen(onText: (String) -> Unit, onError: (String) -> Unit, onLevel: ((Float) -> Unit)? = null, lang: String = "bn-BD") {
         if (!available()) return onError("এই ফোনে অফলাইন (on-device) বাংলা ভয়েস চেনা পাওয়া যায়নি। ইন্টারনেট-ভিত্তিক বিকল্পে নিজে থেকে যাওয়া হয় না। লিখে নির্দেশ দিন।")
+        if (Build.VERSION.SDK_INT >= 33) {
+            packStatus(lang) { installed, _, err ->
+                val tag = pickInstalled(lang, installed)
+                if (err == null && installed.isNotEmpty() && tag == null)
+                    onError("এই ভাষার (${lang}) অফলাইন ভাষা-প্যাক ফোনে ইনস্টল নেই (আছে: ${installed.joinToString()})। ‘ফোন পরীক্ষা’ পর্দায় ‘ভয়েস-চেনার ভাষা-প্যাক’ অংশ দেখুন।")
+                else start(tag ?: lang, onText, onError, onLevel)
+            }
+        } else start(lang, onText, onError, onLevel)
+    }
+
+    /** Installed on-device language tags for the recogniser (Android 13+); [onResult] runs on the main thread. */
+    fun packStatus(lang: String, onResult: (installed: List<String>, supported: List<String>, error: String?) -> Unit) {
+        if (!available() || Build.VERSION.SDK_INT < 33) return onResult(emptyList(), emptyList(), "এই তথ্য Android 13+ ফোনে পাওয়া যায়")
+        val r = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        r.checkRecognitionSupport(intent(lang), androidx.core.content.ContextCompat.getMainExecutor(context), object : android.speech.RecognitionSupportCallback {
+            override fun onSupportResult(s: android.speech.RecognitionSupport) { onResult(s.installedOnDeviceLanguages, s.supportedOnDeviceLanguages, null); r.destroy() }
+            override fun onError(error: Int) { onResult(emptyList(), emptyList(), "পরীক্ষা ব্যর্থ (কোড $error)"); r.destroy() }
+        })
+    }
+
+    /** Asks the phone's own speech service (not this app, which has no internet permission) to download the language pack. Android 13+. */
+    fun downloadPack(lang: String): Boolean {
+        if (!available() || Build.VERSION.SDK_INT < 33) return false
+        val r = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        r.triggerModelDownload(intent(lang))
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ r.destroy() }, 5_000)
+        return true
+    }
+
+    private fun intent(lang: String) = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+        .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM).putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+
+    /** Exact tag if installed, else another installed variant of the same language (e.g. bn-IN when bn-BD was asked). */
+    internal fun pickInstalled(lang: String, installed: List<String>): String? {
+        val want = lang.replace('_', '-').lowercase()
+        return installed.firstOrNull { it.replace('_', '-').lowercase() == want } ?: installed.firstOrNull { it.substringBefore('-', it).lowercase() == want.substringBefore('-') }
+    }
+
+    private fun start(lang: String, onText: (String) -> Unit, onError: (String) -> Unit, onLevel: ((Float) -> Unit)?) {
         stop()
         val r = SpeechRecognizer.createOnDeviceSpeechRecognizer(context); rec = r
         r.setRecognitionListener(object : RecognitionListener {

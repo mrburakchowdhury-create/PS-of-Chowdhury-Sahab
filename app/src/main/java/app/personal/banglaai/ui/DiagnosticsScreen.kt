@@ -85,6 +85,15 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
                 Text(f.detail, style = MaterialTheme.typography.bodyMedium)
             } }
         }
+        SectionTitle("ভয়েস-চেনার ভাষা-প্যাক (কথা শুনে লেখা)")
+        var packText by remember { mutableStateOf<String?>(null) }
+        val vi = remember { VoiceInput(ctx) }
+        Text("মাইকে বললে অ্যাপ ফোনের ভেতরের অফলাইন ভাষা-প্যাক ব্যবহার করে। বাংলা প্যাক ইনস্টল না থাকলে ‘বাংলা অফলাইন নামান’ বার্তা আসে — সেটা কীবোর্ড বা কণ্ঠস্বর (TTS) থেকে আলাদা জিনিস।", style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { packText = "দেখা হচ্ছে…"; vi.packStatus("bn-BD") { inst, sup, err -> packText = err ?: ("ইনস্টল করা: " + (inst.joinToString().ifBlank { "কিছু নেই" }) + "\nসমর্থিত (বাংলা): " + sup.filter { it.startsWith("bn") }.joinToString().ifBlank { "জানা যায়নি" }) } }) { Text("প্যাকের অবস্থা দেখুন") }
+            Button(onClick = { packText = if (vi.downloadPack("bn-BD")) "ফোনের নিজস্ব স্পিচ-সার্ভিসকে বাংলা প্যাক নামাতে বলা হয়েছে (এই অ্যাপের ইন্টারনেট অনুমতি নেই, নামায় ফোনের সিস্টেম)। কিছুক্ষণ পরে ‘অবস্থা দেখুন’ চাপুন।" else "এই ফোনে (Android 13+ লাগে) এটা করা যায়নি। ফোনের Settings → Google → সব সেবা → ভয়েস → অফলাইন স্পিচ রিকগনিশন → বাংলা দেখুন।" }) { Text("বাংলা প্যাক নামান") }
+        }
+        packText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
         SectionTitle("AI চালানোর উপায়: CPU নাকি GPU")
         var gpu by remember { mutableStateOf(LocalLlm.preferGpu) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

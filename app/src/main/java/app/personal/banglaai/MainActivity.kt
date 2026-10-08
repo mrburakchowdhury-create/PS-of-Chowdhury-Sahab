@@ -44,7 +44,10 @@ class MainActivity : FragmentActivity() {
         if (allowed) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
     }
 
-    override fun onStop() { super.onStop(); leftAt = SystemClock.elapsedRealtime() }
+    override fun onStop() { super.onStop(); leftAt = SystemClock.elapsedRealtime(); window.decorView.postDelayed({ if (!isChangingConfigurations && !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) app.personal.banglaai.ai.LocalLlm.releaseAll() }, 60_000L) }
+
+    /** Android is short of memory: give the model's RAM back first (it is by far the biggest thing we hold). */
+    override fun onTrimMemory(level: Int) { super.onTrimMemory(level); if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND || level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) app.personal.banglaai.ai.LocalLlm.releaseAll() }
 
     override fun onStart() {
         super.onStart()

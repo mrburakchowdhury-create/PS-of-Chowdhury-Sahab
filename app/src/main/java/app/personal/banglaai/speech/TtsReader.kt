@@ -71,7 +71,7 @@ class TtsReader(context: Context, private val onState: (State) -> Unit, private 
         val seg = pos?.let { plan?.segmentAt(it) } ?: return advance()
         token++; onSegment(seg, pos)
         tts?.setSpeechRate(rate)
-        tts?.speak(seg.text, TextToSpeech.QUEUE_FLUSH, null, "s$token")
+        tts?.speak(SpeechText.clean(seg.text).ifBlank { "।" }, TextToSpeech.QUEUE_FLUSH, null, "s$token")
     }
 
     fun shutdown() { token++; tts?.stop(); tts?.shutdown(); tts = null }
