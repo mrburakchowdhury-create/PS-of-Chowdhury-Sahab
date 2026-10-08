@@ -51,6 +51,15 @@ class KeyVaultTest {
         assertArrayEquals("d".toByteArray(), Vault.unsealWith(n.streamingAead(), blob, aad))
     }
 
+    @Test fun failureCausesAreSeparated() {
+        kv().unlockWithPin("123456".toCharArray())
+        val w = kv(); assertFalse(w.unlockWithPin("000000".toCharArray()))
+        assertEquals(KeyVault.Failure.WrongPin, w.lastFailure)
+        ctx.getSharedPreferences("vault_key2", Context.MODE_PRIVATE).edit().putString("pinwrap", "!!not-base64!!").commit()
+        val c = kv(); assertFalse(c.unlockWithPin("123456".toCharArray()))
+        assertEquals(KeyVault.Failure.MetadataMissingOrCorrupt, c.lastFailure)
+    }
+
     @Test fun nothingInPrefsRevealsThePinOrKey() {
         kv().unlockWithPin("123456".toCharArray())
         val all = ctx.getSharedPreferences("vault_key2", Context.MODE_PRIVATE).all.values.joinToString()

@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.material.icons.rounded.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -119,7 +120,11 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
                         // arm biometric unlock (best effort; the PIN always works)
                         if (activity.canUseStrongBiometric() && !keys.hasBio()) runCatching { keys.masterForWrapping()?.let { m -> try { keys.setBioBlob(app.personal.banglaai.security.BiometricGate.wrap(m)) } finally { m.fill(0) } } }
                         onUnlocked()
-                    } else msg = "ভল্ট খোলা যায়নি" + (res.exceptionOrNull()?.let { " (ত্রুটি: ${it.javaClass.simpleName})" } ?: " (PIN মেলেনি — অ্যাপ আনইনস্টল করে নতুন করে সেটআপ করুন)")
+                    } else msg = res.exceptionOrNull()?.let { "ভল্ট খোলা যায়নি (ত্রুটি: ${it.javaClass.simpleName}) — আপনার ডেটা মোছা হয়নি। অ্যাপ বন্ধ করে আবার চেষ্টা করুন; না হলে Setup → Backup থেকে ব্যাকআপ ফিরিয়ে আনুন।" } ?: when (keys.lastFailure) {
+                        app.personal.banglaai.security.KeyVault.Failure.WrongPin -> "PIN মেলেনি — আবার চেষ্টা করুন।"
+                        app.personal.banglaai.security.KeyVault.Failure.DeviceKeyUnavailable -> "এই ফোনের নিরাপত্তা-কী পাওয়া যাচ্ছে না (ফোনের লক/সিকিউরিটি বদলালে এমন হতে পারে)। আপনার ডেটা মোছা হয়নি। আগের ব্যাকআপ থাকলে Setup → Backup থেকে ফিরিয়ে আনুন; অ্যাপ আনইনস্টল করবেন না।"
+                        else -> "ভল্টের তথ্য-ফাইল পড়া যাচ্ছে না (নষ্ট বা অনুপস্থিত)। আপনার এনক্রিপ্টেড ফাইল মোছা হয়নি। আনইনস্টল করবেন না; ব্যাকআপ থাকলে সেখান থেকে ফিরিয়ে আনুন।"
+                    }
                 }
                 is PinStore.Result.Wrong -> msg = "ভুল PIN (আর ${r.attemptsBeforeDelay}বার পর অপেক্ষা শুরু হবে)"
                 is PinStore.Result.Locked -> { wait = r.seconds; msg = null }
@@ -133,8 +138,6 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
                 if (blob == null) msg = "বায়োমেট্রিক এখনো চালু নয় — একবার PIN দিয়ে খুলুন"
                 else activity.promptBiometric("আঙুলের ছাপ / ফেস দিয়ে খুলুন", "PIN ব্যবহার করুন", blob, { sec -> if (keys.unlockWithMaster(sec)) onUnlocked() else msg = "ভল্ট খোলা যায়নি — PIN ব্যবহার করুন" }) { msg = it; if (it.contains("বদলেছে")) { keys.setBioBlob(null) } }
             }) { Text("বায়োমেট্রিক দিয়ে খুলুন") }
-            Text("মনে রাখবেন: ফোনে অন্য কারও আঙুলের ছাপ/ফেস নথিভুক্ত থাকলে সেও খুলতে পারবে। তা থাকলে শুধু PIN ব্যবহার করুন।",
-                style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -276,7 +279,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             pendingJobs.forEach { (d, n, c) -> TextButton(onClick = { openPage = null; openDoc = d }) { Text("${d.name} — $n থামানো ($c)") } }
         }
         val hasModel = remember(modelList, workflow.chosenModel) { workflow.usableModel() != null }
-        Text(if (hasModel) "✅ AI মডেল বসানো আছে" else "❌ AI model বসানো নেই — Setup → AI Model থেকে বসান (এটা ছাড়া অনুবাদ, কল, লাইভ, উত্তর চলবে না)", color = if (hasModel) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        if (!hasModel) Text("এই কাজের জন্য AI মডেল প্রয়োজন। মডেল যোগ করুন।", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clickable { tab = HomeTab.Setup })
         val ic = androidx.compose.material.icons.Icons.Rounded; val st = TileStyle
         TileGrid(listOf(
             Tile("Voice Call", ic.Call, st.call.first, st.call.second) { callOpen = true },

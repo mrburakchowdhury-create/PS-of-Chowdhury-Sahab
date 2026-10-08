@@ -89,12 +89,18 @@ class KeyVault(
     fun hasBio() = prefs.contains(P_BIO)
 
     /** Unlocks with the PIN; creates (fresh install) or migrates (older install) the key on first use. False = wrong PIN. */
+    /** Why the last [unlockWithPin] failed — kept apart so the screen never tells the owner to reinstall (that would destroy every stored file). */
+    enum class Failure { None, WrongPin, DeviceKeyUnavailable, MetadataMissingOrCorrupt }
+    @Volatile var lastFailure: Failure = Failure.None; private set
+
     @Synchronized fun unlockWithPin(pin: CharArray): Boolean {
+        lastFailure = Failure.None
         if (!prefs.contains(P_KEYSET)) { if (!prefs.contains(P_PIN)) { createOrMigrate(pin); return true } }
-        val s = runCatching {
-            val salt = d(prefs.getString(P_SALT, null)!!)
-            gcmOpen(kek(pin, salt), outerOpen(d(prefs.getString(P_PIN, null)!!)), AAD_PIN)
-        }.getOrNull() ?: return false
+        val saltS = prefs.getString(P_SALT, null); val pinS = prefs.getString(P_PIN, null)
+        if (saltS == null || pinS == null) { lastFailure = Failure.MetadataMissingOrCorrupt; return false }
+        val parts = runCatching { d(saltS) to d(pinS) }.getOrNull() ?: run { lastFailure = Failure.MetadataMissingOrCorrupt; return false }
+        val outer = runCatching { outerOpen(parts.second) }.getOrNull() ?: run { lastFailure = Failure.DeviceKeyUnavailable; return false }
+        val s = runCatching { gcmOpen(kek(pin, parts.first), outer, AAD_PIN) }.getOrNull() ?: run { lastFailure = Failure.WrongPin; return false }
         adopt(s); return true
     }
 
