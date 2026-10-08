@@ -186,7 +186,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         scope.launch {
             busy = "ব্যাকআপ থেকে ফেরত আনা হচ্ছে…"; error = null; restoring = true
             runCatching { withContext(Dispatchers.IO) { activity.contentResolver.openInputStream(uri)!!.use { backup.restore(it, backupPass.toCharArray()) } } }
-                .onSuccess { error = "✅ ফেরত এসেছে: ${it.restored}টি ফাইল (আগে থেকে থাকায় বাদ: ${it.skipped}টি); নোট/বুকমার্ক/পরিভাষা/শব্দভান্ডার/পড়ার অবস্থান: ${it.userItems}টি যোগ হয়েছে" }
+                .onSuccess { error = "✅ ফেরত এসেছে: ${it.restored}টি ফাইল (আগে থেকে থাকায় বাদ: ${it.skipped}টি); নোট/বুকমার্ক/পরিভাষা/শব্দভান্ডার/পড়ার অবস্থান/সংরক্ষিত উত্তর: ${it.userItems}টি যোগ হয়েছে (${it.perType.entries.joinToString { e -> "${e.key}=${e.value}" }})" + (if (it.failedTypes.isEmpty()) "" else "। ⚠ এগুলো ফেরানো যায়নি: ${it.failedTypes.joinToString()} — ফাইলগুলো ঠিকঠাক ফিরেছে") }
                 .onFailure { error = when (it) {
                     is PassphraseBackup.BadBackup -> it.message
                     is BackupService.StorageFull -> it.message

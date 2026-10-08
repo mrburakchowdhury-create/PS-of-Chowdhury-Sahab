@@ -102,6 +102,7 @@ class BackupServiceTest {
         assertTrue(before.contains("fix2 সংশোধিত পৃষ্ঠা দুই")); assertTrue(before.contains("qa সংরক্ষিত প্রশ্ন?"))
         assertEquals(2, r.restored); assertEquals(0, r.skipped); assertTrue(r.userItems >= 5)
         assertEquals(before.replace(Regex("job (extract|translate) .*\\n"), ""), snapshot().replace(Regex("job (extract|translate) .*\\n"), ""))   // content equal ...
+        for (t in listOf("marks", "glossary", "vocab", "reading", "savedqa")) assertTrue("type $t restored", (r.perType[t] ?: 0) >= 1); assertTrue(r.failedTypes.isEmpty())
         // ... and job coverage equal too (restored jobs come back PAUSED so nothing runs by itself)
         for (d in vault.list()) { assertEquals(listOf(1, 1, 3), wf.job(d, DocWorkflow.Kind.Extract)!!.pages.toList()); assertEquals(JobStatus.PAUSED, wf.job(d, DocWorkflow.Kind.Extract)!!.status) }
         noStagingLeft()

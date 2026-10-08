@@ -33,7 +33,8 @@ import java.util.zip.ZipOutputStream
  * Documents whose id already exists in the vault are left untouched (never overwritten).
  */
 class BackupService(private val vault: Vault, private val wf: DocWorkflow, private val freeSpace: () -> Long = { vault.usableSpace() }) {
-    data class Report(val restored: Int, val skipped: Int, val userItems: Int = 0)
+    /** [perType] = items merged per owner-data type (marks, glossary, vocab, reading, savedqa); [failedTypes] = types whose merge failed (documents are already restored then; say so, never hide it). */
+    data class Report(val restored: Int, val skipped: Int, val userItems: Int = 0, val perType: Map<String, Int> = emptyMap(), val failedTypes: List<String> = emptyList())
     class StorageFull(msg: String) : Exception(msg)
 
     // ---------------------------------------------------------------- create
@@ -179,7 +180,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
     private fun publish(st: Staged): Report {
         val fresh = st.docs.values.filter { !vault.contains(it.id) }
         val skipped = st.docs.size - fresh.size
-        if (fresh.isEmpty()) return Report(0, skipped, mergeUser(st))
+        if (fresh.isEmpty()) return mergeUser(st).let { Report(0, skipped, it.values.sum(), it, lastFailed) }
         val journal = journalFile(); journal.parentFile?.mkdirs()
         journal.writeBytes(vault.seal(JSONArray(fresh.map { it.id }).toString().toByteArray(), JOURNAL_AAD))   // written BEFORE anything becomes visible
         try {
@@ -195,18 +196,21 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
             fresh.forEach { rollbackDerived(it.id) }; journal.delete(); throw t
         }
         journal.delete()
-        return Report(fresh.size, skipped, mergeUser(st))
+        return mergeUser(st).let { Report(fresh.size, skipped, it.values.sum(), it, lastFailed) }
     }
 
-    private fun mergeUser(st: Staged): Int {
-        if (st.version < 2) return 0
-        val ids = vault.list().map { it.id }.toSet(); var n = 0
-        runCatching { n += wf.marks.mergeJson(st.user["marks"].orEmpty(), ids) }
-        runCatching { n += wf.glossary.mergeJson(st.user["glossary"].orEmpty()) }
-        runCatching { n += wf.vocab.mergeJson(st.user["vocab"].orEmpty(), ids) }
-        runCatching { n += wf.reading.mergeJson(st.user["reading"].orEmpty(), ids) }
-        runCatching { n += wf.savedQa.mergeJson(st.user["savedqa"].orEmpty(), ids) }
-        return n
+    private var lastFailed: List<String> = emptyList()
+    private fun mergeUser(st: Staged): Map<String, Int> {
+        lastFailed = emptyList()
+        if (st.version < 2) return emptyMap()
+        val ids = vault.list().map { it.id }.toSet(); val out = LinkedHashMap<String, Int>(); val failed = ArrayList<String>()
+        fun step(name: String, f: () -> Int) { runCatching(f).onSuccess { out[name] = it }.onFailure { failed += name; out[name] = 0 } }
+        step("marks") { wf.marks.mergeJson(st.user["marks"].orEmpty(), ids) }
+        step("glossary") { wf.glossary.mergeJson(st.user["glossary"].orEmpty()) }
+        step("vocab") { wf.vocab.mergeJson(st.user["vocab"].orEmpty(), ids) }
+        step("reading") { wf.reading.mergeJson(st.user["reading"].orEmpty(), ids) }
+        if (st.version >= 3) step("savedqa") { wf.savedQa.mergeJson(st.user["savedqa"].orEmpty(), ids) }
+        lastFailed = failed; return out
     }
 
     private fun rollbackDerived(id: String) {

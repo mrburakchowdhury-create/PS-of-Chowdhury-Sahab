@@ -35,6 +35,20 @@ class ExporterTest {
         assertTrue(doc.contains("অনূদিত নয়: 2"))
     }
 
+    @Test fun docxHasRealTablesFootnotesAndRelationships() {
+        val pg = listOf(ExportPage(1, null, "নাম\tমান\nএক\t১", "অনুবাদ", originalIsOcr = true, footnotes = listOf("সম্পাদকের টীকা")))
+        val bo = ByteArrayOutputStream(); Exporter.docx(pg, ExportOptions("T", true, false), bo)
+        val parts = HashMap<String, String>(); java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bo.toByteArray())).use { z -> while (true) { val e = z.nextEntry ?: break; parts[e.name] = z.readBytes().toString(Charsets.UTF_8) } }
+        val doc = parts["word/document.xml"]!!
+        assertTrue(doc.contains("<w:tbl>")); assertEquals(2, Regex("<w:tr>").findAll(doc).count()); assertEquals(4, Regex("<w:tc>").findAll(doc).count())
+        assertEquals(2, Regex("<w:footnoteReference").findAll(doc).count())
+        assertTrue(parts["word/footnotes.xml"]!!.contains("সম্পাদকের টীকা")); assertTrue(parts["word/footnotes.xml"]!!.contains("OCR"))
+        assertTrue(parts.containsKey("word/endnotes.xml"))
+        val rels = parts["word/_rels/document.xml.rels"]!!; assertTrue(rels.contains("footnotes.xml")); assertTrue(rels.contains("endnotes.xml"))
+        val ct = parts["[Content_Types].xml"]!!; assertTrue(ct.contains("/word/footnotes.xml")); assertTrue(ct.contains("/word/endnotes.xml"))
+        for ((n, x) in parts) if (n.endsWith(".xml") || n.endsWith(".rels")) javax.xml.parsers.DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }.newDocumentBuilder().parse(java.io.ByteArrayInputStream(x.toByteArray()))
+    }
+
     @Test fun missingListIsExact() = assertEquals(listOf(2), Exporter.missing(pages))
 }
 
