@@ -14,7 +14,7 @@ import java.util.Locale
  * fallback to a network voice or another language. Pause = stop speaking and remember the segment; resume replays that segment.
  * Status: compiles; whether the S24 Ultra has a usable offline Bengali voice and how it sounds is device-test pending.
  */
-class TtsReader(context: Context, private val onState: (State) -> Unit, private val onSegment: (Segment?, ReadingPosition?) -> Unit) {
+class TtsReader(private val context: Context, private val onState: (State) -> Unit, private val onSegment: (Segment?, ReadingPosition?) -> Unit) {
     enum class State { Initialising, NoEngine, NoOfflineBengali, Ready, Playing, Paused }
     var state = State.Initialising; private set
     /** True if a Bengali voice exists but needs the network (we refuse to use it). */
@@ -34,7 +34,7 @@ class TtsReader(context: Context, private val onState: (State) -> Unit, private 
             main.post {
                 if (status != TextToSpeech.SUCCESS) return@post set(State.NoEngine)
                 val bn = tts?.voices.orEmpty().filter { it.locale.language == "bn" && !it.features.contains("notInstalled") }
-                val offline = bn.firstOrNull { !it.isNetworkConnectionRequired }
+                val offline = tts?.let { BengaliVoices.choose(context, it) }
                 onlyNetworkBengaliExists = offline == null && bn.isNotEmpty()
                 if (offline == null) return@post set(State.NoOfflineBengali)
                 tts!!.voice = offline; voiceName = offline.name

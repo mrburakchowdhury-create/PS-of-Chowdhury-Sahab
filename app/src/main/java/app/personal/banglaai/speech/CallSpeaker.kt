@@ -11,7 +11,7 @@ import android.speech.tts.UtteranceProgressListener
  * everything queued has been spoken. Same rule as [TtsReader]: only an installed offline Bengali voice; otherwise [ready] is false and nothing is spoken.
  * Status: compiles; device-test pending.
  */
-class CallSpeaker(context: Context, private val onReady: (Boolean) -> Unit, private val onWord: () -> Unit, private val onIdle: () -> Unit) {
+class CallSpeaker(private val context: Context, private val onReady: (Boolean) -> Unit, private val onWord: () -> Unit, private val onIdle: () -> Unit) {
     private val main = Handler(Looper.getMainLooper())
     private var tts: TextToSpeech? = null
     private var pending = 0
@@ -27,7 +27,7 @@ class CallSpeaker(context: Context, private val onReady: (Boolean) -> Unit, priv
                 val t = tts ?: return@post
                 if (status != TextToSpeech.SUCCESS) return@post onReady(false)
                 val bn = t.voices.orEmpty().filter { it.locale.language == "bn" && !it.features.contains("notInstalled") }
-                val offline = bn.firstOrNull { !it.isNetworkConnectionRequired }
+                val offline = BengaliVoices.choose(context, t)
                 onlyNetworkBengaliExists = offline == null && bn.isNotEmpty()
                 if (offline == null) return@post onReady(false)
                 t.voice = offline

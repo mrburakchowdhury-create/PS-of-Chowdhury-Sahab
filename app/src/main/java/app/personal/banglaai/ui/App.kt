@@ -360,6 +360,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             }
             HomeTab.Settings -> {
         SectionTitle("সেটিংস")
+        VoicePicker(activity)
         var bgRead by remember { mutableStateOf(activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean(app.personal.banglaai.speech.ReadAloudController.BG_READ_KEY, false)) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch(checked = bgRead, onCheckedChange = { bgRead = it; activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().putBoolean(app.personal.banglaai.speech.ReadAloudController.BG_READ_KEY, it).apply() })
@@ -446,4 +447,26 @@ private fun fmtSize(b: Long) = when {
     b >= 1_000_000_000L -> "%.2f GB".format(b / 1e9)       // decimal units, the same as the model sizes quoted in docs/MODELS.md
     b >= 1_000_000L -> "%.1f MB".format(b / 1e6)
     else -> "${b / 1000} KB"
+}
+
+/** Lists the installed OFFLINE Bengali voices (if any) and stores the owner's pick; a voice that needs the network is never offered. */
+@Composable
+private fun VoicePicker(activity: MainActivity) {
+    val prefs = activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE)
+    var names by remember { mutableStateOf<List<String>?>(null) }
+    var chosen by remember { mutableStateOf(prefs.getString(app.personal.banglaai.speech.BengaliVoices.PREF, null)) }
+    DisposableEffect(Unit) {
+        var t: android.speech.tts.TextToSpeech? = null
+        t = android.speech.tts.TextToSpeech(activity.applicationContext) { st -> names = if (st == android.speech.tts.TextToSpeech.SUCCESS) t?.let { app.personal.banglaai.speech.BengaliVoices.offline(it).map { v -> v.name } }.orEmpty() else emptyList() }
+        onDispose { t?.shutdown() }
+    }
+    Text("বাংলা কণ্ঠ (অফলাইন)", style = MaterialTheme.typography.titleSmall)
+    when {
+        names == null -> Text("খোঁজা হচ্ছে…", style = MaterialTheme.typography.bodySmall)
+        names!!.isEmpty() -> Text("এই ফোনে ইনস্টল-করা অফলাইন বাংলা কণ্ঠ পাওয়া যায়নি। ফোনের সেটিংস → টেক্সট-টু-স্পিচ থেকে বাংলা কণ্ঠ ডাউনলোড করুন; নেটওয়ার্ক-নির্ভর কণ্ঠ ব্যবহার করা হয় না।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        else -> names!!.forEach { n ->
+            val on = chosen == n || (chosen == null && n == names!!.first())
+            if (on) Button(onClick = {}) { Text(n) } else OutlinedButton(onClick = { chosen = n; prefs.edit().putString(app.personal.banglaai.speech.BengaliVoices.PREF, n).apply() }) { Text(n) }
+        }
+    }
 }

@@ -53,12 +53,25 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
     var openSrc by remember { mutableStateOf(-1) }
     var err by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf<String?>(null) }
+    val passageBn = remember { mutableStateMapOf<Int, String>() }   // per-passage Bengali translation (AI), kept apart from the original text
+    var transBusy by remember { mutableStateOf(-1) }
+
+    fun translatePassage(i: Int) {
+        if (transBusy >= 0) return
+        val model = wf.usableModel() ?: run { err = "অনুবাদের জন্য মডেল বসানো নেই"; return }
+        transBusy = i; err = null
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { LocalLlm(model, File(cacheDir, "llm")).ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(sources[i].text.take(3500))) } }
+                .onSuccess { passageBn[i] = it }.onFailure { err = it.message ?: it.javaClass.simpleName }
+            transBusy = -1
+        }
+    }
 
     fun ready(d: VaultDoc): Int? = wf.job(d, DocWorkflow.Kind.Extract)?.let { j -> if (j.count(PageStatus.DONE) > 0) j.count(PageStatus.DONE) else null }
 
     fun ask() {
         if (busy != null || q.isBlank()) return
-        busy = "বই খোঁজা হচ্ছে…"; answer = null; err = null; sources = emptyList(); note = null; openSrc = -1
+        passageBn.clear(); busy = "বই খোঁজা হচ্ছে…"; answer = null; err = null; sources = emptyList(); note = null; openSrc = -1
         var cutNote: String? = null
         scope.launch {
             runCatching { withContext(Dispatchers.IO) {
@@ -113,7 +126,12 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
             Text("উৎস (ট্যাপ করলে মূল অংশ দেখা যাবে)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             sources.forEachIndexed { i, p ->
                 OutlinedButton(onClick = { openSrc = if (openSrc == i) -1 else i }, modifier = Modifier.fillMaxWidth()) { Text("[উৎস ${i + 1}] ${p.book} — ${p.label}") }
-                if (openSrc == i) SelectionContainer { Text(p.text, style = MaterialTheme.typography.bodySmall) }
+                if (openSrc == i) {
+                    Text("মূল লেখা (${p.book} — ${p.label})", style = MaterialTheme.typography.titleSmall)
+                    SelectionContainer { Text(p.text, style = MaterialTheme.typography.bodySmall) }
+                    OutlinedButton(enabled = transBusy < 0, onClick = { translatePassage(i) }) { Text(if (transBusy == i) "অনুবাদ হচ্ছে…" else "বাংলা অনুবাদ (AI) করুন") }
+                    passageBn[i]?.let { Text("বাংলা অনুবাদ (AI — মূলের সঙ্গে মিলিয়ে নিন; মূল লেখা অক্ষত)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.tertiary); SelectionContainer { Text(it) } }
+                }
             }
         }
 
