@@ -47,6 +47,7 @@ class MainActivity : FragmentActivity() {
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
         if (!hooked) { hooked = true   // once per process, before any lock can happen
             val appCtx = applicationContext
+            AppLock.addBeforeLock { File(appCtx.cacheDir, "photos").deleteRecursively() }   // a not-yet-imported document photo is plaintext: it does not survive a lock
             AppLock.addBeforeLock { app.personal.banglaai.backup.BackupService.requestCancel() }   // a restore in progress stops; its staged copy is discarded, the vault is untouched
             AppLock.addBeforeLock { app.personal.banglaai.ui.AppGraph.workflowIfCreated()?.pause() }   // jobs stop at their next safe point, model calls are cancelled
             AppLock.addBeforeLock { app.personal.banglaai.speech.ReadAloudController.onVaultLock(appCtx) }   // reading stops unless the owner allowed limited background reading
