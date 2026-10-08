@@ -33,6 +33,7 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
     val msgs = remember { mutableStateListOf<Msg>() }
     var input by remember { mutableStateOf("") }
     var translate by remember { mutableStateOf(false) }
+    var advisor by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
@@ -50,8 +51,8 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
             runCatching {
                 withContext(Dispatchers.IO) {
                     val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
-                    val sys = if (translate) Prompts.TRANSLATE_SYSTEM else Prompts.ASSISTANT_SYSTEM
-                    val prompt = if (translate) Prompts.translateFree(text) else Prompts.ask(text)
+                    val sys = if (translate) Prompts.TRANSLATE_SYSTEM else if (advisor) Prompts.ADVISOR_SYSTEM else Prompts.ASSISTANT_SYSTEM
+                    val prompt = if (translate) Prompts.translateFree(text) else if (advisor) Prompts.advisor(text, app.personal.banglaai.knowledge.KnowledgeBase.search(ctx, text, null, 3).map { "প্রশ্ন: ${it.q}\nউত্তর: ${it.a}" }) else Prompts.ask(text)
                     var first = true
                     m.askStream(sys, prompt) { piece -> if (first) { first = false; busy = "লিখছে…" }; msgs[idx] = Msg(false, msgs[idx].text + piece) }
                 }
@@ -70,8 +71,9 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
             Text("সহকারী", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !translate, onClick = { translate = false }, label = { Text("প্রশ্ন / কথা") })
-            FilterChip(selected = translate, onClick = { translate = true }, label = { Text("অনুবাদ → বাংলা") })
+            FilterChip(selected = !translate && !advisor, onClick = { translate = false; advisor = false }, label = { Text("প্রশ্ন / কথা") })
+            FilterChip(selected = advisor, onClick = { translate = false; advisor = true }, label = { Text("পরামর্শদাতা") })
+            FilterChip(selected = translate, onClick = { translate = true; advisor = false }, label = { Text("অনুবাদ → বাংলা") })
         }
         Text(if (translate) "যেকোনো ভাষার লেখা পেস্ট করুন; শুধু বাংলা অনুবাদ আসবে।" else "যা জানতে চান লিখুন। AI ভুল করতে পারে; ধর্মীয়/আইনি/চিকিৎসা বিষয়ে নিজে যাচাই করুন।",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
