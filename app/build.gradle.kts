@@ -13,7 +13,7 @@ android {
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()   // CI run number: every build is a newer version, so it installs as an update
         versionName = "0.3.0-" + (System.getenv("GITHUB_SHA")?.take(7) ?: "local")   // shown on the lock screen so the owner can tell which build is installed
         // Galaxy S24 Ultra is arm64. `-Pemu` additionally packs x86_64 so the same code can be smoke-tested on an x86 emulator.
-        ndk { abiFilters += if (project.hasProperty("emu")) listOf("arm64-v8a", "x86_64") else listOf("arm64-v8a") }
+        ndk { abiFilters += if (project.hasProperty("emuOnly")) listOf("x86_64") else if (project.hasProperty("emu")) listOf("arm64-v8a", "x86_64") else listOf("arm64-v8a") }   // emuOnly: smaller APK for the slow software emulator
     }
     // SIGNING. The app's identity is its signing key; a new key means "App not installed" on update, so the identity must stay stable.
     //  * "release" uses YOUR private key when RELEASE_KEYSTORE_FILE / RELEASE_KEYSTORE_PASSWORD / RELEASE_KEY_ALIAS / RELEASE_KEY_PASSWORD are set (CI: repository secrets, see docs/BUILD.md).
