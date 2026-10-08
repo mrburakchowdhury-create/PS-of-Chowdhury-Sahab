@@ -15,7 +15,11 @@ android {
         // Galaxy S24 Ultra is arm64. `-Pemu` additionally packs x86_64 so the same code can be smoke-tested on an x86 emulator.
         ndk { abiFilters += if (project.hasProperty("emu")) listOf("arm64-v8a", "x86_64") else listOf("arm64-v8a") }
     }
+    // Test (debug) builds are signed with ONE fixed, non-secret key kept in the repo (password "android", never used for the real release), so every
+    // new test APK installs over the previous one. A different key per CI run is what produced "App not installed" on update.
+    signingConfigs { create("shared") { storeFile = file("debug-shared.keystore"); storePassword = "android"; keyAlias = "androiddebugkey"; keyPassword = "android" } }
     buildTypes {
+        debug { signingConfig = signingConfigs.getByName("shared") }
         release {
             isMinifyEnabled = true; isShrinkResources = true; isDebuggable = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

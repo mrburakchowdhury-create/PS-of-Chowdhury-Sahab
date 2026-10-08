@@ -8,3 +8,6 @@ local.properties
 *.litertlm
 *.traineddata
 .kotlin/
+
+# the shared TEST-build key is deliberately committed (non-secret); real release keys must never be
+!app/debug-shared.keystore
