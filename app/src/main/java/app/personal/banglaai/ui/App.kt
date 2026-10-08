@@ -44,8 +44,9 @@ import kotlinx.coroutines.withContext
 fun App(activity: MainActivity, unlocked: Boolean, onUnlocked: () -> Unit, onLock: () -> Unit) {
     val settings = remember { activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE) }
     var fontScale by remember { mutableFloatStateOf(settings.getFloat("font_scale", 1.0f).coerceIn(0.85f, 1.6f)) }
-    PsTheme(fontScale) {
-        Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = Ps.Ice) {
+    var themeMode by remember { mutableStateOf(settings.getString("theme", "dark") ?: "dark") }
+    PsTheme(fontScale, themeMode) {
+        Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = MaterialTheme.colorScheme.onBackground) {
             val pins = remember { PinStore(activity) }
             var pinSet by remember { mutableStateOf(pins.isSet()) }
             var splashDone by rememberSaveable { mutableStateOf(false) }
@@ -54,7 +55,7 @@ fun App(activity: MainActivity, unlocked: Boolean, onUnlocked: () -> Unit, onLoc
                 !splashDone -> Image(painterResource(R.drawable.splash_art), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 !pinSet -> SetupScreen(pins, AppGraph.keys(activity)) { pinSet = true; onUnlocked() }
                 !unlocked -> UnlockScreen(activity, pins, AppGraph.keys(activity), onUnlocked)
-                else -> HomeScreen(activity, onLock, fontScale) { v -> fontScale = v.coerceIn(0.85f, 1.6f); settings.edit().putFloat("font_scale", fontScale).apply() }
+                else -> HomeScreen(activity, onLock, fontScale, themeMode, { m -> themeMode = m; settings.edit().putString("theme", m).apply() }) { v -> fontScale = v.coerceIn(0.85f, 1.6f); settings.edit().putFloat("font_scale", fontScale).apply() }
             }
         }
     }
@@ -142,7 +143,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
 private enum class HomeTab { Menu, Files, Model, Voice, Terms, Settings, Status }
 
 @Composable
-private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Float, onFontScale: (Float) -> Unit) {
+private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Float, themeMode: String, onTheme: (String) -> Unit, onFontScale: (Float) -> Unit) {
     val scope = rememberCoroutineScope()
     val vault = remember { AppGraph.vault(activity) }; val models = remember { AppGraph.models(activity) }
     var docs by remember { mutableStateOf<List<VaultDoc>>(emptyList()) }
@@ -374,6 +375,10 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
                 Text("স্ক্রিনশট / স্ক্রিন-রেকর্ডিং অনুমতি")
                 Text(if (shots) "চালু: স্ক্রিনশট নেওয়া যাবে। সাবধান: রিসেন্ট-অ্যাপ প্রিভিউতেও ভেতরের লেখা দেখা যেতে পারে।" else "বন্ধ: স্ক্রিনশট/রেকর্ডিং ও রিসেন্ট-অ্যাপ প্রিভিউ অন্ধকার থাকবে (বেশি গোপনীয়)।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("থিম", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            listOf("dark" to "গাঢ়", "light" to "হালকা", "system" to "ফোনের মতো").forEach { (k, l) -> if (themeMode == k) Button(onClick = { onTheme(k) }) { Text(l) } else OutlinedButton(onClick = { onTheme(k) }) { Text(l) } }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("লেখার আকার", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

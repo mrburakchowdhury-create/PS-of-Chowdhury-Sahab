@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -36,6 +37,17 @@ object Ps {
         outline = Outline, outlineVariant = Color(0xFF1D3F78), error = Error, onError = Color(0xFF3B0012), errorContainer = Color(0xFF5C1226), onErrorContainer = Color(0xFFFFD9E1),
     )
 
+    /** Light option: same hues, darkened so every text/background pair stays above 4.5:1 (primary 0A5C70 on F6FAFF ≈ 7.2:1, text 0A1B3D ≈ 16:1). */
+    val lightColors = lightColorScheme(
+        primary = Color(0xFF0A5C70), onPrimary = Color.White, primaryContainer = Color(0xFFCDEFF8), onPrimaryContainer = Color(0xFF001F28),
+        secondary = Color(0xFF7A5900), onSecondary = Color.White, secondaryContainer = Color(0xFFFFE9B0), onSecondaryContainer = Color(0xFF261A00),
+        tertiary = Color(0xFF006B3C), onTertiary = Color.White, tertiaryContainer = Color(0xFFB6F2D0), onTertiaryContainer = Color(0xFF002111),
+        background = Color(0xFFF6FAFF), onBackground = Color(0xFF0A1B3D), surface = Color(0xFFFFFFFF), onSurface = Color(0xFF0A1B3D),
+        surfaceVariant = Color(0xFFE3ECF8), onSurfaceVariant = Color(0xFF33496E),
+        surfaceContainerLowest = Color.White, surfaceContainerLow = Color(0xFFF0F5FC), surfaceContainer = Color(0xFFE8EFFA), surfaceContainerHigh = Color(0xFFDDE7F5), surfaceContainerHighest = Color(0xFFD3DFF0),
+        outline = Color(0xFF5B76A3), outlineVariant = Color(0xFFB9C8E0), error = Color(0xFFB3002F), onError = Color.White, errorContainer = Color(0xFFFFD9E1), onErrorContainer = Color(0xFF40000F),
+    )
+
     private val base = Typography()
     val typography = Typography(
         headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.Bold, fontSize = 24.sp),
@@ -54,13 +66,14 @@ object Ps {
 
 /** [fontScale] is the owner's own text-size choice (0.85–1.6) applied on top of the phone's font setting. */
 @Composable
-fun PsTheme(fontScale: Float, content: @Composable () -> Unit) {
+fun PsTheme(fontScale: Float, mode: String = "dark", content: @Composable () -> Unit) {
     val d = LocalDensity.current
+    val dark = when (mode) { "light" -> false; "system" -> androidx.compose.foundation.isSystemInDarkTheme(); else -> true }
     CompositionLocalProvider(LocalDensity provides Density(d.density, d.fontScale * fontScale)) {
-        MaterialTheme(colorScheme = Ps.colors, typography = Ps.typography) {
+        MaterialTheme(colorScheme = if (dark) Ps.colors else Ps.lightColors, typography = Ps.typography) {
             // Plain Text() must default to the light "ice" colour: a transparent Surface would otherwise leave it black on navy.
-            CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides Ps.Ice) {
-                Box(Modifier.fillMaxSize().background(Ps.Gradient)) { content() }
+            CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides MaterialTheme.colorScheme.onBackground) {
+                Box(Modifier.fillMaxSize().background(if (dark) Ps.Gradient else Brush.verticalGradient(listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.background)))) { content() }
             }
         }
     }
