@@ -10,8 +10,8 @@ android {
         applicationId = "app.personal.banglaai"
         minSdk = 31
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.2.0-dev"
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()   // CI run number: every build is a newer version, so it installs as an update
+        versionName = "0.2.0-" + (System.getenv("GITHUB_SHA")?.take(7) ?: "local")   // shown on the lock screen so the owner can tell which build is installed
         // Galaxy S24 Ultra is arm64. `-Pemu` additionally packs x86_64 so the same code can be smoke-tested on an x86 emulator.
         ndk { abiFilters += if (project.hasProperty("emu")) listOf("arm64-v8a", "x86_64") else listOf("arm64-v8a") }
     }

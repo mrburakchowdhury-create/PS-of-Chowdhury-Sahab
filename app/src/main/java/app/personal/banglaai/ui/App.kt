@@ -103,6 +103,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
         Image(painterResource(R.drawable.logo_ps), contentDescription = null, modifier = Modifier.size(104.dp).clip(androidx.compose.foundation.shape.CircleShape).align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(12.dp))
         Text("🔒 অ্যাপ বন্ধ আছে", style = MaterialTheme.typography.headlineSmall)
+        Text("সংস্করণ ${runCatching { activity.packageManager.getPackageInfo(activity.packageName, 0).versionName }.getOrNull() ?: "?"}", style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(16.dp))
         PinField("PIN", pin) { pin = it }
         msg?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -369,6 +370,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             }
             HomeTab.Status -> {
         SectionTitle("ফিচারের অবস্থা (সৎ তালিকা)")
+        Text("এই অ্যাপের সংস্করণ: ${runCatching { activity.packageManager.getPackageInfo(activity.packageName, 0).versionName }.getOrNull() ?: "?"} (GitHub-এর কমিট-কোডের শুরু; সর্বশেষ বিল্ডের সঙ্গে মিলিয়ে নিন)", style = MaterialTheme.typography.bodySmall)
         listOf(
             "PIN + বায়োমেট্রিক লক, এনক্রিপ্টেড ফাইল সংরক্ষণ" to "তৈরি; ডিভাইসে পরীক্ষা বাকি",
             "PDF/TXT লেখা বের করা, পৃষ্ঠা-ম্যাপ, থামা/চালু" to "তৈরি; synthetic টেস্টে যাচাইকৃত, ফোনে পরীক্ষা বাকি",

@@ -16,7 +16,7 @@ object SpeechText {
     fun clean(raw: String): String {
         var s = raw.replace(fence, " কোড দেখুন পর্দায়। ").replace(url, " ")
         s = s.replace(heading, "").replace(listMarker, "")
-        s = s.replace(emoji, " ").replace(symbols, " ").replace(dashes, ", ")
+        s = s.replace(Regex("\\.{2,}|[…·]+|(?<=\\s)\\.(?=\\s)"), ", ").replace(emoji, " ").replace(symbols, " ").replace(dashes, ", ")
         s = s.replace(Regex("\\(\\s*\\)"), " ").replace(Regex("\\s*\\n\\s*"), "। ").replace(Regex("[।]\\s*[।]+"), "।")
         s = s.replace(Regex("\\s{2,}"), " ").replace(Regex("\\s+([,।.!?;:])"), "$1").replace(Regex("([,;:])\\s*[,;:]+"), "$1")
         return s.trim().trim(',', ';', ':').trim()

@@ -152,7 +152,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
         scope.launch {
             delay(350)   // let the recognizer/audio route settle between turns
             if (machine.phase != Phase.Listening) return@launch
-            voice.listen({ t ->
+            runCatching { voice.listen({ t ->
                 level = 0f
                 if (machine.phase != Phase.Listening) return@listen
                 if (VoiceCallMachineHelper.interrupt(t)) { actRef[0]?.invoke(Action.Listen); return@listen }
@@ -161,7 +161,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
                 level = 0f
                 if (machine.phase != Phase.Listening) return@listen
                 if (e == "কিছু শোনা যায়নি") actRef[0]?.invoke(machine.onSilence()) else endCall(e)
-            }, { level = it })
+            }, { level = it }) }.onFailure { endCall("কথা শোনা চালু করা যায়নি (${it.javaClass.simpleName}) — ‘ফোন পরীক্ষা’ পর্দা দেখুন") }
         }
     }
 
@@ -182,7 +182,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
         note = null; heard = ""; answer = ""; history.clear()
         if (wf.usableModel() == null) { note = "কোনো AI মডেল বসানো নেই। হোমে ফিরে 'মডেল ফাইল বসান' চাপুন।"; return }
         if (!voice.available()) { note = "এই ফোনে অফলাইন (on-device) ভয়েস চেনা নেই, তাই কথা শোনা যাবে না; ইন্টারনেট-ভিত্তিক বিকল্পে যাওয়া হয় না। নিচের ঘরে লিখে কলের মতো চালাতে পারেন।" }
-        act(machine.start())
+        runCatching { act(machine.start()) }.onFailure { endCall("কল শুরু করা যায়নি (${it.javaClass.simpleName})") }
     }
     val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) start() else note = "মাইক্রোফোনের অনুমতি ছাড়া ভয়েস কল চলবে না।"

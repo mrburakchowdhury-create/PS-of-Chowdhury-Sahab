@@ -86,5 +86,6 @@ class MainActivity : FragmentActivity() {
     }
 
     private companion object {
-        @Volatile private var cleaned = false; const val INACTIVITY_LOCK_MS = 30_000L }
+        @Volatile private var cleaned = false; // photo/file pickers and permission dialogs are other screens; a short limit locked the app while they were open
+        const val INACTIVITY_LOCK_MS = 90_000L }
 }

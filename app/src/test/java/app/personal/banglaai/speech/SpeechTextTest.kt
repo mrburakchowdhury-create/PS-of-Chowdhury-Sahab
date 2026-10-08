@@ -24,4 +24,9 @@ class SpeechTextTest {
         assertFalse(SpeechText.isMostlyBengali("The weather is nice today"))
         assertFalse(SpeechText.isMostlyBengali("الحمد لله رب العالمين"))
     }
+
+    @Test fun ellipsisAndStarsAreNotSpoken() {
+        val c = SpeechText.clean("আমরা সবাই... এই প্রতিষ্ঠাতার কর্ম **সম্পাদন** করিব…")
+        assertFalse(c.contains("*")); assertFalse(c.contains("...")); assertFalse(c.contains("…"))
+    }
 }
