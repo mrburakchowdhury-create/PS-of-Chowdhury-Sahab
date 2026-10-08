@@ -42,7 +42,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     val state = ReadAloudController.state
     val current = ReadAloudController.current
     LaunchedEffect(doc.id) { ReadAloudController.setPositionSaver { wf.reading.put(doc.id, it.page, it.segment) } }
-    val voice = remember { VoiceInput(ctx) }
+    val voice = remember { VoiceEngine.create(ctx, wf) }
     // Reading deliberately continues in the background (foreground service); the mic never does.
     DisposableEffect(Unit) { onDispose { voice.stop() } }
     var initialDone by remember { mutableStateOf(false) }

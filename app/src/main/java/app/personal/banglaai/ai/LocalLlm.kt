@@ -3,6 +3,7 @@ package app.personal.banglaai.ai
 import android.os.Handler
 import android.os.Looper
 import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
@@ -24,7 +25,7 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
     @Volatile private var current: com.google.ai.edge.litertlm.Conversation? = null
 
     private fun stillWanted(gen: Int) { if (!background && gen != Shared.interactiveGen) throw CancellationException("screen closed or app locked") }
-    private fun engine(): Engine = Shared.engine(modelFile, cacheDir)
+    private fun engine(audio: Boolean = false): Engine = Shared.engine(modelFile, cacheDir, audio)
 
     /** Loads (or reuses) the shared engine, taking its turn like a request so a memory-trim cannot free it half-way. Call off the main thread. */
     fun load() { Shared.turn.acquire(); try { engine() } finally { Shared.turn.release(); Shared.touch() } }
@@ -52,6 +53,22 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
             val conv = eng.createConversation(ConversationConfig(systemInstruction = Contents.of(system)))
             current = conv; if (!background) Shared.activeInteractive = conv
             try { conv.sendMessageAsync(TokenBudget.guard(system, prompt)).collect { onText(it.toString()) } } finally { current = null; Shared.activeInteractive = null; conv.close() }
+        } finally { Shared.turn.release(); Shared.touch() }
+    }
+
+    /**
+     * Speech -> text with the model's own audio understanding (Gemma 4): [wav] is a complete 16 kHz mono 16-bit WAV file. Independent of the phone's speech service.
+     * The engine is (re)loaded with the audio encoder on first use (a little more RAM than text only). Blocks; call off the main thread. Cancelled by [cancel].
+     */
+    fun transcribe(wav: ByteArray, instruction: String): String {
+        val gen = Shared.interactiveGen
+        Shared.turn.acquire()
+        try {
+            stillWanted(gen)
+            val eng = engine(audio = true); stillWanted(gen)
+            val conv = eng.createConversation(ConversationConfig())
+            current = conv; if (!background) Shared.activeInteractive = conv
+            try { return conv.sendMessage(Contents.of(Content.AudioBytes(wav), Content.Text(instruction))).toString() } finally { current = null; Shared.activeInteractive = null; conv.close() }
         } finally { Shared.turn.release(); Shared.touch() }
     }
 
@@ -84,22 +101,24 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
         @Volatile var activeInteractive: com.google.ai.edge.litertlm.Conversation? = null
         private var eng: Engine? = null
         private var path: String? = null
+        private var withAudio = false
         private val main = Handler(Looper.getMainLooper())
         private val idle = Runnable { releaseWhenIdle(retryLater = true) }
         val loaded get() = eng != null
 
-        @Synchronized fun engine(modelFile: File, cacheDir: File): Engine {
-            eng?.let { if (path == modelFile.path) { touch(); return it } else { runCatching { it.close() }; eng = null } }
+        @Synchronized fun engine(modelFile: File, cacheDir: File, audio: Boolean = false): Engine {
+            // an engine that already has the audio encoder serves text requests too; one without it is replaced when audio is first needed
+            eng?.let { if (path == modelFile.path && (withAudio || !audio)) { touch(); return it } else { runCatching { it.close() }; eng = null } }
             require(modelFile.exists()) { "মডেল ফাইল নেই — আগে মডেল import করুন" }
             cacheDir.mkdirs()
             // CPU is the safe default. GPU (lower RAM) is opt-in via [preferGpu]; if it fails to start we fall back to CPU and remember why.
             if (preferGpu) {
-                val gpu = runCatching { Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.GPU(), maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() } }
-                gpu.onSuccess { eng = it; path = modelFile.path; usedBackend = "GPU"; touch(); return it }
+                val gpu = runCatching { Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.GPU(), audioBackend = if (audio) Backend.CPU() else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() } }
+                gpu.onSuccess { eng = it; path = modelFile.path; withAudio = audio; usedBackend = "GPU"; touch(); return it }
                 lastGpuFailure = gpu.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" }
             }
-            val e = Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.CPU(), maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() }
-            eng = e; path = modelFile.path; usedBackend = "CPU"; touch(); return e
+            val e = Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.CPU(), audioBackend = if (audio) Backend.CPU() else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() }
+            eng = e; path = modelFile.path; withAudio = audio; usedBackend = "CPU"; touch(); return e
         }
 
         fun touch() { main.removeCallbacks(idle); if (eng != null) main.postDelayed(idle, IDLE_MS) }
@@ -108,6 +127,6 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
         fun releaseWhenIdle(retryLater: Boolean = false) {
             if (turn.tryAcquire()) Thread { try { release() } finally { turn.release() } }.start() else if (retryLater) touch()
         }
-        @Synchronized fun release() { main.removeCallbacks(idle); runCatching { eng?.close() }; eng = null; path = null }
+        @Synchronized fun release() { main.removeCallbacks(idle); runCatching { eng?.close() }; eng = null; path = null; withAudio = false }
     }
 }

@@ -101,6 +101,18 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
             Button(onClick = { packText = if (vi.downloadPack("bn-BD")) "ফোনের নিজস্ব স্পিচ-সার্ভিসকে বাংলা প্যাক নামাতে বলা হয়েছে (এই অ্যাপের ইন্টারনেট অনুমতি নেই, নামায় ফোনের সিস্টেম)। কিছুক্ষণ পরে ‘অবস্থা দেখুন’ চাপুন।" else "এই ফোনে (Android 13+ লাগে) এটা করা যায়নি। ফোনের Settings → Google → সব সেবা → ভয়েস → অফলাইন স্পিচ রিকগনিশন → বাংলা দেখুন।" }) { Text("বাংলা প্যাক নামান") }
         }
         packText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
+        SectionTitle("Microphone & speech test (one sentence)")
+        var vtT0 by remember { mutableLongStateOf(0L) }
+        var vtLog by remember { mutableStateOf<List<String>>(emptyList()) }; var vtOn by remember { mutableStateOf(false) }
+        val vtVoice = remember { app.personal.banglaai.speech.VoiceEngine.create(ctx, wf) }
+        DisposableEffect(Unit) { onDispose { vtVoice.stop() } }
+        fun vtAdd(t: String) { vtLog = vtLog + "${(System.currentTimeMillis() - vtT0) / 100 / 10.0}s  $t" }
+        val vtPerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok -> if (!ok) vtAdd("মাইক্রোফোনের অনুমতি দেওয়া হয়নি") else { vtT0 = System.currentTimeMillis(); vtOn = true; vtAdd("start")
+            vtVoice.listen({ t -> vtOn = false; vtAdd("✅ শুনেছি: $t") }, { e -> vtOn = false; vtAdd("⚠️ $e") }, null, "bn-BD", { p -> vtAdd("… $p") }, { st -> vtAdd("stage: $st") }) } }
+        Text("বোতাম চেপে একটি বাক্য বলুন। নিচে দেখাবে ফোনের ভয়েস-সেবা কোন ধাপে কী করল (ready → hearing → processing) এবং ত্রুটি হলে তার কোড। এই লেখাটি আমাকে পাঠালে ঠিক কোথায় আটকাচ্ছে বোঝা যাবে।", style = MaterialTheme.typography.bodySmall)
+        Button(enabled = !vtOn, onClick = { vtLog = emptyList(); vtPerm.launch(android.Manifest.permission.RECORD_AUDIO) }) { Text(if (vtOn) "🎤 শুনছি… বলুন" else "🎤 Test speech recognition (${if (app.personal.banglaai.speech.VoiceEngine.usesModel(ctx, wf)) "AI model" else "phone service"})") }
+        if (vtOn) OutlinedButton(onClick = { vtVoice.stop(); vtOn = false; vtAdd("বন্ধ করা হলো") }) { Text("Stop") }
+        vtLog.takeLast(14).forEach { Text(it, style = MaterialTheme.typography.bodySmall.merge(app.personal.banglaai.ui.Ps.Mono)) }
         SectionTitle("AI চালানোর উপায়: CPU নাকি GPU")
         var gpu by remember { mutableStateOf(LocalLlm.preferGpu) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

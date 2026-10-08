@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import app.personal.banglaai.doc.DocWorkflow
 import app.personal.banglaai.speech.BengaliVoices
+import app.personal.banglaai.speech.VoiceEngine
 import app.personal.banglaai.speech.VoiceInput
 
 /** One line of the checklist: what is needed, whether it is ready, and (if not) the one button that fixes it. */
@@ -34,8 +35,10 @@ fun ReadinessPanel(wf: DocWorkflow, needModel: Boolean, needMic: Boolean, needHe
     val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> micOk = ok; refresh++; onChanged() }
     val voice = remember { VoiceInput(ctx) }
     DisposableEffect(Unit) { onDispose { voice.stop() } }
+    val viaModel = remember(refresh) { VoiceEngine.usesModel(ctx, wf) }
     val hearing by produceState<Pair<Boolean?, String>>(null to "", refresh) {
         value = when {
+            viaModel -> true to "AI model দিয়ে শোনা হবে (ফোনের ভয়েস-সেবা লাগে না; একটু ধীর — প্রতি বাক্যে কয়েক সেকেন্ড)"
             !voice.available() -> false to "এই ফোনে অফলাইন (on-device) ভয়েস-চেনা সেবা নেই"
             android.os.Build.VERSION.SDK_INT < 33 -> true to "আছে (বাংলা প্যাক আছে কি না প্রথম ব্যবহারে বোঝা যাবে)"
             else -> { var r: Pair<Boolean?, String> = null to "দেখা হচ্ছে…"

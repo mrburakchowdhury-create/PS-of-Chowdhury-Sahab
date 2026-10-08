@@ -3,6 +3,7 @@ package app.personal.banglaai.ui
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -57,6 +58,7 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onOpenDoc: (Vau
         JobRunner.start("বই যোগ হচ্ছে (এনক্রিপ্ট করে রাখা)") { val d = vault.import(uri); store.add(d.id); JobStatus.DONE }
     }
     var q by remember { mutableStateOf("") }
+    var scope1 by remember { mutableStateOf<String?>(null) }   // null = all books, otherwise one book title
     var busy by remember { mutableStateOf<String?>(null) }
     var answer by remember { mutableStateOf<String?>(null) }
     var sources by remember { mutableStateOf<List<Passage>>(emptyList()) }
@@ -89,7 +91,7 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onOpenDoc: (Vau
                 Library.bundled.forEach { all += Library.bundledPassages(ctx, it) }
                 userDocs.forEach { d -> val total = wf.job(d, DocWorkflow.Kind.Extract)?.total ?: 0
                     for (p in 1..total) wf.effective(d.id, p)?.text?.takeIf { it.isNotBlank() }?.let { t -> all += Library.chunk(d.name, t).map { c -> c.copy(label = "পৃষ্ঠা $p") } } }
-                val index = Library.Index(all)
+                val index = Library.Index(scope1?.let { sc -> all.filter { it.book == sc } } ?: all)
                 val model = wf.usableModel()
                 // Bengali question -> English search words WITHOUT the model (concept list + dictionary glosses); the model's own expansion is added on top
                 val dict = runCatching { app.personal.banglaai.knowledge.Dictionary.get(ctx) }.getOrNull()
@@ -102,11 +104,12 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onOpenDoc: (Vau
                 }
                 val found = index.search(query, 6)
                 var ans: String? = null
+                val forModel = found.take(4)   // the model reads the 4 best passages (shorter prompt = faster, fewer slips); all 6 are still listed as sources
                 if (model != null && found.isNotEmpty()) {
                     withContext(Dispatchers.Main) { busy = "উত্তর লেখা হচ্ছে…" }
-                    ans = LocalLlm(model, File(cacheDir, "llm")).ask(Prompts.LIB_SYSTEM, Prompts.libraryAnswer(q, run { val (cut, trimmed) = app.personal.banglaai.ai.TokenBudget.share(found.map { it.text }, app.personal.banglaai.ai.TokenBudget.INPUT_TOKENS - 800)
+                    ans = LocalLlm(model, File(cacheDir, "llm")).ask(Prompts.LIB_SYSTEM, Prompts.libraryAnswer(q, run { val (cut, trimmed) = app.personal.banglaai.ai.TokenBudget.share(forModel.map { it.text }, app.personal.banglaai.ai.TokenBudget.INPUT_TOKENS - 800)
                         if (trimmed) cutNote = app.personal.banglaai.ai.TokenBudget.NOTE_BN
-                        found.indices.map { "${found[it].book} — ${found[it].label}" to cut[it] } }))
+                        forModel.indices.map { "${forModel[it].book} — ${forModel[it].label}" to cut[it] } }))
                 }
                 Triple(found, ans, model != null)
             } }.onSuccess { (found, ans, hadModel) ->
@@ -126,6 +129,12 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onOpenDoc: (Vau
 
         SectionTitle("প্রশ্ন")
         OutlinedTextField(q, { q = it }, label = { Text("আপনার প্রশ্ন (বাংলা বা ইংরেজি)") }, modifier = Modifier.fillMaxWidth(), maxLines = 4)
+        Text("Search in:", style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(selected = scope1 == null, onClick = { scope1 = null }, label = { Text("All books") })
+            Library.bundled.forEach { b -> val t = b.title.substringBefore(" ("); FilterChip(selected = scope1 == t, onClick = { scope1 = t }, label = { Text(t) }) }
+            userDocs.forEach { d -> FilterChip(selected = scope1 == d.name, onClick = { scope1 = d.name }, label = { Text(d.name.take(24)) }) }
+        }
         Button(enabled = busy == null && q.isNotBlank(), onClick = { ask() }) { Text(busy ?: "Ask the books") }
         err?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }

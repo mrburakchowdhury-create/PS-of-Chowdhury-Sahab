@@ -21,8 +21,8 @@ import android.speech.SpeechRecognizer
  * longer silence limits are requested so a short pause does not cut the sentence; a watchdog catches an engine that never answers.
  * Every error says its numeric code, so a failure can be reported precisely. Status: device-test pending.
  */
-class VoiceInput(private val context: Context) {
-    fun available() = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+class VoiceInput(private val context: Context) : SpeechListener {
+    override fun available() = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
     private val main = Handler(Looper.getMainLooper())
     private var rec: SpeechRecognizer? = null
@@ -32,9 +32,9 @@ class VoiceInput(private val context: Context) {
     private var watchdog: Runnable? = null
 
     /** What the owner should see while a press is in progress ("starting", "ready", "hearing", "processing"). */
-    fun listen(
-        onText: (String) -> Unit, onError: (String) -> Unit, onLevel: ((Float) -> Unit)? = null, lang: String = "bn-BD",
-        onPartial: ((String) -> Unit)? = null, onStage: ((String) -> Unit)? = null,
+    override fun listen(
+        onText: (String) -> Unit, onError: (String) -> Unit, onLevel: ((Float) -> Unit)?, lang: String,
+        onPartial: ((String) -> Unit)?, onStage: ((String) -> Unit)?,
     ) {
         if (!available()) return onError(UNAVAILABLE_MESSAGE)
         val e = ++epoch
@@ -140,7 +140,7 @@ class VoiceInput(private val context: Context) {
     private fun releaseRecognizer() { rec?.let { runCatching { it.cancel() }; runCatching { it.destroy() } }; rec = null }
 
     /** Mic is released on every path: result, error, or leaving the screen. */
-    fun stop() { epoch++; cancelWatchdog(); releaseRecognizer() }
+    override fun stop() { epoch++; cancelWatchdog(); releaseRecognizer() }
 
     companion object {
         const val NOTHING_HEARD = "কিছু শোনা যায়নি"

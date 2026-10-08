@@ -17,9 +17,9 @@ import app.personal.banglaai.storage.VaultDoc
  * the owner taps confirm (or taps one of several matching names). The app cannot be opened or unlocked by voice from outside — see the user guide (Bixby).
  */
 @Composable
-fun HomeVoice(docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit, onAsk: (String) -> Unit) {
+fun HomeVoice(wf: app.personal.banglaai.doc.DocWorkflow, docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit, onAsk: (String) -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val voice = remember { VoiceInput(ctx) }
+    val voice = remember { VoiceEngine.create(ctx, wf) }
     DisposableEffect(Unit) { onDispose { voice.stop() } }
     var transcript by remember { mutableStateOf("") }
     var cmd by remember { mutableStateOf<VoiceCommand?>(null) }

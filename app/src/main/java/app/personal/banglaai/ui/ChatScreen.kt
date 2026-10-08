@@ -39,7 +39,7 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
     var stoppedByUser by remember { mutableStateOf(false) }
     // microphone: one press = one sentence, written into the question box (so it can be corrected before sending)
-    val voice = remember { app.personal.banglaai.speech.VoiceInput(ctx) }
+    val voice = remember { app.personal.banglaai.speech.VoiceEngine.create(ctx, wf) }
     var listening by remember { mutableStateOf(false) }; var micMsg by remember { mutableStateOf<String?>(null) }; var heardPartial by remember { mutableStateOf("") }
     DisposableEffect(Unit) { onDispose { voice.stop() } }
     fun listen() {

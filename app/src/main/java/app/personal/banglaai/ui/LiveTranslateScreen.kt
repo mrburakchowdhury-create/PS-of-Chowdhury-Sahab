@@ -22,6 +22,7 @@ import app.personal.banglaai.ai.Prompts
 import app.personal.banglaai.doc.DocWorkflow
 import app.personal.banglaai.speech.CallSpeaker
 import app.personal.banglaai.speech.ReadAloudController
+import app.personal.banglaai.speech.VoiceEngine
 import app.personal.banglaai.speech.VoiceInput
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -56,7 +57,7 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onGoModel: () -> Unit =
     var stage by remember { mutableStateOf("") }
     var checkTick by remember { mutableIntStateOf(0) }
     val lines = remember { mutableStateListOf<Line>() }
-    val voice = remember { VoiceInput(ctx) }
+    val voice = remember { VoiceEngine.create(ctx, wf) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
     var gen by remember { mutableIntStateOf(0) }
     var silences by remember { mutableIntStateOf(0) }

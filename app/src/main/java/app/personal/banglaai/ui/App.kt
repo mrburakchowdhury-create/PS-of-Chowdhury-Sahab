@@ -298,7 +298,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             OutlinedButton(onClick = { takeDocPhoto() }, enabled = busy == null) { Text("📷 Scan") }
         }
         HorizontalDivider()
-        HomeVoice(docs, { d, then -> pendingCmd = then; openDoc = d }) { q -> chatStart = q; chatOpen = true }
+        HomeVoice(workflow, docs, { d, then -> pendingCmd = then; openDoc = d }) { q -> chatStart = q; chatOpen = true }
         HorizontalDivider()
         val bookIds = remember(docs) { app.personal.banglaai.library.BundledBooks(activity, vault, workflow).docIds() }
         val mine = docs.filter { it.id !in bookIds }; val builtIn = docs.filter { it.id in bookIds }
@@ -374,6 +374,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             }
             HomeTab.Settings -> {
         SectionTitle("সেটিংস")
+        VoiceEnginePicker(activity)
         VoicePicker(activity)
         var bgRead by remember { mutableStateOf(activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean(app.personal.banglaai.speech.ReadAloudController.BG_READ_KEY, false)) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -483,4 +484,21 @@ private fun VoicePicker(activity: MainActivity) {
             if (on) Button(onClick = {}) { Text(n) } else OutlinedButton(onClick = { chosen = n; prefs.edit().putString(app.personal.banglaai.speech.BengaliVoices.PREF, n).apply() }) { Text(n) }
         }
     }
+}
+
+/** Which engine listens: Auto (AI model if installed, else the phone's recogniser), the phone's own, or the AI model's. */
+@Composable
+private fun VoiceEnginePicker(activity: MainActivity) {
+    var mode by remember { mutableStateOf(app.personal.banglaai.speech.VoiceEngine.mode(activity)) }
+    Text("Voice recognition (what turns your speech into text)", style = MaterialTheme.typography.titleSmall)
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(app.personal.banglaai.speech.VoiceEngine.Mode.AUTO to "Auto", app.personal.banglaai.speech.VoiceEngine.Mode.MODEL to "AI model", app.personal.banglaai.speech.VoiceEngine.Mode.PHONE to "Phone's service").forEach { (m, l) ->
+            FilterChip(selected = mode == m, onClick = { mode = m; app.personal.banglaai.speech.VoiceEngine.setMode(activity, m) }, label = { Text(l) })
+        }
+    }
+    Text(when (mode) {
+        app.personal.banglaai.speech.VoiceEngine.Mode.AUTO -> "Auto: AI model বসানো থাকলে সেটাই শোনে (ফোনের Google ভয়েস-প্যাক লাগে না, একটু ধীর); না থাকলে ফোনের সেবা।"
+        app.personal.banglaai.speech.VoiceEngine.Mode.MODEL -> "AI model: প্রতি বাক্যের শেষে কয়েক সেকেন্ড থেকে আধা মিনিট লাগতে পারে (ফোনভেদে); প্রথমবার model লোড হয়।"
+        app.personal.banglaai.speech.VoiceEngine.Mode.PHONE -> "Phone's service: দ্রুত, কিন্তু ফোনে অফলাইন বাংলা প্যাক ঠিকমতো থাকতে হয়; না থাকলে ত্রুটি দেখায়।"
+    }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }

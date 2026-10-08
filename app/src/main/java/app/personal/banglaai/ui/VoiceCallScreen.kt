@@ -31,6 +31,7 @@ import app.personal.banglaai.call.VoiceCallMachine.Phase
 import app.personal.banglaai.doc.DocWorkflow
 import app.personal.banglaai.speech.CallSpeaker
 import app.personal.banglaai.speech.ReadAloudController
+import app.personal.banglaai.speech.VoiceEngine
 import app.personal.banglaai.speech.VoiceInput
 import app.personal.banglaai.storage.Vault
 import kotlinx.coroutines.Dispatchers
@@ -65,7 +66,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onGoModel: ()
     var stage by remember { mutableStateOf("") }
     var checkTick by remember { mutableIntStateOf(0) }
 
-    val voice = remember { VoiceInput(ctx) }
+    val voice = remember { VoiceEngine.create(ctx, wf) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
     val history = remember { ArrayList<Pair<String, String>>() }
     var turn by remember { mutableIntStateOf(0) }          // invalidates work of an interrupted turn
