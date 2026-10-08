@@ -1,5 +1,6 @@
 package app.personal.banglaai.ui
 
+import java.io.File
 import android.net.Uri
 import androidx.compose.material.icons.rounded.*
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -206,13 +207,30 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             busy = null; refresh()
         }
     }
-    val takeDocPhoto = rememberPhotoCapture { f ->
+    val scanPages = remember { mutableStateListOf<ScanPage>() }
+    val takeDocPhoto = rememberPhotoCapture { f -> scanPages += ScanPage(f) }   // nothing is stored until the owner presses Save on the review screen
+    fun discardScan() { scanPages.forEach { it.file.delete() }; scanPages.clear() }
+    fun saveScan() {
+        val pages = scanPages.toList(); if (pages.isEmpty()) return
         scope.launch {
             busy = "ছবি এনক্রিপ্ট করে রাখা হচ্ছে…"; error = null
-            val saved = runCatching { withContext(Dispatchers.IO) { try { vault.import(Uri.fromFile(f)) } finally { f.delete() } } }.onFailure { error = it.message ?: "ব্যর্থ" }.getOrNull()
-            busy = null; refresh()
-            if (saved != null) { openPage = null; openDoc = saved }   // straight to the photo: view it, scan its text (OCR), translate, read
+            val saved = runCatching { withContext(Dispatchers.IO) {
+                val dir = File(activity.cacheDir, "photos").apply { mkdirs() }
+                val out = File(dir, if (pages.size > 1) "scan-${System.currentTimeMillis()}.pdf" else "scan-${System.currentTimeMillis()}.jpg")
+                try {
+                    if (pages.size > 1) out.outputStream().use { ScanPdf.write(pages, it) } else out.writeBytes(ScanPdf.jpeg(pages[0]))
+                    vault.import(Uri.fromFile(out))
+                } finally { out.delete() }
+            } }.onFailure { error = it.message ?: "ব্যর্থ" }.getOrNull()
+            busy = null
+            if (saved != null) { discardScan(); refresh(); openPage = null; openDoc = saved }   // straight to the saved scan: crop, scan its text (OCR), translate, read
         }
+    }
+    if (scanPages.isNotEmpty()) {
+        ScanReviewScreen(scanPages, busy != null, onAddPage = { takeDocPhoto() }, onRetakeLast = { val l = scanPages.removeAt(scanPages.lastIndex); l.file.delete(); takeDocPhoto() }, onDiscard = { discardScan() }, onSave = { saveScan() })
+        androidx.activity.compose.BackHandler { discardScan() }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        return
     }
     val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
