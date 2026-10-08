@@ -90,7 +90,9 @@ fun CodeScreen(wf: DocWorkflow, cacheDir: File, noBackupDir: File, onBack: () ->
         scope.launch {
             runCatching { withContext(Dispatchers.IO) {
                 val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
-                m.ask(Prompts.CODE_SYSTEM, Prompts.explainCode(code, q))
+                val fitted = app.personal.banglaai.ai.TokenBudget.head(code, 2000)
+                if (fitted.length < code.length) withContext(Dispatchers.Main) { error = "কোড বড়, তাই প্রথম ${fitted.lines().size} লাইন নিয়ে ব্যাখ্যা করা হচ্ছে (মডেলের সীমা)।" }
+                m.ask(Prompts.CODE_SYSTEM, Prompts.explainCode(fitted, q))
             } }.onSuccess { answer = it; proposed = CodeDiff.lastFencedBlock(it) }.onFailure { error = it.message ?: it.javaClass.simpleName }
             busy = null
         }
@@ -99,7 +101,7 @@ fun CodeScreen(wf: DocWorkflow, cacheDir: File, noBackupDir: File, onBack: () ->
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         TextButton(onClick = onBack) { Text("← ফিরে যান") }
         Text("কোড বিশ্লেষণ", style = MaterialTheme.typography.headlineSmall)
-        Text("কোড কখনো চালানো হয় না; শুধু পড়ে ব্যাখ্যা করা হয়। AI ভুল করতে পারে — বিশেষ করে জটিল কোডে। নিশ্চিত নয় এমন অংশ 'অনুমান' লেখা থাকবে।", style = MaterialTheme.typography.bodySmall)
+        Text("কোড কখনো চালানো হয় না; শুধু পড়ে ব্যাখ্যা করা হয়। AI ভুল করতে পারে — বিশেষ করে জটিল কোডে। নিশ্চিত নয় এমন অংশ ‘অনুমান’ লিখতে মডেলকে বলা হয়, কিন্তু সে সবসময় মানবে — এমন নিশ্চয়তা নেই। বড় কোডের শুরুর অংশই নেওয়া হয়।", style = MaterialTheme.typography.bodySmall)
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

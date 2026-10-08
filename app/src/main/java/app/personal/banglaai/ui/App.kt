@@ -52,8 +52,8 @@ fun App(activity: MainActivity, unlocked: Boolean, onUnlocked: () -> Unit, onLoc
             LaunchedEffect(Unit) { if (!splashDone) { delay(1400); splashDone = true } }
             when {
                 !splashDone -> Image(painterResource(R.drawable.splash_art), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                !pinSet -> SetupScreen(pins) { pinSet = true; onUnlocked() }
-                !unlocked -> UnlockScreen(activity, pins, onUnlocked)
+                !pinSet -> SetupScreen(pins, AppGraph.keys(activity)) { pinSet = true; onUnlocked() }
+                !unlocked -> UnlockScreen(activity, pins, AppGraph.keys(activity), onUnlocked)
                 else -> HomeScreen(activity, onLock, fontScale) { v -> fontScale = v.coerceIn(0.85f, 1.6f); settings.edit().putFloat("font_scale", fontScale).apply() }
             }
         }
@@ -61,7 +61,7 @@ fun App(activity: MainActivity, unlocked: Boolean, onUnlocked: () -> Unit, onLoc
 }
 
 @Composable
-private fun SetupScreen(pins: PinStore, done: () -> Unit) {
+private fun SetupScreen(pins: PinStore, keys: app.personal.banglaai.security.KeyVault, done: () -> Unit) {
     var a by remember { mutableStateOf("") }; var b by remember { mutableStateOf("") }
     var err by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().padding(24.dp).systemBarsPadding(), verticalArrangement = Arrangement.Center) {
@@ -79,7 +79,7 @@ private fun SetupScreen(pins: PinStore, done: () -> Unit) {
             when {
                 a.length < 6 -> err = "PIN কমপক্ষে ৬ সংখ্যার হতে হবে"
                 a != b -> err = "দুটি PIN মেলেনি"
-                else -> { pins.set(a.toCharArray()); done() }
+                else -> { pins.set(a.toCharArray()); runCatching { keys.unlockWithPin(a.toCharArray()) }; done() }
             }
         }, Modifier.fillMaxWidth()) { Text("PIN সেট করুন") }
     }
@@ -93,12 +93,12 @@ private fun PinField(label: String, value: String, onChange: (String) -> Unit) =
 )
 
 @Composable
-private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () -> Unit) {
+private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.personal.banglaai.security.KeyVault, onUnlocked: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf<String?>(null) }
     var wait by remember { mutableStateOf(pins.lockedSeconds()) }
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait = pins.lockedSeconds() } }
-    val bio = remember { activity.canUseStrongBiometric() }
+    val bio = remember { activity.canUseStrongBiometric() && keys.hasBio() }
     Column(Modifier.fillMaxSize().padding(24.dp).systemBarsPadding(), verticalArrangement = Arrangement.Center) {
         Image(painterResource(R.drawable.logo_ps), contentDescription = null, modifier = Modifier.size(104.dp).clip(androidx.compose.foundation.shape.CircleShape).align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(12.dp))
@@ -109,8 +109,16 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () 
         if (wait > 0) Text("$wait সেকেন্ড পরে আবার চেষ্টা করুন", color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.height(12.dp))
         Button(enabled = wait == 0L && pin.isNotEmpty(), modifier = Modifier.fillMaxWidth(), onClick = {
-            when (val r = pins.verify(pin.toCharArray())) {
-                PinStore.Result.Ok -> onUnlocked()
+            val pinChars = pin.toCharArray()
+            when (val r = pins.verify(pinChars)) {
+                PinStore.Result.Ok -> {
+                    val ok = runCatching { keys.unlockWithPin(pinChars) }.getOrDefault(false)
+                    if (ok) {
+                        // arm biometric unlock (best effort; the PIN always works)
+                        if (activity.canUseStrongBiometric() && !keys.hasBio()) runCatching { keys.masterForWrapping()?.let { m -> keys.setBioBlob(app.personal.banglaai.security.BiometricGate.wrap(m)) } }
+                        onUnlocked()
+                    } else msg = "ভল্ট খোলা যায়নি — আবার চেষ্টা করুন (PIN বদলানো থাকলে পুরনো PIN লাগতে পারে)"
+                }
                 is PinStore.Result.Wrong -> msg = "ভুল PIN (আর ${r.attemptsBeforeDelay}বার পর অপেক্ষা শুরু হবে)"
                 is PinStore.Result.Locked -> { wait = r.seconds; msg = null }
             }
@@ -119,7 +127,9 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, onUnlocked: () 
         if (bio) {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
-                activity.promptBiometric("আঙুলের ছাপ / ফেস দিয়ে খুলুন", "PIN ব্যবহার করুন", onUnlocked) { msg = it }
+                val blob = keys.bioBlob()
+                if (blob == null) msg = "বায়োমেট্রিক এখনো চালু নয় — একবার PIN দিয়ে খুলুন"
+                else activity.promptBiometric("আঙুলের ছাপ / ফেস দিয়ে খুলুন", "PIN ব্যবহার করুন", blob, { sec -> if (keys.unlockWithMaster(sec)) onUnlocked() else msg = "ভল্ট খোলা যায়নি — PIN ব্যবহার করুন" }) { msg = it; if (it.contains("বদলেছে")) { keys.setBioBlob(null) } }
             }) { Text("বায়োমেট্রিক দিয়ে খুলুন") }
             Text("মনে রাখবেন: ফোনে অন্য কারও আঙুলের ছাপ/ফেস নথিভুক্ত থাকলে সেও খুলতে পারবে। তা থাকলে শুধু PIN ব্যবহার করুন।",
                 style = MaterialTheme.typography.bodySmall)
@@ -197,15 +207,22 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     val importing = app.personal.banglaai.storage.ModelImporter.running
     val jobBusy = JobRunner.label != null
     DisposableEffect(importing || jobBusy) {
-        if (importing || jobBusy) activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose { activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        val hold = importing || jobBusy
+        if (hold) KeepAwake.acquire(activity)
+        onDispose { if (hold) KeepAwake.release(activity) }
     }
     LaunchedEffect(importing) { if (!importing) refresh() }
     // A model file without a recorded checksum is verified automatically (reads the file once; no copy).
-    LaunchedEffect(modelList, importing) { if (!importing) modelList.firstOrNull { it.sha256.isBlank() && it.name.endsWith(".litertlm") }?.let { app.personal.banglaai.storage.ModelImporter.startVerify(models, it.name) } }
+    val verifyTried = remember { mutableSetOf<String>() }   // a failing verify must not retry in a loop every time the list refreshes
+    LaunchedEffect(modelList, importing) { if (!importing) modelList.firstOrNull { it.sha256.isBlank() && it.name.endsWith(".litertlm") && it.name !in verifyTried }?.let { verifyTried += it.name; app.personal.banglaai.storage.ModelImporter.startVerify(models, it.name) } }
 
     androidx.activity.compose.BackHandler(enabled = tab != HomeTab.Menu && openDoc == null && !callOpen && !kbOpen && !libOpen && !chatOpen && !diagOpen && !codeOpen) { tab = HomeTab.Menu }
     var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
+    androidx.activity.compose.BackHandler(enabled = openDoc != null || libOpen || kbOpen || liveOpen || callOpen || chatOpen || diagOpen || codeOpen) {
+        when { openDoc != null -> { openDoc = null; pendingCmd = null }; libOpen -> libOpen = false; kbOpen -> kbOpen = false; liveOpen -> liveOpen = false
+            callOpen -> callOpen = false; chatOpen -> { chatOpen = false; chatStart = null }; diagOpen -> diagOpen = false; else -> codeOpen = false }
+    }
+    DisposableEffect(Unit) { onDispose { app.personal.banglaai.ai.LocalLlm.cancelInteractive() } }   // leaving Home (lock / close) stops any answer still being written for a screen that is gone
     openDoc?.let { d -> DocScreen(d, workflow, pendingCmd) { openDoc = null; pendingCmd = null }; return }
     if (libOpen) { LibraryScreen(workflow, vault, activity.cacheDir) { libOpen = false }; return }
     if (kbOpen) { KnowledgeScreen(workflow, activity.cacheDir) { kbOpen = false }; return }
@@ -227,7 +244,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             Text("চৌধুরী সাহেবের পিএস", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             OutlinedButton(onClick = { tab = HomeTab.Menu }) { Text("← হোম") }
         }
-        app.personal.banglaai.storage.ModelImporter.copiedMb?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("মডেল কপি হচ্ছে… $it MB / প্রায় ৩৪৯০ MB — স্ক্রিন জাগিয়ে রাখা হয়েছে, অ্যাপ বন্ধ করবেন না") }
+        app.personal.banglaai.storage.ModelImporter.copiedMb?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("মডেল কপি হচ্ছে… $it MB / ${app.personal.banglaai.storage.ModelImporter.totalMb?.let { "$it MB" } ?: "কয়েক GB"} — স্ক্রিন জাগিয়ে রাখা হয়েছে, অ্যাপ বন্ধ করবেন না") }
         app.personal.banglaai.storage.ModelImporter.lastOk?.let { Text("✅ $it", color = MaterialTheme.colorScheme.tertiary) }
         app.personal.banglaai.storage.ModelImporter.lastError?.let { Text("❌ মডেল বসানো ব্যর্থ: $it", color = MaterialTheme.colorScheme.error) }
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }
@@ -235,7 +252,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
 
         when (tab) {
             HomeTab.Menu -> {
-        val hasModel = workflow.usableModel() != null
+        val hasModel = remember(modelList, workflow.chosenModel) { workflow.usableModel() != null }
         Text(if (hasModel) "✅ AI মডেল বসানো আছে" else "❌ AI মডেল বসানো নেই — নিচে '🤖 AI মডেল' চেপে বসান", color = if (hasModel) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         val ic = androidx.compose.material.icons.Icons.Rounded; val st = TileStyle
         TileGrid(listOf(
@@ -366,6 +383,13 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             "পরিভাষা (glossary), বুকমার্ক, ব্যক্তিগত নোট" to "তৈরি; লজিক টেস্টকৃত, ফোনে চালানো হয়নি",
             "শব্দ/বাক্য ধরে প্রশ্ন (লিখে/পেস্ট করে; পড়ার প্রসঙ্গে), শব্দভান্ডার, অনুশীলনী প্রশ্ন" to "তৈরি; লজিক টেস্টকৃত; AI-উত্তরের মান ফোনে যাচাই বাকি",
             "ছবি-ফাইল (JPG/PNG) আলাদা ডকুমেন্ট হিসেবে import + OCR" to "তৈরি; ফোনে চালানো হয়নি",
+            "ভয়েস কল (হ্যান্ডস-ফ্রি, আকাশী রিং, ছবি নড়ে)" to "তৈরি; ফোনে চালানো হয়নি",
+            "লাইভ অনুবাদ (শুনে অনুবাদ)" to "তৈরি; ফোনে চালানো হয়নি",
+            "ছবি-সম্পাদনা (জুম/কাট/ঘোরানো), ছবিতে ট্যাপ করে প্রশ্ন" to "তৈরি; লজিক টেস্টকৃত, ফোনে চালানো হয়নি",
+            "লাইব্রেরি (৮টি বান্ডেল বই + নিজের বই, উৎস-সহ উত্তর)" to "তৈরি; অনুসন্ধান টেস্টকৃত, AI-উত্তর ফোনে চালানো হয়নি",
+            "জ্ঞানভাণ্ডার (৬১টি কার্ড) ও পরামর্শদাতা মোড" to "তৈরি; কাঠামো টেস্টকৃত, ফোনে চালানো হয়নি",
+            "এক্সপোর্ট (অনুবাদ/মূল)" to "তৈরি; ফরম্যাট টেস্টকৃত, ফোনে চালানো হয়নি",
+            "ভল্ট-চাবি PIN-এর সঙ্গে বাঁধা (KeyVault)" to "তৈরি; JVM-টেস্টকৃত; বায়োমেট্রিক-আনলক ফোনে চালানো হয়নি",
         ).forEach { (k, v) -> Text("• $k — $v", style = MaterialTheme.typography.bodySmall) }
             }
         }
@@ -382,7 +406,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
 }
 
 private fun fmtSize(b: Long) = when {
-    b >= 1L shl 30 -> "%.2f GB".format(b / (1L shl 30).toDouble())
-    b >= 1L shl 20 -> "%.1f MB".format(b / (1L shl 20).toDouble())
-    else -> "${b / 1024} KB"
+    b >= 1_000_000_000L -> "%.2f GB".format(b / 1e9)       // decimal units, the same as the model sizes quoted in docs/MODELS.md
+    b >= 1_000_000L -> "%.1f MB".format(b / 1e6)
+    else -> "${b / 1000} KB"
 }

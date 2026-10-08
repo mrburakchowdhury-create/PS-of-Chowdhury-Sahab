@@ -25,7 +25,7 @@ import app.personal.banglaai.storage.VaultDoc
 @Composable
 fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialCommand: VoiceCommand? = null) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val prefs = remember { ctx.getSharedPreferences("reading", Context.MODE_PRIVATE) }
+    LaunchedEffect(Unit) { ctx.getSharedPreferences("reading", Context.MODE_PRIVATE).edit().clear().apply() }   // older versions kept the position unencrypted
     var rate by remember { mutableFloatStateOf(1.0f) }
     var useTranslation by remember { mutableStateOf(true) }
     var pageInput by remember { mutableStateOf("1") }
@@ -41,7 +41,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     val reader = remember { ReadAloudController.get(ctx) }
     val state = ReadAloudController.state
     val current = ReadAloudController.current
-    LaunchedEffect(doc.id) { ReadAloudController.setPositionSaver { prefs.edit().putString(doc.id, "${it.page}:${it.segment}").apply() } }
+    LaunchedEffect(doc.id) { ReadAloudController.setPositionSaver { wf.reading.put(doc.id, it.page, it.segment) } }
     val voice = remember { VoiceInput(ctx) }
     // Reading deliberately continues in the background (foreground service); the mic never does.
     DisposableEffect(Unit) { onDispose { voice.stop() } }
@@ -77,7 +77,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
             is VoiceCommand.ReadPage -> { pageInput = c.page.toString(); endInput = ""; play(c.page) }
             is VoiceCommand.ReadRange -> { pageInput = c.from.toString(); endInput = c.to.toString(); play(c.from) }
             VoiceCommand.Resume -> if (state == TtsReader.State.Paused) reader.resume() else {
-                prefs.getString(doc.id, null)?.split(":")?.let { play(it[0].toInt(), it[1].toInt()) } ?: play(pageInput.toIntOrNull() ?: 1) }
+                wf.reading.get(doc.id)?.let { play(it.first, it.second) } ?: play(pageInput.toIntOrNull() ?: 1) }
             VoiceCommand.Pause -> reader.pause(); VoiceCommand.Stop -> reader.stop()
             VoiceCommand.Slower -> { rate = (rate - 0.15f).coerceAtLeast(0.5f); reader.setRate(rate) }
             VoiceCommand.Faster -> { rate = (rate + 0.15f).coerceAtMost(2f); reader.setRate(rate) }
@@ -140,7 +140,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
             Text("গতি: ${"%.2f".format(rate)}×", style = MaterialTheme.typography.bodySmall)
             Slider(value = rate, onValueChange = { rate = it; reader.setRate(it) }, valueRange = 0.5f..2f)
             current?.let { Text((if (ReadAloudController.adHoc) "ব্যাখ্যা শোনানো হচ্ছে:" else "এখন পড়া হচ্ছে — পৃষ্ঠা ${it.page}:"), style = MaterialTheme.typography.bodySmall); Surface(color = MaterialTheme.colorScheme.secondaryContainer) { Text(it.text, Modifier.padding(8.dp)) } }
-            prefs.getString(doc.id, null)?.let { Text("শেষ পড়ার অবস্থান: পৃষ্ঠা ${it.substringBefore(':')}", style = MaterialTheme.typography.bodySmall) }
+            wf.reading.get(doc.id)?.let { Text("শেষ পড়ার অবস্থান: পৃষ্ঠা ${it.first}", style = MaterialTheme.typography.bodySmall) }
         }
     }
     voiceMsg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }

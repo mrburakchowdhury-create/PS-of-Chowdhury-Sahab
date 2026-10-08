@@ -66,7 +66,7 @@ class SmokeCoreTest {
             fun item(t: String, pg: PDPage) = PDOutlineItem().also { it.title = t; it.destination = PDPageFitDestination().also { dd -> dd.page = pg } }
             o.addLast(item("Chapter A", pages[0])); o.addLast(item("Chapter B", pages[9])); d.save(f)
         }
-        val vault = Vault(ctx)
+        val keys = app.personal.banglaai.security.KeyVault(ctx); check(keys.unlockWithPin("246810".toCharArray())); val vault = Vault(ctx, keys)
         vault.list().forEach { vault.delete(it.id) }
         val doc = vault.import(Uri.fromFile(f))
         assertEquals("smoke.pdf", doc.name)

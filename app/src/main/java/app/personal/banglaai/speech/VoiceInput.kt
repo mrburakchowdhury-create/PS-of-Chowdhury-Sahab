@@ -17,11 +17,14 @@ class VoiceInput(private val context: Context) {
     fun available() = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
 
     private var rec: SpeechRecognizer? = null
+    private var epoch = 0   // bumped by every stop(), so a language-pack check or recogniser callback that finishes late cannot start/answer a listen that was already cancelled
 
     fun listen(onText: (String) -> Unit, onError: (String) -> Unit, onLevel: ((Float) -> Unit)? = null, lang: String = "bn-BD") {
         if (!available()) return onError("এই ফোনে অফলাইন (on-device) বাংলা ভয়েস চেনা পাওয়া যায়নি। ইন্টারনেট-ভিত্তিক বিকল্পে নিজে থেকে যাওয়া হয় না। লিখে নির্দেশ দিন।")
+        val e = ++epoch
         if (Build.VERSION.SDK_INT >= 33) {
             packStatus(lang) { installed, _, err ->
+                if (e != epoch) return@packStatus
                 val tag = pickInstalled(lang, installed)
                 if (err == null && installed.isNotEmpty() && tag == null)
                     onError("এই ভাষার (${lang}) অফলাইন ভাষা-প্যাক ফোনে ইনস্টল নেই (আছে: ${installed.joinToString()})। ‘ফোন পরীক্ষা’ পর্দায় ‘ভয়েস-চেনার ভাষা-প্যাক’ অংশ দেখুন।")
@@ -59,14 +62,16 @@ class VoiceInput(private val context: Context) {
     }
 
     private fun start(lang: String, onText: (String) -> Unit, onError: (String) -> Unit, onLevel: ((Float) -> Unit)?) {
-        stop()
+        val keep = epoch; stop(); epoch = keep
         val r = SpeechRecognizer.createOnDeviceSpeechRecognizer(context); rec = r
         r.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle?) {
+                if (rec !== r) return
                 val t = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
                 if (t.isNullOrBlank()) onError("কিছু শোনা যায়নি") else onText(t); stop()
             }
             override fun onError(error: Int) {
+                if (rec !== r) return
                 onError(when (error) {
                     SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
                         "এই ভাষার (বা বাংলার) অফলাইন ভাষা-প্যাক ফোনে নেই। ফোনের সেটিংস → ভাষা/ভয়েস ইনপুট থেকে অফলাইন প্যাক নামান, অথবা লিখে দিন।"
@@ -85,5 +90,5 @@ class VoiceInput(private val context: Context) {
     }
 
     /** Mic is released on every path: result, error, or leaving the screen. */
-    fun stop() { rec?.cancel(); rec?.destroy(); rec = null }
+    fun stop() { epoch++; rec?.cancel(); rec?.destroy(); rec = null }
 }

@@ -31,8 +31,9 @@ class PageTextStore(private val dir: File, private val seal: (ByteArray, ByteArr
  */
 class ExtractionJob(
     private val job: JobState, private val extractor: PdfExtractor, private val texts: PageTextStore, private val jobs: JobStore,
-    private val checkpointEvery: Int = 25,
+    private val checkpointEvery: Int = 25, private val pauseCheck: () -> String? = { null },
 ) {
+    @Volatile var pausedBecause: String? = null; private set
     private val stop = AtomicBoolean(false)
     @Volatile var stopStatus = JobStatus.PAUSED; private set
 
@@ -45,6 +46,7 @@ class ExtractionJob(
         var sinceCheckpoint = 0
         for (p in job.remaining(retryFailed)) {
             if (stop.get()) { job.status = stopStatus; jobs.save(job); return job.status }
+            pauseCheck()?.let { pausedBecause = it; job.status = JobStatus.PAUSED; jobs.save(job); return job.status }
             val r = extractor.page(p)
             when {
                 r.failed -> job.mark(p, PageStatus.FAILED)

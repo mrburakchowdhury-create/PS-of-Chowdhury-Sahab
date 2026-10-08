@@ -59,12 +59,13 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
     fun ask() {
         if (busy != null || q.isBlank()) return
         busy = "বই খোঁজা হচ্ছে…"; answer = null; err = null; sources = emptyList(); note = null; openSrc = -1
+        var cutNote: String? = null
         scope.launch {
             runCatching { withContext(Dispatchers.IO) {
                 val all = ArrayList<Passage>()
                 Library.bundled.forEach { all += Library.bundledPassages(ctx, it) }
                 userDocs.forEach { d -> val total = wf.job(d, DocWorkflow.Kind.Extract)?.total ?: 0
-                    for (p in 1..total) wf.texts.get(d.id, p)?.text?.takeIf { it.isNotBlank() }?.let { all += Passage(d.name, "পৃষ্ঠা $p", it.take(2500)) } }
+                    for (p in 1..total) wf.texts.get(d.id, p)?.text?.takeIf { it.isNotBlank() }?.let { t -> all += Library.chunk(d.name, t).map { c -> c.copy(label = "পৃষ্ঠা $p") } } }
                 val index = Library.Index(all)
                 val model = wf.usableModel()
                 var query = q
@@ -77,13 +78,15 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
                 var ans: String? = null
                 if (model != null && found.isNotEmpty()) {
                     withContext(Dispatchers.Main) { busy = "উত্তর লেখা হচ্ছে…" }
-                    ans = LocalLlm(model, File(cacheDir, "llm")).ask(Prompts.LIB_SYSTEM, Prompts.libraryAnswer(q, found.map { "${it.book} — ${it.label}" to it.text.take(1800) }))
+                    ans = LocalLlm(model, File(cacheDir, "llm")).ask(Prompts.LIB_SYSTEM, Prompts.libraryAnswer(q, run { val (cut, trimmed) = app.personal.banglaai.ai.TokenBudget.share(found.map { it.text }, app.personal.banglaai.ai.TokenBudget.INPUT_TOKENS - 800)
+                        if (trimmed) cutNote = app.personal.banglaai.ai.TokenBudget.NOTE_BN
+                        found.indices.map { "${found[it].book} — ${found[it].label}" to cut[it] } }))
                 }
                 Triple(found, ans, model != null)
             } }.onSuccess { (found, ans, hadModel) ->
                 sources = found; answer = ans
                 note = when { found.isEmpty() -> "কোনো বইয়ে মিল পাওয়া যায়নি।" + if (!hadModel) " (মডেল না থাকায় শুধু সরাসরি শব্দ-মিল খোঁজা হয়েছে; বাংলা প্রশ্নে ইংরেজি বই পেতে মডেল লাগে।)" else ""
-                    !hadModel -> "মডেল বসানো নেই — নিচে শুধু মিল-থাকা অংশ দেখানো হলো, AI-র উত্তর নেই।" else -> null }
+                    !hadModel -> "মডেল বসানো নেই — নিচে শুধু মিল-থাকা অংশ দেখানো হলো, AI-র উত্তর নেই।" else -> cutNote }
             }.onFailure { err = it.message ?: it.javaClass.simpleName }
             busy = null
         }
@@ -135,6 +138,6 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
         Button(enabled = JobRunner.label == null, onClick = { add.launch(arrayOf("*/*")) }) { Text("➕ নিজের বই যোগ করুন (PDF / EPUB / TXT)") }
         Text("বই ফোনে এনক্রিপ্ট হয়ে থাকে, কোথাও যায় না। কপিরাইটযুক্ত বই শুধু আপনার বৈধ কপি যোগ করুন। যোগ করলে নিজে থেকে কোনো AI কাজ শুরু হয় না।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         SectionTitle("কোন বই আছে, কোনটা আপনাকে দিতে হবে")
-        Text("অ্যাপে আছে (সর্বজনীন-ডোমেইন, বৈধ): The Prince, Discourses on Livy, The Art of War, On War, On the Manner of Negotiating with Princes (কূটনীতি), The Crowd (জনতার মনোবিজ্ঞান)।\n\nআপনাকে নিজে যোগ করতে হবে (কপিরাইটযুক্ত): 48 Laws of Power, Influence (Cialdini), How to Win Friends and Influence People, Kissinger-এর Diplomacy ইত্যাদি। বৈধ কপি কিনে বা লাইব্রেরি থেকে নিয়ে PDF/EPUB যোগ করুন।", style = MaterialTheme.typography.bodySmall)
+        Text("অ্যাপে আছে (পুরোনো অনুবাদ, সর্বজনীন-ডোমেইন বলে ধরা হয়েছে — আর্থশাস্ত্রের ১৯৫১-র সংস্করণের ভূমিকা-নোটের স্বত্ব যাচাই বাকি): The Prince, Discourses on Livy, The Art of War, On War, On the Manner of Negotiating with Princes (কূটনীতি), The Crowd (জনতার মনোবিজ্ঞান), The Art of Worldly Wisdom (গ্রাসিয়ান), Kautilya’s Arthashastra (অর্থশাস্ত্র)।\n\nআপনাকে নিজে যোগ করতে হবে (কপিরাইটযুক্ত): 48 Laws of Power, Influence (Cialdini), How to Win Friends and Influence People, Kissinger-এর Diplomacy ইত্যাদি। বৈধ কপি কিনে বা লাইব্রেরি থেকে নিয়ে PDF/EPUB যোগ করুন।", style = MaterialTheme.typography.bodySmall)
     }
 }

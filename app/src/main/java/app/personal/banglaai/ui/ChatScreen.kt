@@ -43,7 +43,7 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
 
     fun send(text: String) {
         if (busy != null || text.isBlank()) return
-        val model = wf.usableModel() ?: run { error = "কোনো AI মডেল বসানো নেই। হোমে ফিরে 'মডেল ফাইল বসান' চাপুন (ফাইল ≈ 3.66 GB, docs/MODELS.md)। মডেল ছাড়া উত্তর/অনুবাদ হয় না, আর ইন্টারনেটে কিছু পাঠানো হয় না।"; return }
+        val model = wf.usableModel() ?: run { error = "কোনো AI মডেল বসানো নেই। হোমে ফিরে 'মডেল ফাইল বসান' চাপুন (E4B ≈ 3.66 GB, E2B ≈ 2.59 GB, docs/MODELS.md)। মডেল ছাড়া উত্তর/অনুবাদ হয় না, আর ইন্টারনেটে কিছু পাঠানো হয় না।"; return }
         error = null; msgs += Msg(true, text.trim()); msgs += Msg(false, ""); input = ""
         val idx = msgs.lastIndex
         busy = if (llm[0]?.isLoaded == true) "লিখছে…" else "মডেল লোড হচ্ছে (প্রথমবার কিছু সময় লাগে, ফোনভেদে)…"

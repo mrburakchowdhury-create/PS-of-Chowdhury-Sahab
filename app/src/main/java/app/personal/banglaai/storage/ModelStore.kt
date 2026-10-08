@@ -21,7 +21,7 @@ class ModelStore(private val context: Context) {
 
     fun freeBytes() = dir.usableSpace
 
-    fun import(uri: Uri, onProgress: (Long) -> Unit): ModelFile {
+    fun import(uri: Uri, onProgress: (Long) -> Unit, onSize: (Long) -> Unit = {}): ModelFile {
         var name = "model.bin"; var declared = -1L
         context.contentResolver.query(uri, null, null, null, null)?.use { c ->
             if (c.moveToFirst()) {
@@ -29,6 +29,7 @@ class ModelStore(private val context: Context) {
                 c.getColumnIndex(OpenableColumns.SIZE).takeIf { it >= 0 && !c.isNull(it) }?.let { declared = c.getLong(it) }
             }
         }
+        if (declared > 0) onSize(declared)
         // A file name from a content provider is untrusted: keep only the last path part, drop control characters, and refuse "." / ".." style names.
         name = File(name.replace('\\', '/')).name.filter { it.code >= 32 && it != '/' }.trim().let { if (it.isBlank() || it.all { c -> c == '.' }) "model.bin" else it }
         require(declared < 0 || dir.usableSpace > declared + 500L * 1024 * 1024) { "ফোনে পর্যাপ্ত খালি জায়গা নেই" }

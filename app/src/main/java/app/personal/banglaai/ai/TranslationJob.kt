@@ -20,8 +20,11 @@ fun interface Translator { fun translate(text: String): String }
 class TranslationJob(
     private val job: JobState, private val source: PageTextStore, private val target: PageTextStore,
     private val jobs: JobStore, private val translator: Translator, private val maxChunk: Int = 1200,
-    private val checkpointEvery: Int = 5,
+    private val checkpointEvery: Int = 5, private val pauseCheck: () -> String? = { null },
+    /** Pages whose text is already in the target language are copied, not sent to the model. */
+    private val alreadyTarget: (String) -> Boolean = { false },
 ) {
+    @Volatile var pausedBecause: String? = null; private set
     private val stop = AtomicBoolean(false)
     @Volatile var stopStatus = JobStatus.PAUSED; private set
     fun pause() { stopStatus = JobStatus.PAUSED; stop.set(true) }
@@ -32,8 +35,10 @@ class TranslationJob(
         var since = 0
         for (p in job.remaining(retryFailed)) {
             if (stop.get()) { job.status = stopStatus; jobs.save(job); return job.status }
+            pauseCheck()?.let { pausedBecause = it; job.status = JobStatus.PAUSED; jobs.save(job); return job.status }
             val src = source.get(job.docId, p)
             if (src == null || src.text.isBlank()) { job.mark(p, PageStatus.UNREADABLE) }
+            else if (alreadyTarget(src.text)) { target.put(job.docId, PageText(p, src.text, src.printedLabel)); job.mark(p, PageStatus.DONE) }
             else try {
                 val parts = Chunker.split(src.text, maxChunk).map { c ->
                     if (stop.get()) throw InterruptedException()   // pause/cancel mid-page: page stays PENDING, redone fully on resume

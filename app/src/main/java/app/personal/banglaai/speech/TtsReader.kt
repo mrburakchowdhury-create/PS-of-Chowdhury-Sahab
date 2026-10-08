@@ -26,6 +26,7 @@ class TtsReader(context: Context, private val onState: (State) -> Unit, private 
     private var plan: ReadingPlan? = null
     private var pos: ReadingPosition? = null
     private var rate = 1.0f
+    private var queued: Pair<ReadingPlan, ReadingPosition>? = null   // play() pressed while the voice engine was still starting
     private var token = 0   // invalidates callbacks from segments that were cancelled
 
     init {
@@ -43,6 +44,7 @@ class TtsReader(context: Context, private val onState: (State) -> Unit, private 
                     @Deprecated("") override fun onError(id: String?) { main.post { if (id == "s$token") { set(State.Paused) } } }
                 })
                 set(State.Ready)
+                queued?.let { (p, f) -> queued = null; play(p, f) }
             }
         }
     }
@@ -52,6 +54,7 @@ class TtsReader(context: Context, private val onState: (State) -> Unit, private 
     fun setRate(r: Float) { rate = r.coerceIn(0.5f, 2.0f); tts?.setSpeechRate(rate) }
 
     fun play(plan: ReadingPlan, from: ReadingPosition) {
+        if (state == State.Initialising) { queued = plan to from; return }
         if (state != State.Ready && state != State.Paused && state != State.Playing) return
         this.plan = plan; pos = from; set(State.Playing); speakCurrent()
     }
@@ -71,8 +74,9 @@ class TtsReader(context: Context, private val onState: (State) -> Unit, private 
         val seg = pos?.let { plan?.segmentAt(it) } ?: return advance()
         token++; onSegment(seg, pos)
         tts?.setSpeechRate(rate)
-        tts?.speak(SpeechText.clean(seg.text).ifBlank { "।" }, TextToSpeech.QUEUE_FLUSH, null, "s$token")
+        val r = tts?.speak(SpeechText.clean(seg.text).ifBlank { "।" }, TextToSpeech.QUEUE_FLUSH, null, "s$token") ?: TextToSpeech.ERROR
+        if (r != TextToSpeech.SUCCESS) set(State.Paused)   // the engine refused: stop honestly instead of showing "playing" in silence
     }
 
-    fun shutdown() { token++; tts?.stop(); tts?.shutdown(); tts = null }
+    fun shutdown() { queued = null; token++; tts?.stop(); tts?.shutdown(); tts = null }
 }

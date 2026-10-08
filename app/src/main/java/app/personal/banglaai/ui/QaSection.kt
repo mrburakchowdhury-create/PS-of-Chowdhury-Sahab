@@ -37,6 +37,7 @@ fun QaSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, cacheDir: File, o
     FilterChip(selected = wide, onClick = { wide = !wide }, label = { Text("আরও ব্যাপক খোঁজ (AI সমার্থক শব্দ যোগ করে — ধীর)") })
     Button(enabled = !busy && q.isNotBlank(), onClick = {
         busy = true; error = null; answer = null; hits = emptyList()
+        var cutNote: String? = null
         scope.launch {
             runCatching { withContext(Dispatchers.IO) {
                 val pages = (1..totalPages).mapNotNull { p -> wf.texts.get(doc.id, p)?.text?.takeIf { it.isNotBlank() }?.let { p to it } }.toMap()
@@ -50,12 +51,14 @@ fun QaSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, cacheDir: File, o
                 if (found.isEmpty()) return@withContext Triple(found, null as String?, pages.size)
                 val model = wf.usableModel() ?: error("কোনো AI মডেল বসানো নেই — আগে মডেল import করুন")
                 val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
-                val a = m.ask(Prompts.QA_SYSTEM, Prompts.answer(q, found.map { it.page to pages.getValue(it.page).take(2500) }))
+                val a = m.ask(Prompts.QA_SYSTEM, Prompts.answer(q, run { val (cut, trimmed) = app.personal.banglaai.ai.TokenBudget.share(found.map { pages.getValue(it.page) }, app.personal.banglaai.ai.TokenBudget.INPUT_TOKENS - 700)
+                    if (trimmed) cutNote = app.personal.banglaai.ai.TokenBudget.NOTE_BN
+                    found.indices.map { found[it].page to cut[it] } }))
                 Triple(found, a, pages.size)
             } }.onSuccess { (f, a, n) ->
                 hits = f; answer = a
                 note = "অনুসন্ধান: $n পৃষ্ঠার মধ্যে কীওয়ার্ড-মিলে শীর্ষ ${f.size} পৃষ্ঠা ব্যবহার হয়েছে। এটি অর্থ-ভিত্তিক নয় — ভিন্ন শব্দে লেখা অংশ বাদ পড়তে পারে; তাই এটি পুরো বই যাচাইয়ের প্রমাণ নয়।" +
-                    if (f.isEmpty()) " কোনো পৃষ্ঠায় মিল পাওয়া যায়নি; AI ডাকা হয়নি।" else ""
+                    if (f.isEmpty()) " কোনো পৃষ্ঠায় মিল পাওয়া যায়নি; AI ডাকা হয়নি।" else "" + (cutNote?.let { " $it" } ?: "")
             }.onFailure { error = it.message ?: it.javaClass.simpleName }
             busy = false
         }

@@ -60,7 +60,7 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
             Fact(null, "ফোন", "${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}) · ${Build.SUPPORTED_ABIS.firstOrNull()}"),
             Fact(null, "RAM (এই মুহূর্তে)", "মোট ${mi.totalMem / (1 shl 20)} MB · খালি ${mi.availMem / (1 shl 20)} MB" + if (mi.lowMemory) " · ⚠️ কম" else ""),
             Fact(null, "স্টোরেজ (খালি)", "${ctx.noBackupFilesDir.usableSpace / (1 shl 20)} MB"),
-            Fact(model != null, "AI মডেল", when { model == null -> (app.personal.banglaai.storage.ModelImporter.lastError?.let { "শেষ চেষ্টায় ব্যর্থ: $it। " } ?: if (app.personal.banglaai.storage.ModelImporter.running) "কপি চলছে, শেষ হলে আবার দেখুন। " else "") + "বসানো নেই — হোমে 'মডেল ফাইল বসান' (≈ 3.66 GB)। মডেল ছাড়া অনুবাদ/উত্তর/ব্যাখ্যা চলবে না।"
+            Fact(model != null, "AI মডেল", when { model == null -> (app.personal.banglaai.storage.ModelImporter.lastError?.let { "শেষ চেষ্টায় ব্যর্থ: $it। " } ?: if (app.personal.banglaai.storage.ModelImporter.running) "কপি চলছে, শেষ হলে আবার দেখুন। " else "") + "বসানো নেই — হোমে 'মডেল ফাইল বসান' (E4B ≈ 3.66 GB, E2B ≈ 2.59 GB — দশমিক GB)। মডেল ছাড়া অনুবাদ/উত্তর/ব্যাখ্যা চলবে না।"
                 verdict is KnownModels.Verdict.Official -> "${verdict.model.label} — অফিসিয়াল ফাইলের সঙ্গে মিলেছে"
                 verdict is KnownModels.Verdict.Pending -> "ফাইল আছে, checksum যাচাই বাকি/চলছে (হোমের AI মডেল পর্দা দেখুন)"
                 verdict is KnownModels.Verdict.Mismatch -> "ফাইল আছে কিন্তু মেলেনি: " + modelFiles.firstOrNull { it.name.endsWith(".litertlm") }!!.let { KnownModels.explainMismatch(verdict.expected, it.size, it.sha256) }

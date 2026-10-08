@@ -108,10 +108,10 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
         val w = (ctx as? android.app.Activity)?.window
-        w?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        KeepAwake.acquire(ctx as? android.app.Activity)
         val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP && running) stopAll("অ্যাপ পর্দা থেকে সরে যাওয়ায় থেমেছে") }
         owner.lifecycle.addObserver(obs)
-        onDispose { owner.lifecycle.removeObserver(obs); w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON); running = false; gen++; voice.stop(); speaker.shutdown(); llm[0]?.cancel(); llm[0]?.close() }
+        onDispose { owner.lifecycle.removeObserver(obs); KeepAwake.release(ctx as? android.app.Activity); running = false; gen++; voice.stop(); speaker.shutdown(); llm[0]?.cancel(); llm[0]?.close() }
     }
     LaunchedEffect(lines.size, lines.lastOrNull()?.translated) { if (lines.isNotEmpty()) list.animateScrollToItem(lines.lastIndex) }
 

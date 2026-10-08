@@ -64,7 +64,7 @@ fun ImageEditScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
                 val f = CropMath.fit(bmp.width, bmp.height, bw, bh)
                 if (!cropMode) {
                     Image(bmp.asImageBitmap(), "ছবি", Modifier.fillMaxSize()
-                        .pointerInput(Unit) { detectTransformGestures { _, p, z, _ ->
+                        .pointerInput(bw, bh) { detectTransformGestures { _, p, z, _ ->
                             zoom = CropMath.clampZoom(zoom * z)
                             pan = Offset(CropMath.clampPan(pan.x + p.x, zoom, bw), CropMath.clampPan(pan.y + p.y, zoom, bh))
                         } }

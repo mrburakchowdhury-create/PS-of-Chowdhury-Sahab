@@ -32,10 +32,17 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     private fun saveChapters(doc: VaultDoc, list: List<Chapter>) = chapterStore(doc).write(list.map { org.json.JSONObject().put("t", it.title).put("p", it.page) })
     val marks = app.personal.banglaai.userdata.Marks(app.personal.banglaai.userdata.SealedList(File(base, "marks.enc"), vault::seal, vault::unseal))
 
+    val reading = app.personal.banglaai.userdata.ReadingPosition(app.personal.banglaai.userdata.SealedList(File(base, "reading.enc"), vault::seal, vault::unseal))
+
     @Volatile private var extraction: ExtractionJob? = null
     @Volatile private var translation: TranslationJob? = null
     @Volatile private var llm: LocalLlm? = null
     @Volatile private var ocrJob: OcrJob? = null
+    /** Why the last job paused itself (heat / battery / space), or about a guessed text encoding; shown on the document screen. */
+    @Volatile var pauseReason: String? = null
+    @Volatile var textNote: String? = null
+    private fun guard(): () -> String? = { app.personal.banglaai.doc.ResourceGuard.check(context) }
+    fun isCode(doc: VaultDoc) = app.personal.banglaai.importer.OfficeImporter.extension(doc.name.lowercase()) in app.personal.banglaai.importer.OfficeImporter.codeExtensions
 
     enum class Kind(val key: String) { Extract("extract"), Translate("translate") }
     fun jobId(doc: VaultDoc, k: Kind) = "${doc.id}-${k.key}"
@@ -65,8 +72,9 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
                     val id = jobId(doc, Kind.Extract)
                     val job = jobs.load(id) ?: JobState(id, doc.id, Kind.Extract.key, ex.pageCount)
                     runCatching { saveChapters(doc, ex.outline().map { (t, p) -> Chapter(t, p) }) }
-                    val runner = ExtractionJob(job, ex, texts, jobs).also { extraction = it }
-                    return runner.run(retryFailed, onProgress)
+                    val runner = ExtractionJob(job, ex, texts, jobs, pauseCheck = guard()).also { extraction = it }
+                    pauseReason = null
+                    return runner.run(retryFailed, onProgress).also { pauseReason = runner.pausedBecause }
                 }
             }
         } finally { extraction = null; tmp.deleteRecursively() }   // never leave plaintext temp data behind
@@ -82,7 +90,8 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
             PdfExtractor.init(context)
             val opened = vault.open(doc.id).use { PdfExtractor.open(it, tmp) } as? PdfExtractor.OpenResult.Ok ?: error("PDF খোলা যায়নি")
             opened.extractor.use { ex -> TesseractOcr(context).use { t ->
-                return OcrJob(job, ex, t, langs, texts, jobs).also { ocrJob = it }.run(onProgress)
+                pauseReason = null
+                return OcrJob(job, ex, t, langs, texts, jobs, pauseCheck = guard()).also { ocrJob = it }.let { r -> r.run(onProgress).also { pauseReason = r.pausedBecause } }
             } }
         } finally { ocrJob = null; tmp.deleteRecursively() }
     }
@@ -155,7 +164,9 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     }
 
     private fun extractTxt(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
-        val text = vault.open(doc.id).use { String(it.readBytes(), Charsets.UTF_8) }
+        val dec = vault.open(doc.id).use { app.personal.banglaai.importer.TextDecoding.decode(it.readBytes()) }
+        textNote = if (dec.guessed) "এই TXT ফাইলের এনকোডিং UTF-8 নয়; ${dec.charset} ধরে পড়া হয়েছে (আন্দাজ) — অক্ষর ভাঙা দেখালে ফাইলটি UTF-8-এ সেভ করে আবার দিন।" else null
+        val text = dec.text
         val pages = app.personal.banglaai.ai.Chunker.split(text, 3000).ifEmpty { listOf("") }
         val id = jobId(doc, Kind.Extract)
         val job = JobState(id, doc.id, Kind.Extract.key, pages.size)
@@ -182,6 +193,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         ?.let { File(context.noBackupFilesDir, "models/${it.name}") }
 
     fun translate(doc: VaultDoc, retryFailed: Boolean, onProgress: (Int, Int) -> Unit): JobStatus {
+        require(!isCode(doc)) { "সোর্স-কোড ফাইল অনুবাদ করা হয় না — মূল কোড অক্ষত থাকে; কোড বুঝতে 'কোড ব্যাখ্যা' ব্যবহার করুন" }
         val ext = job(doc, Kind.Extract) ?: error("আগে 'লেখা বের করুন' চালান")
         val model = usableModel() ?: error("কোনো AI মডেল বসানো নেই — আগে মডেল import করুন (স্থানীয় ছাড়া অনুবাদ করা হবে না)")
         val id = jobId(doc, Kind.Translate)
@@ -189,8 +201,10 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         LocalLlm(model, File(context.cacheDir, "llm"), background = true).use { m ->
             llm = m
             try {
-                val runner = TranslationJob(job, texts, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it, glossary.relevantTo(it).map { g -> g.source to g.bengali })) }).also { translation = it }
-                return runner.run(retryFailed, onProgress)
+                val runner = TranslationJob(job, texts, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it, glossary.relevantTo(it).map { g -> g.source to g.bengali })) },
+                    pauseCheck = guard(), alreadyTarget = { t -> t.count { c -> c.isLetter() } >= 20 && app.personal.banglaai.speech.SpeechText.isMostlyBengali(t) }).also { translation = it }
+                pauseReason = null
+                return runner.run(retryFailed, onProgress).also { pauseReason = runner.pausedBecause }
             } finally { translation = null; llm = null }
         }
     }
@@ -207,6 +221,6 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun deleteDerived(doc: VaultDoc) {
         texts.deleteDoc(doc.id); translations.deleteDoc(doc.id)
         Kind.entries.forEach { jobs.delete(jobId(doc, it)) }
-        marks.deleteDoc(doc.id); vocab.deleteDoc(doc.id); File(File(base, "chapters"), "${doc.id}.enc").delete()
+        marks.deleteDoc(doc.id); vocab.deleteDoc(doc.id); reading.delete(doc.id); app.personal.banglaai.library.LibraryStore(context).remove(doc.id); File(File(base, "chapters"), "${doc.id}.enc").delete()
     }
 }

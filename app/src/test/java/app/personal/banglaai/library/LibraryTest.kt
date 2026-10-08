@@ -43,6 +43,22 @@ class LibraryTest {
 
     @Test fun smallInputChunking() {
         val p = Library.chunk("T", "intro text\n\nCHAPTER I. ONE\n\nalpha beta\n\nCHAPTER II.\n\ngamma")
-        assertEquals(listOf("ভূমিকা", "CHAPTER I. ONE", "CHAPTER II"), p.map { it.label.substringBefore(" · ") })
+        assertEquals(listOf("শুরুর অংশ", "CHAPTER I. ONE", "CHAPTER II"), p.map { it.label.substringBefore(" · ") })
+    }
+
+    @Test fun repeatedChapterNumbersKeepTheirBook() {
+        val t = "BOOK I\n\nCHAPTER I. A\n\ntext one\n\nBOOK II\n\nCHAPTER I. B\n\ntext two"
+        val labels = Library.chunk("X", t).map { it.label }
+        assertTrue(labels.any { it.startsWith("BOOK II · CHAPTER I") })
+        assertTrue(labels.any { it.startsWith("BOOK I · CHAPTER I") })
+    }
+
+    @Test fun headinglessBookGetsNumberedLabelsNotIntroduction() {
+        val labels = Library.chunk("X", "alpha beta.\n\ngamma delta.").map { it.label }
+        assertTrue(labels.all { it.startsWith("অনুচ্ছেদ-গুচ্ছ") })
+    }
+
+    @Test fun hyphenWithTrailingSpaceIsJoined() {
+        assertTrue(Library.chunk("X", "the gov- \nernment fell").first().text.contains("government"))
     }
 }

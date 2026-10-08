@@ -194,9 +194,10 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
     // Leaving the screen or sending the app to the background ends the call and releases the microphone.
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
+        KeepAwake.acquire(ctx as? android.app.Activity)
         val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP && machine.phase != Phase.Idle && machine.phase != Phase.Ended) endCall("অ্যাপ পর্দা থেকে সরে যাওয়ায় কল শেষ হয়েছে") }
         owner.lifecycle.addObserver(obs)
-        onDispose { owner.lifecycle.removeObserver(obs); voice.stop(); speaker.shutdown(); llm[0]?.cancel(); llm[0]?.close(); turn++ }
+        onDispose { owner.lifecycle.removeObserver(obs); KeepAwake.release(ctx as? android.app.Activity); voice.stop(); speaker.shutdown(); llm[0]?.cancel(); llm[0]?.close(); turn++ }
     }
 
     val active = phase != Phase.Idle && phase != Phase.Ended

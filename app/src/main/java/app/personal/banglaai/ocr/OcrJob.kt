@@ -17,8 +17,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 class OcrJob(
     private val job: JobState, private val ex: PdfExtractor, private val ocr: TesseractOcr,
     private val langs: List<TesseractOcr.Lang>, private val texts: PageTextStore, private val jobs: JobStore,
-    private val checkpointEvery: Int = 5,
+    private val checkpointEvery: Int = 5, private val pauseCheck: () -> String? = { null },
 ) {
+    @Volatile var pausedBecause: String? = null; private set
     private val stop = AtomicBoolean(false)
     @Volatile var stopStatus = JobStatus.PAUSED; private set
     fun pause() { stopStatus = JobStatus.PAUSED; stop.set(true); ocr.stop() }
@@ -31,6 +32,7 @@ class OcrJob(
         var n = 0
         for (p in todo) {
             if (stop.get()) { job.status = stopStatus; jobs.save(job); return job.status }
+            pauseCheck()?.let { pausedBecause = it; job.status = JobStatus.PAUSED; jobs.save(job); return job.status }
             val bmp = ex.renderPage(p)
             try {
                 val r = ocr.recognize(bmp, langs)

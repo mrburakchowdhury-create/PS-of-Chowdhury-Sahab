@@ -3,10 +3,7 @@ package app.personal.banglaai.storage
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import com.google.crypto.tink.KeyTemplates
 import com.google.crypto.tink.StreamingAead
-import com.google.crypto.tink.integration.android.AndroidKeysetManager
-import com.google.crypto.tink.streamingaead.StreamingAeadConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -18,21 +15,14 @@ data class VaultDoc(val id: String, val name: String, val size: Long, val added:
 
 /**
  * Encrypted store for imported originals. Files are streamed through AES-256-GCM (Tink streaming AEAD);
- * the keyset is wrapped by an Android Keystore key. Lives in no-backup storage. Originals are never modified.
+ * the keyset is sealed by a secret that only the owner's PIN (or a strong biometric) can release — see KeyVault. Lives in no-backup storage. Originals are never modified.
  * The document index (names) is encrypted as well.
  */
-class Vault(private val context: Context) {
+class Vault(private val context: Context, private val keys: app.personal.banglaai.security.KeyVault) {
     private val dir = File(context.noBackupFilesDir, "vault").apply { mkdirs() }
     private val indexFile = File(dir, "index.enc")
 
-    private val aead: StreamingAead by lazy {
-        StreamingAeadConfig.register()
-        AndroidKeysetManager.Builder()
-            .withSharedPref(context, "vault_keyset", "vault_keyset_prefs")
-            .withKeyTemplate(KeyTemplates.get("AES256_GCM_HKDF_4KB"))
-            .withMasterKeyUri("android-keystore://banglaai_vault_master")
-            .build().keysetHandle.getPrimitive(StreamingAead::class.java)
-    }
+    private val aead: StreamingAead get() = keys.streamingAead()
 
     @Synchronized fun list(): List<VaultDoc> = readIndex().sortedByDescending { it.added }
 

@@ -38,7 +38,7 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
             val eng = engine(); stillWanted(gen)
             val conv = eng.createConversation(ConversationConfig(systemInstruction = Contents.of(system)))
             current = conv; if (!background) Shared.activeInteractive = conv
-            try { return conv.sendMessage(prompt).toString() } finally { current = null; Shared.activeInteractive = null; conv.close() }
+            try { return conv.sendMessage(TokenBudget.guard(system, prompt)).toString() } finally { current = null; Shared.activeInteractive = null; conv.close() }
         } finally { Shared.turn.release(); Shared.touch() }
     }
 
@@ -51,7 +51,7 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
             val eng = engine(); currentCoroutineContext().ensureActive(); stillWanted(gen)
             val conv = eng.createConversation(ConversationConfig(systemInstruction = Contents.of(system)))
             current = conv; if (!background) Shared.activeInteractive = conv
-            try { conv.sendMessageAsync(prompt).collect { onText(it.toString()) } } finally { current = null; Shared.activeInteractive = null; conv.close() }
+            try { conv.sendMessageAsync(TokenBudget.guard(system, prompt)).collect { onText(it.toString()) } } finally { current = null; Shared.activeInteractive = null; conv.close() }
         } finally { Shared.turn.release(); Shared.touch() }
     }
 

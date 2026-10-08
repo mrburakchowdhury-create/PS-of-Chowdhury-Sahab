@@ -29,16 +29,22 @@ object Library {
 
     /** Splits a plain-text book into passages of about [max] characters on paragraph borders; the label is the latest "CHAPTER …" heading seen. */
     fun chunk(book: String, raw: String, max: Int = 1400): List<Passage> {
-        val out = ArrayList<Passage>(); var label = "ভূমিকা"; val cur = StringBuilder(); var part = 0
+        val out = ArrayList<Passage>(); var label = "শুরুর অংশ"; var bookLbl = ""; val cur = StringBuilder(); var part = 0
         fun flush() { if (cur.isNotBlank()) { part++; out += Passage(book, "$label · অংশ $part", cur.toString().trim()); cur.clear() } }
         for (para in raw.replace("\r", "").replace(Regex("(?<=\\p{L})-[ \\t]*\\n(?=\\p{Ll})"), "").split(Regex("\n\\s*\n"))) {
             val p = para.trim(); if (p.isEmpty()) continue
             val h = p.lines().first().trim()
-            if (heading.matches(h) && h.length < 140) { flush(); part = 0; label = h.trimEnd('.').take(60) }
+            if (heading.matches(h) && h.length < 140) {
+                flush(); part = 0
+                val t = h.trimEnd('.').replace("_", "").take(60)
+                if (h.startsWith("book", true)) { bookLbl = t; label = t } else label = if (bookLbl.isEmpty()) t else "$bookLbl · $t"
+            }
             val pieces = if (p.length <= max) listOf(p) else splitLong(p, max)   // a very long paragraph is cut on sentence borders
             for (piece in pieces) { if (cur.length + piece.length > max && cur.isNotEmpty()) flush(); cur.append(piece).append("\n\n") }
         }
-        flush(); return out
+        flush()
+        // a book without CHAPTER/BOOK headings would be one long "শুরুর অংশ · অংশ N": number the passages plainly instead
+        return if (out.all { it.label.startsWith("শুরুর অংশ") }) out.mapIndexed { i, p -> p.copy(label = "অনুচ্ছেদ-গুচ্ছ ${i + 1}") } else out
     }
 
     private fun splitLong(p: String, max: Int): List<String> {
@@ -50,7 +56,9 @@ object Library {
         if (b.isNotEmpty()) out += b.toString(); return out
     }
 
-    fun bundledPassages(c: Context, b: BundledBook): List<Passage> =
+    private val cache = java.util.concurrent.ConcurrentHashMap<String, List<Passage>>()   // the 8 books are chunked once per process, not on every question
+    fun bundledPassages(c: Context, b: BundledBook): List<Passage> = cache.getOrPut(b.id) { chunkBundled(c, b) }
+    private fun chunkBundled(c: Context, b: BundledBook): List<Passage> =
         chunk(b.title.substringBefore(" ("), c.assets.open(b.file).bufferedReader(Charsets.UTF_8).use { it.readText() })
 
     /** In-memory keyword index over a list of passages. */

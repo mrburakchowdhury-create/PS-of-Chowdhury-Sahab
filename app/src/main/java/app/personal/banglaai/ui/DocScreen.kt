@@ -67,10 +67,13 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
             Button(enabled = running == null, onClick = { start("লেখা বের করা") { wf.extract(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
                 Text(if (ext?.status == JobStatus.PAUSED) "লেখা বের করা — চালিয়ে যান" else "লেখা বের করুন")
             }
-            Button(enabled = running == null && ext != null, onClick = { start("বাংলা অনুবাদ") { wf.translate(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
+            if (!wf.isCode(doc)) Button(enabled = running == null && ext != null, onClick = { start("বাংলা অনুবাদ") { wf.translate(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
                 Text(if (tr?.status == JobStatus.PAUSED) "অনুবাদ — চালিয়ে যান" else "বাংলায় অনুবাদ করুন")
             }
         }
+        if (wf.isCode(doc)) Text("সোর্স-কোড ফাইল: অনুবাদ নেই (মূল কোড অক্ষত থাকে)। কোড বুঝতে হোম থেকে 'কোড ব্যাখ্যা' ব্যবহার করুন।", style = MaterialTheme.typography.bodySmall)
+        wf.pauseReason?.let { Text("⏸ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        wf.textNote?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         val emptyPages = ext?.count(app.personal.banglaai.jobs.PageStatus.UNREADABLE) ?: 0
         if (emptyPages > 0 && (doc.name.lowercase().endsWith(".pdf") || wf.isImage(doc))) {
             Text("লেখা পাওয়া যায়নি এমন $emptyPages টি পৃষ্ঠার জন্য OCR (ভাষা বেছে নিন; একাধিক হলে ধীর ও কম নির্ভুল):", style = MaterialTheme.typography.bodySmall)

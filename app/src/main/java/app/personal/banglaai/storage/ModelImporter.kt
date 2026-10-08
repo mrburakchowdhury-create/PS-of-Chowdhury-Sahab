@@ -16,16 +16,17 @@ import kotlinx.coroutines.launch
 object ModelImporter {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     var copiedMb by mutableStateOf<Long?>(null); private set      // non-null while copying
+    var totalMb by mutableStateOf<Long?>(null); private set       // size announced by the file provider, if any
     var lastError by mutableStateOf<String?>(null); private set
     var lastOk by mutableStateOf<String?>(null); private set
     val running get() = copiedMb != null
 
     fun start(store: ModelStore, uri: Uri) {
         if (running) return
-        copiedMb = 0; lastError = null; lastOk = null
+        copiedMb = 0; totalMb = null; lastError = null; lastOk = null
         scope.launch {
-            runCatching { store.import(uri) { copiedMb = it / (1 shl 20) } }
-                .onSuccess { lastOk = "${it.name} কপি হয়েছে (${it.size / (1 shl 20)} MB)" }
+            runCatching { store.import(uri, { copiedMb = it / 1_000_000L }, { totalMb = it / 1_000_000L }) }
+                .onSuccess { lastOk = "${it.name} কপি হয়েছে (${it.size / 1_000_000L} MB)" }
                 .onFailure { lastError = it.message ?: it.javaClass.simpleName }
             copiedMb = null
         }
@@ -36,7 +37,7 @@ object ModelImporter {
         if (running) return
         copiedMb = 0; lastError = null; lastOk = null
         scope.launch {
-            runCatching { store.rehash(name) { copiedMb = it / (1 shl 20) } }
+            runCatching { store.rehash(name) { copiedMb = it / 1_000_000L } }
                 .onSuccess { lastOk = "${it.name} যাচাই শেষ" }
                 .onFailure { lastError = it.message ?: it.javaClass.simpleName }
             copiedMb = null

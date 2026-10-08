@@ -18,6 +18,7 @@ class CallSpeaker(context: Context, private val onReady: (Boolean) -> Unit, priv
     private var seq = 0
     private var gen = 0   // bumped by stop(), so late callbacks of cancelled sentences are ignored
     var ready = false; private set
+    private companion object { const val STALL_MS = 45_000L }
     var onlyNetworkBengaliExists = false; private set
 
     init {
@@ -41,17 +42,27 @@ class CallSpeaker(context: Context, private val onReady: (Boolean) -> Unit, priv
         }
     }
 
-    private fun finished() { if (pending > 0) pending--; if (pending == 0) onIdle() }
+    private var lastEvent = 0L
+    private val watchdog = object : Runnable {
+        override fun run() {
+            if (pending <= 0) return
+            if (android.os.SystemClock.elapsedRealtime() - lastEvent > STALL_MS) { gen++; pending = 0; tts?.stop(); onIdle() }   // the voice engine went silent: do not leave the call stuck in "speaking"
+            else main.postDelayed(this, 5_000)
+        }
+    }
+    private fun finished() { lastEvent = android.os.SystemClock.elapsedRealtime(); if (pending > 0) pending--; if (pending == 0) { main.removeCallbacks(watchdog); onIdle() } }
 
     fun speak(sentence: String) {
         val clean = SpeechText.clean(sentence)
         if (!ready || clean.isBlank()) return
-        pending++
-        tts?.speak(clean.take(TextToSpeech.getMaxSpeechInputLength() - 1), TextToSpeech.QUEUE_ADD, null, "c${++seq}")
+        pending++; lastEvent = android.os.SystemClock.elapsedRealtime()
+        val r = tts?.speak(clean.take(TextToSpeech.getMaxSpeechInputLength() - 1), TextToSpeech.QUEUE_ADD, null, "c${++seq}") ?: TextToSpeech.ERROR
+        if (r != TextToSpeech.SUCCESS) { main.post { finished() }; return }   // refused: count it as spoken so the call moves on
+        main.removeCallbacks(watchdog); main.postDelayed(watchdog, 5_000)
     }
 
     fun setRate(r: Float) { tts?.setSpeechRate(r.coerceIn(0.5f, 2.0f)) }
     val isSpeaking get() = pending > 0
-    fun stop() { gen++; pending = 0; tts?.stop() }
-    fun shutdown() { gen++; pending = 0; tts?.stop(); tts?.shutdown(); tts = null }
+    fun stop() { gen++; pending = 0; main.removeCallbacks(watchdog); tts?.stop() }
+    fun shutdown() { gen++; pending = 0; main.removeCallbacks(watchdog); tts?.stop(); tts?.shutdown(); tts = null }
 }
