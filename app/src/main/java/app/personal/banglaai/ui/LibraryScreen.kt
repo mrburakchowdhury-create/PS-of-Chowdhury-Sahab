@@ -121,7 +121,7 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onOpenDoc: (Vau
         }
     }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("← Back") }; Text("Library", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f)) }
         Text("বই থেকে প্রশ্ন করুন; উত্তরে বই ও অংশের উৎস থাকবে। এটি বই 'মুখস্থ' করা নয় — প্রতিবার সবচেয়ে মিল-থাকা অংশ খুঁজে পড়ে উত্তর দেয়, তাই ভুল বা অসম্পূর্ণ হতে পারে; গুরুত্বপূর্ণ বিষয়ে নিচের উৎস-অংশ নিজে মিলিয়ে নিন।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         JobRunner.label?.let { Text("চলছে: $it ${JobRunner.progress.first}/${JobRunner.progress.second}", color = MaterialTheme.colorScheme.tertiary); LinearProgressIndicator(Modifier.fillMaxWidth()) }

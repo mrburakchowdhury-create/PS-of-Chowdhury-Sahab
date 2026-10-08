@@ -127,7 +127,7 @@ fun CodeScreen(wf: DocWorkflow, cacheDir: File, noBackupDir: File, onBack: () ->
         }
     }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         TextButton(onClick = onBack) { Text("← Back") }
         Text("কোড বিশ্লেষণ", style = MaterialTheme.typography.headlineSmall)
         Text("কোড কখনো চালানো হয় না; শুধু পড়ে ব্যাখ্যা করা হয়। AI ভুল করতে পারে — বিশেষ করে জটিল কোডে। নিশ্চিত নয় এমন অংশ ‘অনুমান’ লিখতে মডেলকে বলা হয়, কিন্তু সে সবসময় মানবে — এমন নিশ্চয়তা নেই। বড় কোডের শুরুর অংশই নেওয়া হয়।", style = MaterialTheme.typography.bodySmall)

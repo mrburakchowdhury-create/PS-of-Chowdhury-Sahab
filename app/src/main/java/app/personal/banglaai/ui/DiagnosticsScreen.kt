@@ -76,7 +76,7 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
         )
     }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         TextButton(onClick = onBack) { Text("← Back") }
         Text("ফোনের অবস্থা পরীক্ষা", style = MaterialTheme.typography.headlineSmall)
         Text("এটি আসল পরীক্ষা, অনুমান নয়। কিছু না চললে এই পর্দার স্ক্রিনশট পাঠান।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

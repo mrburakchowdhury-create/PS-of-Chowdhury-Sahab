@@ -37,7 +37,8 @@ class TtsReader(private val context: Context, private val onState: (State) -> Un
                 val offline = tts?.let { BengaliVoices.choose(context, it) }
                 onlyNetworkBengaliExists = offline == null && bn.isNotEmpty()
                 if (offline == null) return@post set(State.NoOfflineBengali)
-                tts!!.voice = offline; voiceName = offline.name
+                if (tts!!.setVoice(offline) != TextToSpeech.SUCCESS || tts!!.voice?.name != offline.name) return@post set(State.NoOfflineBengali)   // C06: refused voice = not ready
+                voiceName = offline.name
                 tts!!.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) {}
                     override fun onDone(id: String?) { main.post { if (id == "s$token" && state == State.Playing) advance() } }

@@ -123,7 +123,7 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onGoModel: () -> Unit =
     }
     LaunchedEffect(lines.size, lines.lastOrNull()?.translated) { if (lines.isNotEmpty()) list.animateScrollToItem(lines.lastIndex) }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = { if (running) stopAll(null); onBack() }) { Text("← Back") }
             Text("Live Translate", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))

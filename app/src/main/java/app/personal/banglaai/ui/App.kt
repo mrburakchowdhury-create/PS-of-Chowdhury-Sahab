@@ -66,7 +66,7 @@ fun App(activity: MainActivity, unlocked: Boolean, onUnlocked: () -> Unit, onLoc
 private fun SetupScreen(pins: PinStore, keys: app.personal.banglaai.security.KeyVault, done: () -> Unit) {
     var a by remember { mutableStateOf("") }; var b by remember { mutableStateOf("") }
     var err by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize().padding(24.dp).systemBarsPadding(), verticalArrangement = Arrangement.Center) {
+    Column(Modifier.fillMaxSize().padding(24.dp).systemBarsPadding().imePadding(), verticalArrangement = Arrangement.Center) {
         Text("প্রথম সেটআপ", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(8.dp))
         Text("অ্যাপের জন্য একটি PIN ঠিক করুন (কমপক্ষে ৬ সংখ্যা)। এই PIN কোথাও পাঠানো হয় না এবং ভুলে গেলে ফিরে পাওয়ার কোনো গোপন পথ নেই। আপনার তথ্য মোছা হবে না, কিন্তু PIN ছাড়া অ্যাপ খুলবে না।",
@@ -101,7 +101,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
     var wait by remember { mutableStateOf(pins.lockedSeconds()) }
     LaunchedEffect(wait) { if (wait > 0) { delay(1000); wait = pins.lockedSeconds() } }
     val bio = remember { activity.canUseStrongBiometric() && keys.hasBio() }
-    Column(Modifier.fillMaxSize().padding(24.dp).systemBarsPadding(), verticalArrangement = Arrangement.Center) {
+    Column(Modifier.fillMaxSize().padding(24.dp).systemBarsPadding().imePadding(), verticalArrangement = Arrangement.Center) {
         Image(painterResource(R.drawable.logo_ps), contentDescription = null, modifier = Modifier.size(104.dp).clip(androidx.compose.foundation.shape.CircleShape).align(Alignment.CenterHorizontally))
         Spacer(Modifier.height(12.dp))
         Text("🔒 অ্যাপ বন্ধ আছে", style = MaterialTheme.typography.headlineSmall)
@@ -246,7 +246,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     if (chatOpen) { ChatScreen(workflow, activity.cacheDir, chatStart, onGoModel = { chatOpen = false; chatStart = null; tab = HomeTab.Model }) { chatOpen = false; chatStart = null }; return }
     if (diagOpen) { DiagnosticsScreen(workflow, activity.cacheDir) { diagOpen = false }; return }
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
-    Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (tab == HomeTab.Menu) Box(Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
             // the logo art has its own dark backdrop: fade its edges out so it melts into the app background
             Image(painterResource(R.drawable.home_logo), contentDescription = "চৌধুরী সাহেবের পিএস",

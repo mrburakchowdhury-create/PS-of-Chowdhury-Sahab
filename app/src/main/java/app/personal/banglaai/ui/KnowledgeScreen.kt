@@ -61,7 +61,7 @@ fun KnowledgeScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxSize().systemBarsPadding().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("← Back") }; Text("জ্ঞানভাণ্ডার", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f)) }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FilterChip(selected = cat == null, onClick = { cat = null }, label = { Text("সব") })

@@ -48,6 +48,26 @@ class OfficeImporterTest {
         assertEquals(2, s.size); assertTrue(s[0].text.contains("Hello & welcome")); assertFalse(s[0].text.contains("alert")); assertEquals("Two", s[1].text)
     }
 
+    @Test fun epubPrefixesSingleQuotesAndParentPaths() {
+        val container = "<?xml version='1.0'?><c:container xmlns:c='urn:oasis:names:tc:opendocument:xmlns:container'><c:rootfiles><c:rootfile full-path='OEBPS/pkg/c.opf' media-type='application/oebps-package+xml'/></c:rootfiles></c:container>"
+        val opf = "<opf:package xmlns:opf='http://www.idpf.org/2007/opf'><opf:manifest><opf:item id='x' href='../text/a%20b.xhtml'/></opf:manifest><opf:spine><opf:itemref idref='x'/></opf:spine></opf:package>"
+        val s = run("a.epub", zip("META-INF/container.xml" to container, "OEBPS/pkg/c.opf" to opf, "OEBPS/text/a b.xhtml" to "<p>Found it</p>"))
+        assertEquals("Found it", s[0].text)
+    }
+
+    @Test fun epubWithDoctypeEntityIsRefusedNotExpanded() {
+        val evil = "<?xml version='1.0'?><!DOCTYPE c [<!ENTITY x SYSTEM 'file:///etc/passwd'>]><container><rootfiles><rootfile full-path='c.opf'>&x;</rootfile></rootfiles></container>"
+        assertThrows(ImportRefused::class.java) { run("a.epub", zip("META-INF/container.xml" to evil, "c.opf" to "<package/>")) }
+    }
+
+    @Test fun epubMissingChapterIsReportedNotSilent() {
+        val opf = "<package><manifest><item id='a' href='a.xhtml'/><item id='b' href='gone.xhtml'/></manifest><spine><itemref idref='a'/><itemref idref='b'/></spine></package>"
+        val s = run("a.epub", zip("META-INF/container.xml" to "<container><rootfiles><rootfile full-path='c.opf'/></rootfiles></container>", "c.opf" to opf, "a.xhtml" to "<p>One</p>"))
+        assertTrue(s.last().title.contains("অনুপস্থিত")); assertTrue(s.last().text.contains("gone.xhtml"))
+        val e = assertThrows(ImportRefused::class.java) { run("a.epub", zip("META-INF/container.xml" to "<container><rootfiles><rootfile full-path='c.opf'/></rootfiles></container>", "c.opf" to "<package><manifest><item id='b' href='gone.xhtml'/></manifest><spine><itemref idref='b'/></spine></package>")) }
+        assertTrue(e.message!!.contains("gone.xhtml"))
+    }
+
     @Test fun zipBombIsRefused() {
         val big = "<w:document $W>" + "<w:p><w:r><w:t>x</w:t></w:r></w:p>".repeat(10) + "</w:document>"
         val bo = ByteArrayOutputStream(); ZipOutputStream(bo).use { z -> z.putNextEntry(ZipEntry("word/document.xml")); z.write(big.toByteArray())

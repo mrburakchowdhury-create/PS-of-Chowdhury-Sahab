@@ -229,23 +229,50 @@ object OfficeImporter {
         return rows.joinToString("\n")
     }
 
+    private fun secureXml(bytes: ByteArray): org.w3c.dom.Document {
+        val f = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+        f.isNamespaceAware = true; f.isXIncludeAware = false; f.isExpandEntityReferences = false
+        for ((k, v) in listOf("http://apache.org/xml/features/disallow-doctype-decl" to true, "http://xml.org/sax/features/external-general-entities" to false,
+            "http://xml.org/sax/features/external-parameter-entities" to false, "http://apache.org/xml/features/nonvalidating/load-external-dtd" to false))
+            runCatching { f.setFeature(k, v) }
+        runCatching { f.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true) }
+        val b = f.newDocumentBuilder(); b.setEntityResolver { _, _ -> org.xml.sax.InputSource(java.io.StringReader("")) }
+        return b.parse(java.io.ByteArrayInputStream(bytes))
+    }
+
+    /** Resolves [href] against [dir] (both zip-relative), handling "../" and "./", percent-escapes and "#fragment"; null if it would leave the archive. */
+    internal fun resolveZipPath(dir: String, href: String): String? {
+        val raw = runCatching { java.net.URLDecoder.decode(href.substringBefore('#').replace("+", "%2B"), "UTF-8") }.getOrDefault(href.substringBefore('#'))
+        val parts = ArrayList<String>(); if (dir.isNotEmpty()) parts += dir.split('/')
+        for (seg in raw.split('/')) when (seg) { "", "." -> {}; ".." -> { if (parts.isEmpty()) return null; parts.removeAt(parts.size - 1) }; else -> parts += seg }
+        return parts.joinToString("/")
+    }
+
     private fun epub(z: Map<String, ByteArray>): List<Section> {
         val container = z["META-INF/container.xml"] ?: throw ImportRefused("এটি বৈধ EPUB নয়")
-        val opfPath = Regex("full-path=\"([^\"]+)\"").find(String(container, Charsets.UTF_8))?.groupValues?.get(1) ?: throw ImportRefused("EPUB-এর OPF পাওয়া যায়নি")
-        val opf = String(z[opfPath] ?: throw ImportRefused("EPUB-এর OPF নেই"), Charsets.UTF_8)
+        val cdoc = try { secureXml(container) } catch (e: Exception) { throw ImportRefused("EPUB-এর container.xml পড়া যায়নি বা নিরাপদ নয়") }
+        val rootfiles = cdoc.getElementsByTagNameNS("*", "rootfile")
+        val opfPath = (0 until rootfiles.length).map { (rootfiles.item(it) as org.w3c.dom.Element).getAttribute("full-path") }.firstOrNull { it.isNotBlank() }
+            ?: throw ImportRefused("EPUB-এর OPF পাওয়া যায়নি")
+        val opfDoc = try { secureXml(z[opfPath] ?: throw ImportRefused("EPUB-এর OPF নেই")) } catch (e: ImportRefused) { throw e } catch (e: Exception) { throw ImportRefused("EPUB-এর OPF পড়া যায়নি বা নিরাপদ নয়") }
         val dir = opfPath.substringBeforeLast('/', "")
-        val manifest = Regex("<item\\b[^>]*>").findAll(opf).associate { m ->
-            val t = m.value; (Regex("id=\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: "") to (Regex("href=\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: "") }
-        val spine = Regex("<itemref\\b[^>]*idref=\"([^\"]+)\"").findAll(opf).map { it.groupValues[1] }.toList()
-        val out = ArrayList<Section>()
+        val items = opfDoc.getElementsByTagNameNS("*", "item")
+        val manifest = (0 until items.length).map { items.item(it) as org.w3c.dom.Element }.associate { it.getAttribute("id") to it.getAttribute("href") }
+        val refs = opfDoc.getElementsByTagNameNS("*", "itemref")
+        val spine = (0 until refs.length).map { (refs.item(it) as org.w3c.dom.Element).getAttribute("idref") }
+        if (spine.isEmpty()) throw ImportRefused("EPUB-এ কোনো অধ্যায়-তালিকা (spine) নেই")
+        val out = ArrayList<Section>(); val missing = ArrayList<String>()
         for ((i, id) in spine.withIndex()) {
-            val href = manifest[id] ?: continue
-            val path = (if (dir.isEmpty()) href else "$dir/$href").substringBefore('#')
-            val html = z[path]?.toString(Charsets.UTF_8) ?: continue
+            val href = manifest[id]; val path = href?.let { resolveZipPath(dir, it) }
+            val bytes = path?.let { z[it] }
+            if (bytes == null) { missing += (href ?: id); continue }
+            val html = bytes.toString(Charsets.UTF_8)
             val text = htmlToText(html)
             val title = Regex("(?is)<h[12]\\b[^>]*>(.*?)</h[12]>").find(html)?.groupValues?.get(1)?.let { htmlToText(it).replace('\n', ' ').take(80) }?.takeIf { it.isNotBlank() }
             if (text.isNotBlank()) out += Section("অধ্যায়-ফাইল ${i + 1}" + (title?.let { " · $it" } ?: ""), text)
         }
+        if (missing.isNotEmpty() && out.isEmpty()) throw ImportRefused("EPUB-এর অধ্যায়-ফাইল পাওয়া যায়নি: ${missing.take(3).joinToString()}")
+        if (missing.isNotEmpty()) out += Section("⚠ অনুপস্থিত অধ্যায়", "এই EPUB-এ ${missing.size}টি অধ্যায়-ফাইল পাওয়া যায়নি (বাদ দেওয়া হয়েছে): ${missing.take(5).joinToString()}")
         return out
     }
 

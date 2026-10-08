@@ -30,7 +30,7 @@ class CallSpeaker(private val context: Context, private val onReady: (Boolean) -
                 val offline = BengaliVoices.choose(context, t)
                 onlyNetworkBengaliExists = offline == null && bn.isNotEmpty()
                 if (offline == null) return@post onReady(false)
-                t.voice = offline
+                if (t.setVoice(offline) != TextToSpeech.SUCCESS || t.voice?.name != offline.name) return@post onReady(false)   // C06: the engine refused the voice -> not ready, never pretend
                 t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) {}
                     override fun onRangeStart(id: String?, start: Int, end: Int, frame: Int) { val g = gen; main.post { if (g == gen) onWord() } }
