@@ -17,7 +17,8 @@ class SealedList(private val file: File, private val seal: (ByteArray, ByteArray
     }
 }
 
-data class GlossaryEntry(val source: String, val bengali: String)
+/** One sense of a term. The same [source] may have several senses, told apart by [domain] (e.g. "bank" — finance / river). */
+data class GlossaryEntry(val source: String, val bengali: String, val domain: String = "")
 
 /**
  * User's own terminology list. During translation only the entries whose source term occurs in the current chunk are sent
@@ -25,24 +26,33 @@ data class GlossaryEntry(val source: String, val bengali: String)
  * diacritic-insensitive for Arabic; it is substring-based, so very short terms can over-match — the user controls the list.
  */
 class Glossary(private val store: SealedList) {
-    fun all(): List<GlossaryEntry> = store.read().map { GlossaryEntry(it.getString("s"), it.getString("b")) }
-    fun add(source: String, bengali: String) {
+    private fun entry(o: JSONObject) = GlossaryEntry(o.getString("s"), o.getString("b"), o.optString("d"))
+    private fun json(e: GlossaryEntry) = JSONObject().put("s", e.source).put("b", e.bengali).apply { if (e.domain.isNotBlank()) put("d", e.domain) }
+    fun all(): List<GlossaryEntry> = store.read().map(::entry)
+    fun add(source: String, bengali: String, domain: String = "") {
         require(source.isNotBlank() && bengali.isNotBlank()) { "দুটি ঘরই পূরণ করুন" }
-        val rest = all().filterNot { it.source.equals(source.trim(), true) }
-        store.write((rest + GlossaryEntry(source.trim(), bengali.trim())).map { JSONObject().put("s", it.source).put("b", it.bengali) })
+        val d = domain.trim()
+        val rest = all().filterNot { it.source.equals(source.trim(), true) && it.domain.equals(d, true) }
+        store.write((rest + GlossaryEntry(source.trim(), bengali.trim(), d)).map(::json))
     }
     /** Backup support: the raw items, and a merge that keeps what is already here (existing entries win) and ignores malformed items. Returns how many were added. */
     fun exportJson(): List<JSONObject> = store.read()
     @Synchronized fun mergeJson(items: List<JSONObject>): Int {
-        val have = all().map { it.source.lowercase() }.toMutableSet(); val add = ArrayList<JSONObject>()
-        for (o in items) { val s = o.optString("s").trim(); val b = o.optString("b").trim(); if (s.isNotEmpty() && b.isNotEmpty() && have.add(s.lowercase())) add += JSONObject().put("s", s).put("b", b) }
+        val have = all().map { it.source.lowercase() to it.domain.lowercase() }.toMutableSet(); val add = ArrayList<JSONObject>()
+        for (o in items) { val s = o.optString("s").trim(); val b = o.optString("b").trim(); val d = o.optString("d").trim()
+            if (s.isNotEmpty() && b.isNotEmpty() && have.add(s.lowercase() to d.lowercase())) add += json(GlossaryEntry(s, b, d)) }
         if (add.isNotEmpty()) store.write(store.read() + add); return add.size
     }
-    fun remove(source: String) = store.write(all().filterNot { it.source == source }.map { JSONObject().put("s", it.source).put("b", it.bengali) })
+    fun remove(source: String, domain: String = "") = store.write(all().filterNot { it.source == source && it.domain == domain }.map(::json))
     fun relevantTo(chunk: String, limit: Int = 40): List<GlossaryEntry> {
         val n = app.personal.banglaai.ai.Bm25Index.normalize(chunk)
         return all().filter { n.contains(app.personal.banglaai.ai.Bm25Index.normalize(it.source)) }.sortedByDescending { it.source.length }.take(limit)
     }
+    /** (source, wording) pairs for a translation prompt, shared by EVERY translating screen. A term with several senses becomes "sense1 [domain1] / sense2 [domain2]" so the model picks by context. */
+    fun promptPairs(chunk: String, limit: Int = 40): List<Pair<String, String>> =
+        relevantTo(chunk, limit).groupBy { it.source.lowercase() }.values.map { g ->
+            g.first().source to (if (g.size == 1 && g[0].domain.isBlank()) g[0].bengali else g.joinToString(" / ") { it.bengali + (if (it.domain.isBlank()) "" else " [${it.domain}]") } + " — প্রসঙ্গ অনুযায়ী উপযুক্ত অর্থটি নাও")
+        }
 }
 
 data class Mark(val id: String, val docId: String, val page: Int, val kind: Kind, val text: String, val at: Long) { enum class Kind { BOOKMARK, NOTE } }

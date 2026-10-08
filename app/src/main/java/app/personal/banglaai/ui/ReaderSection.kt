@@ -58,7 +58,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
         if (src == null || src.text.isBlank()) { voiceMsg = "পৃষ্ঠা $page-এ বের-করা লেখা নেই (স্ক্যান হলে আগে OCR চালান)।"; return }
         translating = page; voiceMsg = null
         scope.launch {
-            runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { LocalLlm(model, java.io.File(ctx.cacheDir, "llm")).use { it.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(src.text, wf.glossary.relevantTo(src.text).map { g -> g.source to g.bengali })) } } }
+            runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { LocalLlm(model, java.io.File(ctx.cacheDir, "llm")).use { it.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(src.text, wf.glossary.promptPairs(src.text))) } } }
                 .onSuccess { out -> wf.translations.put(doc.id, app.personal.banglaai.doc.PageText(page, out.trim(), src.printedLabel)); translating = null; useTranslation = true; playRef[0]?.invoke(page) }
                 .onFailure { translating = null; voiceMsg = "অনুবাদ ব্যর্থ: ${it.message ?: it.javaClass.simpleName}" }
         }

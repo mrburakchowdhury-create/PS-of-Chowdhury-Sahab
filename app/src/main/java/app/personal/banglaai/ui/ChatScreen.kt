@@ -63,7 +63,7 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
                 withContext(Dispatchers.IO) {
                     val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
                     val sys = if (translate) Prompts.TRANSLATE_SYSTEM else if (advisor) Prompts.ADVISOR_SYSTEM else Prompts.ASSISTANT_SYSTEM
-                    val prompt = if (translate) Prompts.translateFree(text) else if (advisor) Prompts.advisor(text, app.personal.banglaai.knowledge.KnowledgeBase.search(ctx, text, null, 3).map { "প্রশ্ন: ${it.q}\nউত্তর: ${it.a}" }) else Prompts.ask(text)
+                    val prompt = if (translate) Prompts.translateFree(text, wf.glossary.promptPairs(text)) else if (advisor) Prompts.advisor(text, app.personal.banglaai.knowledge.KnowledgeBase.search(ctx, text, null, 3).map { "প্রশ্ন: ${it.q}\nউত্তর: ${it.a}" }) else Prompts.ask(text)
                     var first = true
                     m.askStream(sys, prompt) { piece -> if (first) { first = false; busy = "লিখছে…" }; msgs[idx] = msgs[idx].copy(text = msgs[idx].text + piece) }
                 }

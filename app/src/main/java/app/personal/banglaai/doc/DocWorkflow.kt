@@ -240,6 +240,8 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         KnownModels.verdict(m.name, m.size, m.sha256).let { v -> v !is KnownModels.Verdict.Mismatch && v !is KnownModels.Verdict.Pending }
 
     /** The chosen model if it is stored and verified, else the first verified one (E2B sorts before E4B, i.e. the lighter one). */
+    /** true when a model file exists but none is usable (partial/damaged/wrong type) — different advice from "no model". */
+    fun modelDamaged(): Boolean = models.list().let { it.isNotEmpty() && it.none(::isUsable) }
     fun usableModel(): File? = models.list().filter(::isUsable).let { ok -> ok.firstOrNull { it.name == chosenModel } ?: ok.firstOrNull() }
         ?.let { File(context.noBackupFilesDir, "models/${it.name}") }
 
@@ -252,7 +254,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         LocalLlm(model, File(context.cacheDir, "llm"), background = true).use { m ->
             llm = m
             try {
-                val runner = TranslationJob(job, effectiveSource, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it, glossary.relevantTo(it).map { g -> g.source to g.bengali })) },
+                val runner = TranslationJob(job, effectiveSource, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it, glossary.promptPairs(it))) },
                     pauseCheck = guard(), alreadyTarget = { t -> t.count { c -> c.isLetter() } >= 20 && app.personal.banglaai.speech.SpeechText.isMostlyBengali(t) }).also { translation = it }
                 pauseReason = null
                 return runner.run(retryFailed, onProgress).also { pauseReason = runner.pausedBecause }

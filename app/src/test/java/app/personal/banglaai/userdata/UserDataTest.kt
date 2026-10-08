@@ -16,6 +16,17 @@ class UserDataTest {
     private val xor = { b: ByteArray, _: ByteArray -> ByteArray(b.size) { i -> (b[i].toInt() xor 0x5A).toByte() } }   // stand-in cipher so we can check the file is not plaintext
     private fun list(n: String) = SealedList(File(tmp.root, n), xor, xor)
 
+    @Test fun sameWordKeepsSeparateSensesByContextAndOneSharedList() {
+        val g = Glossary(list("g3.enc"))
+        g.add("bank", "ব্যাংক", "অর্থ"); g.add("bank", "নদীর তীর", "নদী"); g.add("bank", "ব্যাংক (নতুন)", "অর্থ")
+        assertEquals(2, g.all().size)   // same word + same context = replaced; different context = a second sense
+        val p = g.promptPairs("He sat on the bank of the river").single()
+        assertEquals("bank", p.first); assertTrue(p.second.contains("ব্যাংক (নতুন) [অর্থ]")); assertTrue(p.second.contains("নদীর তীর [নদী]")); assertTrue(p.second.contains("প্রসঙ্গ"))
+        g.remove("bank", "নদী"); assertEquals(listOf("ব্যাংক (নতুন)"), g.all().map { it.bengali })
+        val back = Glossary(list("g4.enc")); assertEquals(1, back.mergeJson(g.exportJson())); assertEquals("অর্থ", back.all().single().domain)
+        val live = app.personal.banglaai.ai.Prompts.interpret("bank", "বাংলা", g.promptPairs("bank")); assertTrue(live.contains("ব্যাংক"))
+    }
+
     @Test fun glossarySendsOnlyTermsPresentInChunkAndReplacesDuplicates() {
         val g = Glossary(list("g.enc"))
         g.add("committee", "কমিটি"); g.add("Budget", "বাজেট"); g.add("budget", "বাজেট/ব্যয়-পরিকল্পনা"); g.add("ٱلْعِلْمُ", "জ্ঞান")

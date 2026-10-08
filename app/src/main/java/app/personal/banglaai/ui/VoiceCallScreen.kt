@@ -158,7 +158,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onGoModel: ()
                 else {
                     answer = "পৃষ্ঠা ${o.page} বাংলায় অনুবাদ হচ্ছে… (প্রথমবার কয়েক মিনিট লাগতে পারে)"
                     scope.launch {
-                        val r = runCatching { withContext(Dispatchers.IO) { LocalLlm(model, File(cacheDir, "llm")).use { it.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(src.text, wf.glossary.relevantTo(src.text).map { g -> g.source to g.bengali })) } } }
+                        val r = runCatching { withContext(Dispatchers.IO) { LocalLlm(model, File(cacheDir, "llm")).use { it.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(src.text, wf.glossary.promptPairs(src.text))) } } }
                         if (my != turn) return@launch   // interrupted or ended meanwhile
                         r.onSuccess { out -> wf.translations.put(d.id, app.personal.banglaai.doc.PageText(o.page, out.trim(), src.printedLabel)); think(text) }
                             .onFailure { say("অনুবাদ ব্যর্থ হয়েছে।") }

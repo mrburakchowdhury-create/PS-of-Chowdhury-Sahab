@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun GlossarySection(wf: DocWorkflow) {
     var items by remember { mutableStateOf<List<GlossaryEntry>>(emptyList()) }
-    var src by remember { mutableStateOf("") }; var bn by remember { mutableStateOf("") }; var err by remember { mutableStateOf<String?>(null) }
+    var src by remember { mutableStateOf("") }; var bn by remember { mutableStateOf("") }; var dom by remember { mutableStateOf("") }; var err by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { items = runCatching { wf.glossary.all() }.getOrDefault(emptyList()) }
     Text("Glossary — অনুবাদে একই শব্দের একই বাংলা", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
     val dictCtx = androidx.compose.ui.platform.LocalContext.current
@@ -26,14 +26,15 @@ fun GlossarySection(wf: DocWorkflow) {
         OutlinedTextField(src, { src = it }, label = { Text("মূল শব্দ") }, singleLine = true, modifier = Modifier.weight(1f))
         OutlinedTextField(bn, { bn = it }, label = { Text("বাংলা") }, singleLine = true, modifier = Modifier.weight(1f))
     }
+    OutlinedTextField(dom, { dom = it }, label = { Text("কোন প্রসঙ্গে? (ঐচ্ছিক — যেমন: ব্যাংক, নদী)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
     if (suggestions.isNotEmpty()) {
         Text("Tap a suggestion to fill the Bengali:", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { suggestions.forEach { sgt -> AssistChip(onClick = { bn = sgt }, label = { Text(sgt) }) } }
     }
-    Button(onClick = { runCatching { wf.glossary.add(src, bn) }.onSuccess { src = ""; bn = ""; err = null; items = wf.glossary.all() }.onFailure { err = it.message } }) { Text("Add") }
+    Button(onClick = { runCatching { wf.glossary.add(src, bn, dom) }.onSuccess { src = ""; bn = ""; dom = ""; err = null; items = wf.glossary.all() }.onFailure { err = it.message } }) { Text("Add") }
     err?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     items.forEach { e -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        Text("${e.source} → ${e.bengali}", Modifier.weight(1f)); TextButton(onClick = { wf.glossary.remove(e.source); items = wf.glossary.all() }) { Text("Delete") } } }
+        Text("${e.source} → ${e.bengali}" + (if (e.domain.isBlank()) "" else " [${e.domain}]"), Modifier.weight(1f)); TextButton(onClick = { wf.glossary.remove(e.source, e.domain); items = wf.glossary.all() }) { Text("Delete") } } }
 }
 
 /** Bookmarks and personal notes for the page chosen in the viewer. Notes are yours, kept separate from the document text. */

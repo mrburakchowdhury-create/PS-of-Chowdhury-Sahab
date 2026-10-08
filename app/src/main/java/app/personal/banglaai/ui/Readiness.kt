@@ -56,7 +56,7 @@ fun ReadinessPanel(wf: DocWorkflow, needModel: Boolean, needMic: Boolean, needHe
         kotlinx.coroutines.delay(4000); if (!got) value = null to "সাড়া পাওয়া যায়নি"; t?.shutdown()
     }
     val needs = buildList {
-        if (needModel) add(Need(hasModel, "AI model", if (hasModel) "বসানো আছে" else "বসানো নেই — এটা ছাড়া অনুবাদ, উত্তর, কল, লাইভ কিছুই কাজ করবে না (অ্যাপ আনইনস্টল করলে মডেলও মুছে যায়)", if (hasModel) null else "Open AI Model", if (hasModel) null else onGoModel))
+        if (needModel) add(Need(hasModel, "AI model", if (hasModel) "বসানো আছে" else if (wf.modelDamaged()) "AI মডেল ফাইলটি অসম্পূর্ণ বা নষ্ট। আবার যোগ করুন।" else "এই কাজের জন্য AI মডেল প্রয়োজন। মডেল যোগ করুন।", if (hasModel) null else "Add AI model", if (hasModel) null else onGoModel))
         if (needMic) add(Need(micOk, "Microphone permission", if (micOk) "দেওয়া আছে" else "দেওয়া হয়নি", if (micOk) null else "Allow microphone") { micPerm.launch(Manifest.permission.RECORD_AUDIO) })
         if (needHearing) add(Need(hearing.first, "Speech recognition (offline Bengali)", hearing.second,
             if (hearing.first == true) null else "Download Bengali pack") {
@@ -73,7 +73,7 @@ fun ReadinessPanel(wf: DocWorkflow, needModel: Boolean, needMic: Boolean, needHe
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Before you start", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer)
-            needs.forEach { n ->
+            needs.filter { it.ok != true }.forEach { n ->   // ready items are not listed (no permanent success text)
                 Text("${when (n.ok) { true -> "✅"; false -> "❌"; null -> "⏳" }} ${n.title} — ${n.why}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                 if (n.ok != true && n.fix != null && n.fixLabel != null) Button(onClick = n.fix) { Text(n.fixLabel) }
             }
