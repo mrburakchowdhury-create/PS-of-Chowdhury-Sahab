@@ -120,6 +120,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
                 val src = remember(page, tick, fixTick) { wf.texts.get(doc.id, page) }
                 val fix = remember(page, tick, fixTick) { wf.fixes.get(doc.id, page) }
                 val bn = remember(page, tick) { wf.translations.get(doc.id, page) }
+                if (doc.name.lowercase().endsWith(".pdf")) OriginalPageView(doc, wf, page)
                 Text("মূল লেখা (পৃষ্ঠা $page${src?.printedLabel?.let { " · মূল অবস্থান: $it" } ?: ""})${if (src?.ocr == true) " — OCR থেকে, ভুল থাকতে পারে" else ""}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 SelectionContainer { Text(src?.text ?: "(এই পৃষ্ঠায় বের করা লেখা নেই)") }
                 if (fix != null) {

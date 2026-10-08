@@ -118,6 +118,20 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         } finally { ocrJob = null; tmp.deleteRecursively() }
     }
 
+    /**
+     * The ORIGINAL page as a picture, for viewing next to the extracted text. PDF only. The vault file is decrypted into a private scratch copy that is deleted before this returns
+     * (see MainActivity: leftovers are also swept at start); the bitmap lives in memory only. Returns null with [error] set if the PDF cannot be opened.
+     */
+    fun renderOriginal(doc: VaultDoc, page: Int, dpi: Float = 110f): Result<android.graphics.Bitmap> = runCatching {
+        require(doc.name.lowercase().endsWith(".pdf")) { "মূল পৃষ্ঠার ছবি শুধু PDF-এর জন্য" }
+        val tmp = File(context.cacheDir, "pdf-view-${doc.id}")
+        try {
+            PdfExtractor.init(context)
+            val opened = vault.open(doc.id).use { PdfExtractor.open(it, tmp) } as? PdfExtractor.OpenResult.Ok ?: error("PDF খোলা যায়নি")
+            opened.extractor.use { it.renderPageColor(page, dpi) }
+        } finally { tmp.deleteRecursively() }
+    }
+
     /** A picture has no text layer: it becomes a 1-page document whose page waits for OCR (never guessed). */
     private fun extractImage(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
         val job = JobState(jobId(doc, Kind.Extract), doc.id, Kind.Extract.key, 1)

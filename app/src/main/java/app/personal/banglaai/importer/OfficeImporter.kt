@@ -101,22 +101,95 @@ object OfficeImporter {
 
     private fun docx(z: Map<String, ByteArray>): List<Section> {
         val body = z["word/document.xml"] ?: throw ImportRefused("এটি বৈধ DOCX নয় (document.xml নেই)")
-        val text = textOf(body, "w:t", "w:p", "w:br")
-        return if (text.isBlank()) emptyList() else Chunking.byParagraphs(text, "DOCX").mapIndexed { i, t -> Section("অংশ ${i + 1}", t) }
+        val text = wordText(body)
+        // The body keeps its structure: headings are marked "# …", table rows are "ঘর | ঘর", a footnote call is "[পাদটীকা N]"; the footnote texts follow as their own section.
+        val out = ArrayList<Section>(); var heading = ""
+        if (text.isNotBlank()) {
+            for ((i, t) in Chunking.byParagraphs(text, "DOCX").withIndex()) {
+                t.lines().lastOrNull { it.startsWith("# ") }?.let { heading = it.removePrefix("# ").take(80) }
+                out += Section("অংশ ${i + 1}" + (if (heading.isNotEmpty()) " · $heading" else ""), t)
+            }
+        }
+        z["word/footnotes.xml"]?.let { wordNotes(it) }?.takeIf { it.isNotBlank() }?.let { out += Section("পাদটীকা", it) }
+        z["word/endnotes.xml"]?.let { wordNotes(it) }?.takeIf { it.isNotBlank() }?.let { out += Section("শেষ-টীকা", it) }
+        return out
     }
+
+    /** Walks WordprocessingML once: paragraphs, heading styles, tables (cells joined by " | "), line breaks, tabs and footnote calls. Never evaluates fields or follows links. */
+    private fun wordText(bytes: ByteArray, noteMode: Boolean = false): String {
+        val p = try { parser(bytes) } catch (e: Exception) { throw ImportRefused("XML পড়া যায়নি") }
+        val out = StringBuilder(); val para = StringBuilder(); var heading = false; var inT = false; var tbl = 0; var cellOpen = false; var rowHasCell = false; var skipNote = false
+        fun endPara() {
+            val t = para.toString().trim(); para.clear()
+            if (t.isNotEmpty() && !skipNote) { if (tbl > 0) { out.append(t).append(' ') } else { out.append(if (heading) "# $t" else t).append('\n') } }
+            heading = false
+        }
+        try {
+            var ev = p.eventType
+            while (ev != XmlPullParser.END_DOCUMENT) {
+                when (ev) {
+                    XmlPullParser.START_TAG -> when (p.name) {
+                        "w:t" -> inT = true
+                        "w:br" -> para.append('\n'); "w:tab" -> para.append('\t')
+                        "w:pStyle" -> { val v = p.getAttributeValue(null, "w:val") ?: ""; if (v.startsWith("Heading", true) || v.equals("Title", true)) heading = true }
+                        "w:footnoteReference", "w:endnoteReference" -> para.append("[${if (p.name == "w:footnoteReference") "পাদটীকা" else "শেষ-টীকা"} ${p.getAttributeValue(null, "w:id")}]")
+                        "w:tbl" -> { tbl++; if (tbl == 1) out.append("[টেবিল]\n") }
+                        "w:tr" -> rowHasCell = false
+                        "w:tc" -> { if (tbl > 0) { if (rowHasCell) out.append("| "); rowHasCell = true; cellOpen = true } }
+                        "w:footnote", "w:endnote" -> if (noteMode) { val id = p.getAttributeValue(null, "w:id") ?: ""; skipNote = id.toIntOrNull()?.let { it <= 0 } != false; if (!skipNote) out.append("[$id] ") }   // id 0/-1 are Word's separator notes
+                    }
+                    XmlPullParser.TEXT -> if (inT) para.append(p.text)
+                    XmlPullParser.END_TAG -> when (p.name) {
+                        "w:t" -> inT = false
+                        "w:p" -> { endPara() }
+                        "w:tc" -> cellOpen = false
+                        "w:tr" -> if (tbl > 0) out.append('\n')
+                        "w:tbl" -> { tbl--; if (tbl == 0) out.append("[টেবিল শেষ]\n") }
+                        "w:footnote", "w:endnote" -> if (noteMode) { if (!skipNote) out.append('\n'); skipNote = false }
+                    }
+                }
+                ev = p.next()
+            }
+        } catch (e: Exception) { throw ImportRefused("XML নষ্ট: ${e.javaClass.simpleName}") }
+        return out.toString().replace(Regex("[ \\t]+\\n"), "\n").replace(Regex("\n{3,}"), "\n\n").trim()
+    }
+
+    private fun wordNotes(bytes: ByteArray) = wordText(bytes, noteMode = true)
 
     private fun pptx(z: Map<String, ByteArray>): List<Section> {
         val slides = z.keys.filter { Regex("ppt/slides/slide\\d+\\.xml").matches(it) }.sortedBy { Regex("\\d+").find(it.substringAfterLast('/'))!!.value.toInt() }
         if (slides.isEmpty()) throw ImportRefused("এটি বৈধ PPTX নয় (স্লাইড নেই)")
-        return slides.mapIndexed { i, n -> Section("স্লাইড ${i + 1}", textOf(z.getValue(n), "a:t", "a:p")) }
+        return slides.mapIndexed { i, n ->
+            val body = textOf(z.getValue(n), "a:t", "a:p")
+            // speaker notes are linked from the slide's own relationship file; they stay visibly separate from the slide text
+            val rels = z["ppt/slides/_rels/${n.substringAfterLast('/')}.rels"]?.toString(Charsets.UTF_8)
+            val notesPath = rels?.let { Regex("Target=\"\\.\\./notesSlides/([^\"]+)\"").find(it)?.groupValues?.get(1) }?.let { "ppt/notesSlides/$it" }
+            val notes = notesPath?.let { z[it] }?.let { textOf(it, "a:t", "a:p") }?.lines()?.filter { l -> l.isNotBlank() && l.trim().toIntOrNull() == null }?.joinToString("\n").orEmpty()
+            Section("স্লাইড ${i + 1}", if (notes.isBlank()) body else "$body\n\n[বক্তার নোট]\n$notes")
+        }
     }
 
     private fun xlsx(z: Map<String, ByteArray>): List<Section> {
         val shared = z["xl/sharedStrings.xml"]?.let { sharedStrings(it) } ?: emptyList()
         val sheets = z.keys.filter { Regex("xl/worksheets/sheet\\d+\\.xml").matches(it) }.sortedBy { Regex("\\d+").find(it.substringAfterLast('/'))!!.value.toInt() }
         if (sheets.isEmpty()) throw ImportRefused("এটি বৈধ XLSX নয় (শিট নেই)")
-        return sheets.mapIndexed { i, n -> Section("শিট ${i + 1}", sheetText(z.getValue(n), shared)) }
+        val names = sheetNames(z)
+        return sheets.mapIndexed { i, n -> Section("শিট ${i + 1}" + (names[n]?.let { " · $it" } ?: ""), sheetText(z.getValue(n), shared)) }
     }
+
+    /** Sheet tab names (workbook.xml + its relationships), keyed by the sheet part's path. Only names — nothing else of the workbook is read. */
+    private fun sheetNames(z: Map<String, ByteArray>): Map<String, String> = runCatching {
+        val wb = z["xl/workbook.xml"]?.toString(Charsets.UTF_8) ?: return emptyMap()
+        val rels = z["xl/_rels/workbook.xml.rels"]?.toString(Charsets.UTF_8) ?: return emptyMap()
+        val target = Regex("<Relationship\\b[^>]*>").findAll(rels).associate { m ->
+            (Regex("Id=\"([^\"]+)\"").find(m.value)?.groupValues?.get(1) ?: "") to (Regex("Target=\"([^\"]+)\"").find(m.value)?.groupValues?.get(1) ?: "") }
+        Regex("<sheet\\b[^>]*>").findAll(wb).mapNotNull { m ->
+            val name = Regex("name=\"([^\"]+)\"").find(m.value)?.groupValues?.get(1)?.let { htmlToText(it) } ?: return@mapNotNull null
+            val rid = Regex("r:id=\"([^\"]+)\"").find(m.value)?.groupValues?.get(1) ?: return@mapNotNull null
+            val t = target[rid]?.removePrefix("/")?.let { if (it.startsWith("xl/")) it else "xl/$it" } ?: return@mapNotNull null
+            t to name
+        }.toMap()
+    }.getOrDefault(emptyMap())
 
     private fun sharedStrings(b: ByteArray): List<String> {
         val p = parser(b); val out = ArrayList<String>(); var cur: StringBuilder? = null; var inT = false
@@ -169,7 +242,9 @@ object OfficeImporter {
             val href = manifest[id] ?: continue
             val path = (if (dir.isEmpty()) href else "$dir/$href").substringBefore('#')
             val html = z[path]?.toString(Charsets.UTF_8) ?: continue
-            val text = htmlToText(html); if (text.isNotBlank()) out += Section("অধ্যায়-ফাইল ${i + 1}", text)
+            val text = htmlToText(html)
+            val title = Regex("(?is)<h[12]\\b[^>]*>(.*?)</h[12]>").find(html)?.groupValues?.get(1)?.let { htmlToText(it).replace('\n', ' ').take(80) }?.takeIf { it.isNotBlank() }
+            if (text.isNotBlank()) out += Section("অধ্যায়-ফাইল ${i + 1}" + (title?.let { " · $it" } ?: ""), text)
         }
         return out
     }

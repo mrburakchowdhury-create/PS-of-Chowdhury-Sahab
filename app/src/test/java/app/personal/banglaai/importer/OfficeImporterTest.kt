@@ -88,4 +88,36 @@ class OfficeImporterTest {
         val txt = r.getOrNull()?.joinToString { it.text } ?: ""
         assertFalse(txt.contains("root:"))   // never reads local files (either refused or left unresolved)
     }
+
+    @Test fun docxKeepsHeadingsTablesAndFootnotesInTheirPlaces() {
+        val doc = "<w:document $W><w:body>" +
+            "<w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr><w:r><w:t>অধ্যায় এক</w:t></w:r></w:p>" +
+            "<w:p><w:r><w:t>লেখা</w:t></w:r><w:r><w:footnoteReference w:id=\"2\"/></w:r></w:p>" +
+            "<w:tbl><w:tr><w:tc><w:p><w:r><w:t>নাম</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>বয়স</w:t></w:r></w:p></w:tc></w:tr><w:tr><w:tc><w:p><w:r><w:t>রহিম</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>৩০</w:t></w:r></w:p></w:tc></w:tr></w:tbl>" +
+            "</w:body></w:document>"
+        val notes = "<w:footnotes $W><w:footnote w:id=\"0\"><w:p><w:r><w:t>sep</w:t></w:r></w:p></w:footnote><w:footnote w:id=\"2\"><w:p><w:r><w:t>টীকার লেখা</w:t></w:r></w:p></w:footnote></w:footnotes>"
+        val s = run("a.docx", zip("word/document.xml" to doc, "word/footnotes.xml" to notes))
+        assertTrue(s[0].title, s[0].title.contains("অধ্যায় এক")); val t = s[0].text
+        assertTrue(t, t.contains("# অধ্যায় এক")); assertTrue(t.contains("লেখা[পাদটীকা 2]"))
+        assertTrue(t, t.contains("[টেবিল]\nনাম | বয়স\nরহিম | ৩০\n[টেবিল শেষ]"))
+        val fn = s.single { it.title == "পাদটীকা" }.text; assertEquals("[2] টীকার লেখা", fn); assertFalse(fn.contains("sep"))
+    }
+
+    @Test fun pptxSpeakerNotesStaySeparateAndXlsxSheetNamesAreKept() {
+        val slide = "<p:sld xmlns:a=\"a\" xmlns:p=\"p\"><a:p><a:r><a:t>শিরোনাম</a:t></a:r></a:p></p:sld>"
+        val notes = "<p:notes xmlns:a=\"a\" xmlns:p=\"p\"><a:p><a:r><a:t>বলার কথা</a:t></a:r></a:p><a:p><a:fld><a:t>1</a:t></a:fld></a:p></p:notes>"
+        val rels = "<Relationships><Relationship Id=\"r1\" Target=\"../notesSlides/notesSlide1.xml\"/></Relationships>"
+        val p = run("a.pptx", zip("ppt/slides/slide1.xml" to slide, "ppt/slides/_rels/slide1.xml.rels" to rels, "ppt/notesSlides/notesSlide1.xml" to notes))
+        assertEquals("শিরোনাম\n\n[বক্তার নোট]\nবলার কথা", p[0].text)
+        val wb = "<workbook><sheets><sheet name=\"বিক্রি\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>"
+        val wr = "<Relationships><Relationship Id=\"rId1\" Target=\"worksheets/sheet1.xml\"/></Relationships>"
+        val x = run("a.xlsx", zip("xl/workbook.xml" to wb, "xl/_rels/workbook.xml.rels" to wr, "xl/worksheets/sheet1.xml" to "<worksheet><sheetData><row><c><v>1</v></c></row></sheetData></worksheet>"))
+        assertEquals("শিট ১ · বিক্রি".replace("১", "1"), x[0].title)
+    }
+
+    @Test fun epubSectionTitleComesFromTheChapterHeading() {
+        val opf = "<package><manifest><item id=\"a\" href=\"a.xhtml\"/></manifest><spine><itemref idref=\"a\"/></spine></package>"
+        val s = run("a.epub", zip("META-INF/container.xml" to "<container><rootfiles><rootfile full-path=\"c.opf\"/></rootfiles></container>", "c.opf" to opf, "a.xhtml" to "<h2>Chapter <i>One</i></h2><p>x</p>"))
+        assertEquals("অধ্যায়-ফাইল 1 · Chapter One", s[0].title)
+    }
 }

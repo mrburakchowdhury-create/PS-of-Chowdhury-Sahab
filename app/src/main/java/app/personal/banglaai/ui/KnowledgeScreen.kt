@@ -97,7 +97,9 @@ private fun KCard(k: KItem, expanded: Boolean, toggle: () -> Unit, speak: () -> 
             Text(k.q, style = MaterialTheme.typography.titleSmall)
             if (expanded) {
                 SelectionContainer { Text(k.a) }
-                if (k.ref.isNotBlank()) Text(k.ref, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (k.sources.isEmpty()) Text("⚠ নির্দিষ্ট উৎস যাচাই করা হয়নি — এটি সাধারণ ব্যাখ্যা (${k.ref.removePrefix("সূত্র: ")})। গুরুত্বপূর্ণ সিদ্ধান্তের আগে নিজে যাচাই করুন।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                else k.sources.forEach { Text("উৎস: ${it.line()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                if (k.uncertainty.isNotBlank()) Text("অনিশ্চয়তা/সীমা: ${k.uncertainty}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
                 TextButton(onClick = speak) { Text("🔊 শুনুন") }
             }
         }

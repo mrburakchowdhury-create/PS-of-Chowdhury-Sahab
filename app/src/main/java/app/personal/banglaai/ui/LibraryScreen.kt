@@ -121,6 +121,10 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
         Library.bundled.forEach { b ->
             Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
                 Text("✅ ${b.title}", style = MaterialTheme.typography.titleSmall); Text("${b.author} · ${b.note}", style = MaterialTheme.typography.bodySmall)
+                val rec = app.personal.banglaai.library.BookManifest.of(b.id)
+                Text("সংস্করণ: ${rec.edition} · উৎস: ${rec.source}", style = MaterialTheme.typography.bodySmall)
+                Text("স্বত্ব-ভিত্তি: ${rec.licenseBasis}", style = MaterialTheme.typography.bodySmall)
+                Text("সীমা: ${rec.limitation}। মূল প্রকাশকের ফাইলের সঙ্গে শব্দে শব্দে মেলানো হয়নি। SHA-256: ${rec.sha256.take(16)}…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("অ্যাপের সঙ্গে দেওয়া; প্রস্তুত।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
             } }
         }

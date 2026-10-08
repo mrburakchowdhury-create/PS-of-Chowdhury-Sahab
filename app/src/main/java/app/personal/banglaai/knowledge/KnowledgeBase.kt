@@ -5,7 +5,13 @@ import app.personal.banglaai.ai.Bm25Index
 import org.json.JSONArray
 
 /** One question-and-answer card of the built-in "জ্ঞানভাণ্ডার" (read-only reference written for the owner's own research and book writing). */
-data class KItem(val id: String, val category: String, val topic: String, val q: String, val a: String, val tags: List<String>, val ref: String)
+data class KItem(val id: String, val category: String, val topic: String, val q: String, val a: String, val tags: List<String>, val ref: String,
+    val sources: List<KSource> = emptyList(), val uncertainty: String = "")
+
+/** One specific, opened-and-checked source for a card: where, what page, the page's own date (if it shows one) and when WE opened it. */
+data class KSource(val url: String, val publisher: String, val title: String, val pageDate: String?, val fetched: String) {
+    fun line() = "$publisher — $title" + (pageDate?.let { " (পৃষ্ঠার তারিখ: $it)" } ?: " (পৃষ্ঠায় তারিখ দেখানো নেই)") + " · দেখা হয়েছে $fetched · $url"
+}
 
 data class KCategory(val id: String, val label: String, val note: String)
 
@@ -32,7 +38,9 @@ object KnowledgeBase {
         return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             KItem("$category-${o.getString("id")}", category, o.getString("topic"), o.getString("q"), o.getString("a"),
-                o.optJSONArray("tags")?.let { t -> (0 until t.length()).map(t::getString) }.orEmpty(), o.optString("ref"))
+                o.optJSONArray("tags")?.let { t -> (0 until t.length()).map(t::getString) }.orEmpty(), o.optString("ref"),
+                o.optJSONArray("sources")?.let { a -> (0 until a.length()).map { j -> a.getJSONObject(j).let { x -> KSource(x.getString("url"), x.getString("publisher"), x.getString("title"), x.optString("pageDate").takeIf { it.isNotBlank() && it != "null" }, x.getString("fetched")) } } }.orEmpty(),
+                o.optString("uncertainty"))
         }
     }
 
@@ -51,5 +59,5 @@ object KnowledgeBase {
     }
 
     /** Plain-text export of cards (for saving into the owner's own notes/book draft). */
-    fun exportText(items: List<KItem>): String = items.joinToString("\n\n") { "প্রশ্ন: ${it.q}\n${it.a}" + (if (it.ref.isNotBlank()) "\n[${it.ref}]" else "") }
+    fun exportText(items: List<KItem>): String = items.joinToString("\n\n") { "প্রশ্ন: ${it.q}\n${it.a}" + (if (it.sources.isNotEmpty()) it.sources.joinToString("") { s -> "\n[উৎস: ${s.line()}]" } else "\n[নির্দিষ্ট উৎস যাচাই হয়নি — ${it.ref}]") + (if (it.uncertainty.isNotBlank()) "\n[অনিশ্চয়তা: ${it.uncertainty}]" else "") }
 }

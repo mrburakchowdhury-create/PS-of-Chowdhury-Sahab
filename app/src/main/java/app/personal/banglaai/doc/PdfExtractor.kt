@@ -48,6 +48,12 @@ class PdfExtractor private constructor(private val doc: PDDocument) : AutoClosea
         return com.tom_roush.pdfbox.rendering.PDFRenderer(doc).renderImageWithDPI(n - 1, dpi, com.tom_roush.pdfbox.rendering.ImageType.GRAY)
     }
 
+    /** Colour render for the on-screen page viewer (OCR uses the grey one above). */
+    fun renderPageColor(n: Int, dpi: Float): android.graphics.Bitmap {
+        require(n in 1..pageCount)
+        return com.tom_roush.pdfbox.rendering.PDFRenderer(doc).renderImageWithDPI(n - 1, dpi, com.tom_roush.pdfbox.rendering.ImageType.RGB)
+    }
+
     override fun close() = doc.close()
 
     sealed interface OpenResult {
