@@ -9,6 +9,8 @@ import app.personal.banglaai.doc.DocWorkflow
 import app.personal.banglaai.storage.VaultDoc
 import app.personal.banglaai.userdata.GlossaryEntry
 import app.personal.banglaai.userdata.Mark
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Personal terminology list used by every translation: only entries whose source word appears in the text being translated are sent to the model. */
 @Composable
@@ -16,15 +18,22 @@ fun GlossarySection(wf: DocWorkflow) {
     var items by remember { mutableStateOf<List<GlossaryEntry>>(emptyList()) }
     var src by remember { mutableStateOf("") }; var bn by remember { mutableStateOf("") }; var err by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { items = runCatching { wf.glossary.all() }.getOrDefault(emptyList()) }
-    Text("পরিভাষা (glossary) — অনুবাদে একই শব্দের একই বাংলা", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+    Text("Glossary — অনুবাদে একই শব্দের একই বাংলা", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+    val dictCtx = androidx.compose.ui.platform.LocalContext.current
+    val dict by produceState<app.personal.banglaai.knowledge.Dictionary.Data?>(null) { value = withContext(Dispatchers.IO) { runCatching { app.personal.banglaai.knowledge.Dictionary.get(dictCtx) }.getOrNull() } }
+    val suggestions = remember(src, dict) { if (src.isBlank()) emptyList() else dict?.bengaliFor(src).orEmpty().take(6) }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedTextField(src, { src = it }, label = { Text("মূল শব্দ") }, singleLine = true, modifier = Modifier.weight(1f))
         OutlinedTextField(bn, { bn = it }, label = { Text("বাংলা") }, singleLine = true, modifier = Modifier.weight(1f))
     }
-    Button(onClick = { runCatching { wf.glossary.add(src, bn) }.onSuccess { src = ""; bn = ""; err = null; items = wf.glossary.all() }.onFailure { err = it.message } }) { Text("যোগ করুন") }
+    if (suggestions.isNotEmpty()) {
+        Text("Tap a suggestion to fill the Bengali:", style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { suggestions.forEach { sgt -> AssistChip(onClick = { bn = sgt }, label = { Text(sgt) }) } }
+    }
+    Button(onClick = { runCatching { wf.glossary.add(src, bn) }.onSuccess { src = ""; bn = ""; err = null; items = wf.glossary.all() }.onFailure { err = it.message } }) { Text("Add") }
     err?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     items.forEach { e -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        Text("${e.source} → ${e.bengali}", Modifier.weight(1f)); TextButton(onClick = { wf.glossary.remove(e.source); items = wf.glossary.all() }) { Text("মুছুন") } } }
+        Text("${e.source} → ${e.bengali}", Modifier.weight(1f)); TextButton(onClick = { wf.glossary.remove(e.source); items = wf.glossary.all() }) { Text("Delete") } } }
 }
 
 /** Bookmarks and personal notes for the page chosen in the viewer. Notes are yours, kept separate from the document text. */
@@ -45,5 +54,5 @@ fun MarksSection(doc: VaultDoc, wf: DocWorkflow, page: Int?, onOpenPage: (Int) -
     items.forEach { m -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         TextButton(onClick = { onOpenPage(m.page) }) { Text("পৃষ্ঠা ${m.page}") }
         Text(if (m.kind == Mark.Kind.BOOKMARK) "🔖" else "📝 ${m.text}", Modifier.weight(1f))
-        TextButton(onClick = { wf.marks.delete(m.id); items = wf.marks.forDoc(doc.id) }) { Text("মুছুন") } } }
+        TextButton(onClick = { wf.marks.delete(m.id); items = wf.marks.forDoc(doc.id) }) { Text("Delete") } } }
 }

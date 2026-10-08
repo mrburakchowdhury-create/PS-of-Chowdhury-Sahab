@@ -49,16 +49,33 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     fun plan() = ReadingPlan({ p -> (if (useTranslation) wf.translations.get(doc.id, p) else wf.effective(doc.id, p))?.text }, endInput.toIntOrNull()?.coerceIn(1, totalPages) ?: totalPages)
-    fun play(page: Int, seg: Int = 0) {
+    var translating by remember { mutableStateOf<Int?>(null) }
+    val playRef = remember { arrayOfNulls<(Int) -> Unit>(1) }
+    /** An English (or other-language) page has no Bengali yet: translate JUST this page with the local model, keep it as the page's translation, then read it. */
+    fun translateThenPlay(page: Int) {
+        val model = wf.usableModel() ?: run { voiceMsg = "এই পৃষ্ঠার বাংলা অনুবাদ নেই, আর AI model বসানো নেই। Home → AI Model থেকে model বসান, তারপর আবার চাপুন।"; return }
+        val src = wf.effective(doc.id, page)
+        if (src == null || src.text.isBlank()) { voiceMsg = "পৃষ্ঠা $page-এ বের-করা লেখা নেই (স্ক্যান হলে আগে OCR চালান)।"; return }
+        translating = page; voiceMsg = null
+        scope.launch {
+            runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { LocalLlm(model, java.io.File(ctx.cacheDir, "llm")).use { it.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(src.text, wf.glossary.relevantTo(src.text).map { g -> g.source to g.bengali })) } } }
+                .onSuccess { out -> wf.translations.put(doc.id, app.personal.banglaai.doc.PageText(page, out.trim(), src.printedLabel)); translating = null; useTranslation = true; playRef[0]?.invoke(page) }
+                .onFailure { translating = null; voiceMsg = "অনুবাদ ব্যর্থ: ${it.message ?: it.javaClass.simpleName}" }
+        }
+    }
+    fun playNowImpl(page: Int, seg: Int) {
         val pl = plan(); val start = if (seg == 0) pl.startAt(page) else ReadingPosition(page, seg)
         val sample = start?.let { pl.segmentAt(it)?.text }
         if (!useTranslation && sample != null && !app.personal.banglaai.speech.SpeechText.isMostlyBengali(sample)) { voiceMsg = "এই মূল লেখা বাংলা নয় — বাংলা কণ্ঠ একে ঠিকমতো পড়তে পারে না। আগে 'বাংলায় অনুবাদ করুন' চালিয়ে ‘বাংলা অনুবাদ’ বেছে পড়ুন।"; return }
-        if (start == null) voiceMsg = if (useTranslation) "এই পৃষ্ঠা থেকে পড়ার মতো বাংলা অনুবাদ এখনো নেই। আগে ওপরে 'বাংলায় অনুবাদ করুন' চালান (মডেল লাগবে), অথবা লেখাটি বাংলা হলে নিচে 'বের করা মূল লেখা' বেছে নিন।" else "এই পৃষ্ঠা থেকে পড়ার মতো বের-করা লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR চালান)।" else {
+        if (start == null && useTranslation && seg == 0 && wf.effective(doc.id, page)?.text?.isNotBlank() == true) { translateThenPlay(page); return }
+        if (start == null) voiceMsg = if (useTranslation) "এই পৃষ্ঠা থেকে পড়ার মতো লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR চালান)।" else "এই পৃষ্ঠা থেকে পড়ার মতো বের-করা লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR চালান)।" else {
             voiceMsg = null; ReadAloudController.play(ctx, pl, start)
             if (android.os.Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)   // only affects whether the controls are visible
             ReadAloudService.start(ctx)
         }
     }
+    fun play(page: Int, seg: Int = 0) = playNowImpl(page, seg)
+    playRef[0] = { p -> playNowImpl(p, 0) }
     fun explainNow() {
         val seg = ReadAloudController.current?.takeIf { !ReadAloudController.adHoc }?.text ?: plan().segments(pageInput.toIntOrNull() ?: 1).firstOrNull()?.text
         if (seg == null) { voiceMsg = "বোঝানোর মতো কোনো অংশ নেই — আগে পড়া শুরু করুন বা পৃষ্ঠা বাছুন"; return }
@@ -108,8 +125,8 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
         Text("সহজ বাংলায় ব্যাখ্যা (AI; 'সাধারণ ব্যাখ্যা' অংশ ডকুমেন্টের বক্তব্য নয়)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         androidx.compose.foundation.text.selection.SelectionContainer { Text(e) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { ReadAloudController.speakExplanation(ctx, e) }) { Text("🔊 আবার শুনুন") }
-            OutlinedButton(onClick = { explanation = null; reader.stop() }) { Text("বন্ধ") }
+            OutlinedButton(onClick = { ReadAloudController.speakExplanation(ctx, e) }) { Text("🔊 Listen again") }
+            OutlinedButton(onClick = { explanation = null; reader.stop() }) { Text("Close") }
         }
     }
     HorizontalDivider()
@@ -125,15 +142,16 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
                 FilterChip(selected = useTranslation, onClick = { useTranslation = true }, label = { Text("বাংলা অনুবাদ") })
                 FilterChip(selected = !useTranslation, onClick = { useTranslation = false }, label = { Text("বের করা মূল লেখা") })
             }
+            translating?.let { Text("⏳ পৃষ্ঠা $it বাংলায় অনুবাদ হচ্ছে… (মডেল প্রথমবার লোড হয়; কয়েক মিনিট লাগতে পারে — শেষ হলে নিজে পড়া শুরু হবে)", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall) }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 OutlinedTextField(value = pageInput, onValueChange = { pageInput = it.filter(Char::isDigit).take(5) }, label = { Text("পৃষ্ঠা") }, singleLine = true, modifier = Modifier.width(110.dp))
                 OutlinedTextField(value = endInput, onValueChange = { endInput = it.filter(Char::isDigit).take(5) }, label = { Text("পর্যন্ত") }, singleLine = true, modifier = Modifier.width(110.dp))
-                Button(onClick = { play(pageInput.toIntOrNull() ?: 1) }) { Text("▶ পড়ুন") }
+                Button(enabled = translating == null, onClick = { play(pageInput.toIntOrNull() ?: 1) }) { Text("▶ Read") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { reader.previous() }) { Text("⏮") }
-                OutlinedButton(enabled = state == TtsReader.State.Playing, onClick = { reader.pause() }) { Text("⏸ থামান") }
-                OutlinedButton(enabled = state == TtsReader.State.Paused, onClick = { reader.resume() }) { Text("▶ চালু") }
+                OutlinedButton(enabled = state == TtsReader.State.Playing, onClick = { reader.pause() }) { Text("⏸ Pause") }
+                OutlinedButton(enabled = state == TtsReader.State.Paused, onClick = { reader.resume() }) { Text("▶ Resume") }
                 OutlinedButton(onClick = { reader.next() }) { Text("⏭") }
                 OutlinedButton(onClick = { reader.stop() }) { Text("⏹") }
             }
@@ -157,6 +175,6 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     cmd?.let { c ->
         val label = describe(c)
         Text("বোঝা গেছে: $label", style = MaterialTheme.typography.bodySmall)
-        if (c !is VoiceCommand.Ambiguous && c !is VoiceCommand.Unknown && c !is VoiceCommand.OpenFile) Button(onClick = { run(c) }) { Text("নিশ্চিত — করুন") }
+        if (c !is VoiceCommand.Ambiguous && c !is VoiceCommand.Unknown && c !is VoiceCommand.OpenFile) Button(onClick = { run(c) }) { Text("Confirm — করুন") }
     }
 }

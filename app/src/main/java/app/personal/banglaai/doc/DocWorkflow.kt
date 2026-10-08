@@ -132,6 +132,16 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         } finally { tmp.deleteRecursively() }
     }
 
+    /**
+     * Stores ready-made pages (a bundled book split into passages) as if they had been extracted from [doc]: per-page text with a printed label (the chapter),
+     * a chapter list and a finished extraction job — so reading, questions, translation, marks and export work on it exactly like on any file.
+     */
+    fun installPages(doc: VaultDoc, pages: List<PageText>, chapters: List<Chapter>) {
+        val job = JobState(jobId(doc, Kind.Extract), doc.id, Kind.Extract.key, pages.size)
+        pages.forEachIndexed { i, p -> texts.put(doc.id, p.copy(page = i + 1)); job.mark(i + 1, app.personal.banglaai.jobs.PageStatus.DONE) }
+        saveChapters(doc, chapters); job.status = JobStatus.DONE; jobs.save(job)
+    }
+
     /** A picture has no text layer: it becomes a 1-page document whose page waits for OCR (never guessed). */
     private fun extractImage(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
         val job = JobState(jobId(doc, Kind.Extract), doc.id, Kind.Extract.key, 1)

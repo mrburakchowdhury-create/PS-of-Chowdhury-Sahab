@@ -55,7 +55,7 @@ fun VocabPanel(wf: DocWorkflow, cacheDir: File) {
     if (items.isEmpty()) Text("এখনো কোনো শব্দ রাখা হয়নি। ডকুমেন্টে 'শব্দ/বাক্যের অর্থ' থেকে রাখুন।", style = MaterialTheme.typography.bodySmall)
     items.forEach { e -> Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Text("${e.term} — ${e.meaning.lines().firstOrNull { it.isNotBlank() }.orEmpty().take(70)}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-        TextButton(onClick = { wf.vocab.remove(e.term, e.docId); items = wf.vocab.all() }) { Text("মুছুন") } } }
+        TextButton(onClick = { wf.vocab.remove(e.term, e.docId); items = wf.vocab.all() }) { Text("Delete") } } }
     Button(enabled = items.isNotEmpty() && !busy, onClick = {
         val model = wf.usableModel() ?: run { err = "কোনো AI মডেল বসানো নেই"; return@Button }
         busy = true; err = null; out = null

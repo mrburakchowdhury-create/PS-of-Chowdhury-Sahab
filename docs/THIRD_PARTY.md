@@ -17,3 +17,8 @@
 **এড়ানো হয়েছে:** MuPDF (AGPL), Gemma 3n (HF-এ gated), Meta MMS-TTS বাংলা (`facebook/mms-tts-ben`: HF API-তে যাচাইকৃত লাইসেন্স `cc-by-nc-4.0`, অর্থাৎ অবাণিজ্যিক-শর্তযুক্ত; ডিফল্ট করা হয়নি — ব্যক্তিগত ব্যবহারে চলবে কি না আপনি সিদ্ধান্ত নিন)।
 
 **0.3.0-এ যোগ/পরিবর্তন:** Tesseract4Android এখন source থেকে rebuild করা 4.9.0 (`third_party/tesseract4android/`, Apache-2.0, 16 KB-এর জন্য NDK r29 + linker flags); androidx `graphics-path`-এর JNI .so AOSP source থেকে rebuild (`third_party/graphics-path/`, Apache-2.0); tessdata_fast ফাইল `assets/tessdata/` (Apache-2.0, `LICENSE.txt` সহ, upstream `main`-এর সঙ্গে SHA-256 মিলিয়ে দেখা)।
+
+## Dictionary data (app/src/main/assets/dict/dictionary.json)
+- **Wiktionary** entries extracted by kaikki.org (https://kaikki.org, Bengali and English editions), licence **CC BY-SA 4.0 / GFDL**; attribution is shown on the Dictionary screen. The data was converted by `tools/build_dictionary.py` (English→Bengali by inverting the English glosses of Bengali entries, plus the ~1000 English entries that carry Bengali translations). Share-alike applies to this data file only.
+- **tools/core_en_bn.tsv**: ~650 hand-picked first meanings for the commonest words of the bundled books, written for this app (AI-assisted, may contain errors; marked ★ on screen).
+- The GPL-3 "BengaliDictionary" by MinhasKamal was deliberately NOT used (licence and provenance).

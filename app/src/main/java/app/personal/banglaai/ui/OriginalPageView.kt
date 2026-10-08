@@ -44,7 +44,7 @@ fun OriginalPageView(doc: VaultDoc, wf: DocWorkflow, page: Int) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { rot = (rot + 90f) % 360f }) { Text("⟳ ঘোরান") }
             OutlinedButton(onClick = { scale = 1f; off = androidx.compose.ui.geometry.Offset.Zero; rot = 0f }) { Text("রিসেট") }
-            OutlinedButton(onClick = { shown = false }) { Text("বন্ধ") }
+            OutlinedButton(onClick = { shown = false }) { Text("Close") }
         }
     }
 }

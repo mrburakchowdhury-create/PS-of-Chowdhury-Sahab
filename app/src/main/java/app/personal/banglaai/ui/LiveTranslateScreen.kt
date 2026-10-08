@@ -42,7 +42,7 @@ private data class Line(val original: String, var translated: String)
  * stop button, or when the app leaves the screen. Nothing is recorded or sent anywhere. Status: device-test pending (recogniser language packs, speed).
  */
 @Composable
-fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
+fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onGoModel: () -> Unit = {}, onBack: () -> Unit) {
     val ctx = LocalContext.current; val scope = rememberCoroutineScope()
     var lang by remember { mutableStateOf(LiveLang.EN) }
     var toBengali by remember { mutableStateOf(true) }
@@ -51,6 +51,10 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
     var note by remember { mutableStateOf<String?>(null) }
     var typed by remember { mutableStateOf("") }
     var level by remember { mutableFloatStateOf(0f) }
+    var voiceErr by remember { mutableStateOf<String?>(null) }
+    var partial by remember { mutableStateOf("") }
+    var stage by remember { mutableStateOf("") }
+    var checkTick by remember { mutableIntStateOf(0) }
     val lines = remember { mutableStateListOf<Line>() }
     val voice = remember { VoiceInput(ctx) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
@@ -66,7 +70,7 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
 
     fun translate(text: String) {
         val my = ++gen; status = "অনুবাদ হচ্ছে…"
-        val model = wf.usableModel() ?: run { stopAll("কোনো AI মডেল বসানো নেই — হোমে 'AI মডেল' থেকে বসান।"); return }
+        val model = wf.usableModel() ?: run { stopAll("AI model নেই — উপরের লাল বাক্সে ‘Open AI Model’ চাপুন।"); return }
         lines += Line(text, ""); val idx = lines.lastIndex
         scope.launch {
             val r = runCatching { withContext(Dispatchers.IO) {
@@ -85,25 +89,28 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
 
     fun listenNext() {
         if (!running) return
-        status = "🎤 শুনছি (${if (toBengali) lang.label else "বাংলা"})…"
+        status = "🎤 শুনছি (${if (toBengali) lang.label else "বাংলা"})…"; voiceErr = null; partial = ""; stage = "starting"
         scope.launch {
             delay(350)
             if (!running) return@launch
-            voice.listen({ t -> level = 0f; if (running) { silences = 0; translate(t) } }, { e ->
-                level = 0f
+            voice.listen({ t -> level = 0f; partial = ""; stage = ""; if (running) { silences = 0; translate(t) } }, { e ->
+                level = 0f; partial = ""; stage = ""
                 if (!running) return@listen
-                if (e == "কিছু শোনা যায়নি") { silences++; if (silences >= 4) stopAll("অনেকক্ষণ কথা শোনা যায়নি, তাই থেমেছে।") else listenNext() } else stopAll(e)
-            }, { level = it }, if (toBengali) lang.tag else "bn-BD")
+                if (e == VoiceInput.NOTHING_HEARD) { silences++; if (silences >= 4) stopAll("অনেকক্ষণ কথা শোনা যায়নি, তাই থেমেছে।") else listenNext() }
+                else { voiceErr = e; status = "🎤 শোনা যাচ্ছে না — নিচে দেখুন" }   // stays open: the owner taps "Speak again" or types
+            }, { level = it }, if (toBengali) lang.tag else "bn-BD", { partial = it }, { stage = it })
         }
     }
     nextRef[0] = { listenNext() }
 
     fun start() {
+        if (wf.usableModel() == null) { note = "AI model নেই — উপরের লাল বাক্সে ‘Open AI Model’ চাপুন।"; checkTick++; return }   // checked BEFORE the mic opens: speaking a sentence only to be told "no model" is the worst order
         ReadAloudController.stop(); note = null; silences = 0; running = true
         if (!voice.available()) note = "এই ফোনে অফলাইন ভয়েস চেনা নেই — কথা শোনা যাবে না; নিচের ঘরে লিখে অনুবাদ করতে পারেন।"
         listenNext()
     }
-    val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) start() else note = "মাইক্রোফোনের অনুমতি ছাড়া লাইভ অনুবাদ চলবে না।" }
+    val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> checkTick++; if (ok) start() else note = "মাইক্রোফোনের অনুমতি ছাড়া লাইভ অনুবাদ চলবে না — উপরের বাক্সে ‘Allow microphone’ চাপুন।" }
+    val hasModel = remember(checkTick, running) { wf.usableModel() != null }
 
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
@@ -117,9 +124,10 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { if (running) stopAll(null); onBack() }) { Text("← ফিরে যান") }
-            Text("লাইভ অনুবাদ", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            TextButton(onClick = { if (running) stopAll(null); onBack() }) { Text("← Back") }
+            Text("Live Translate", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
         }
+        if (!running) ReadinessPanel(wf, needModel = true, needMic = true, needHearing = true, needSpeaking = true, onGoModel = onGoModel, onChanged = { checkTick++ })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = toBengali, enabled = !running, onClick = { toBengali = true }, label = { Text("অন্য ভাষা → বাংলা") })
             FilterChip(selected = !toBengali, enabled = !running, onClick = { toBengali = false }, label = { Text("বাংলা → অন্য ভাষা") })
@@ -129,7 +137,9 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
         }
         Text(status, style = MaterialTheme.typography.titleMedium, color = SkyBlue)
         if (running && level > 0f) LinearProgressIndicator(progress = { level }, Modifier.fillMaxWidth())
+        if (partial.isNotBlank()) Text("শুনছি: $partial", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
         note?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        voiceErr?.let { e -> Text("⚠️ $e", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium); if (running) Button(onClick = { listenNext() }) { Text("🎤 Speak again") } }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (lines.isEmpty()) item { Text("বক্তার কথা এখানে মূল ভাষায় ও অনুবাদে পাশাপাশি আসবে। অনুবাদ AI-এর, ভুল হতে পারে; গুরুত্বপূর্ণ বিষয়ে মূল লেখা মিলিয়ে নিন।", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(lines) { l ->
@@ -139,11 +149,11 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
                 } }
             }
         }
-        if (!running) Button(modifier = Modifier.fillMaxWidth(), onClick = { micPerm.launch(Manifest.permission.RECORD_AUDIO) }) { Text("🎙️ লাইভ অনুবাদ শুরু") }
-        else Button(modifier = Modifier.fillMaxWidth(), onClick = { stopAll(null) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("⏹ থামান") }
+        if (!running) Button(enabled = hasModel, modifier = Modifier.fillMaxWidth(), onClick = { if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) start() else micPerm.launch(Manifest.permission.RECORD_AUDIO) }) { Text("🎙️ Start live translation") }
+        else Button(modifier = Modifier.fillMaxWidth(), onClick = { stopAll(null) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("⏹ Stop") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(typed, { typed = it }, label = { Text("মুখে না বলে লিখেও অনুবাদ করুন") }, modifier = Modifier.weight(1f), maxLines = 3)
-            Button(enabled = typed.isNotBlank(), onClick = { val t = typed; typed = ""; voice.stop(); if (!running) { running = true; typedOnly = true; silences = 0 }; translate(t) }) { Text("অনুবাদ") }
+            OutlinedTextField(typed, { typed = it }, label = { Text("Type instead of speaking") }, modifier = Modifier.weight(1f), maxLines = 3)
+            Button(enabled = typed.isNotBlank(), onClick = { val t = typed; typed = ""; voice.stop(); if (!running) { running = true; typedOnly = true; silences = 0 }; translate(t) }) { Text("Translate") }
         }
     }
 }

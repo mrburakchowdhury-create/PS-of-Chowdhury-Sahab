@@ -25,9 +25,10 @@ fun HomeVoice(docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit, o
     var cmd by remember { mutableStateOf<VoiceCommand?>(null) }
     var msg by remember { mutableStateOf<String?>(null) }
     var listening by remember { mutableStateOf(false) }
+    var stage by remember { mutableStateOf("") }
 
     fun interpret(text: String) {
-        val c = VoiceCommands.parse(text); cmd = c; msg = null
+        val c = VoiceCommands.withNamedDocument(text, VoiceCommands.parse(text), docs.map { it.name }) { app.personal.banglaai.library.BundledBooks.aliasesFor(it) }; cmd = c; msg = null
         // Not a file/reading command -> it is a question for the assistant (answered by the local model only).
         if (c is VoiceCommand.Unknown) { cmd = null; onAsk(text.trim()); return }
         if (VoiceCommands.safeWithoutConfirm(c)) { if (c == VoiceCommand.Stop) ReadAloudController.stop() else ReadAloudController.pause(); cmd = null }
@@ -35,25 +36,27 @@ fun HomeVoice(docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit, o
     fun listen() {
         ReadAloudController.pause()   // never listen while the app is speaking: it must not hear and obey its own voice
         listening = true; msg = null
-        voice.listen({ t -> listening = false; transcript = t; interpret(t) }, { e -> listening = false; msg = e })
+        stage = "starting"
+        voice.listen({ t -> listening = false; stage = ""; transcript = t; interpret(t) }, { e -> listening = false; stage = ""; msg = if (e == VoiceInput.NOTHING_HEARD) "কিছু শোনা যায়নি — আবার চেপে বলুন (বোতাম চাপার পর ‘শুনছি’ দেখা গেলে বলতে শুরু করুন)।" else e },
+            null, "bn-BD", { transcript = it }, { stage = it })
     }
     val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) listen() else msg = "মাইক্রোফোনের অনুমতি ছাড়া ভয়েস চলবে না। নিচের ঘরে লিখে নির্দেশ দিন।" }
 
     SectionTitle("ভয়েস নির্দেশ")
     Text("ফাইল-নির্দেশ (“ইতিহাস ফাইলটা খোলো এবং পনেরো নম্বর পৃষ্ঠা থেকে পড়া শুরু করো”) বা যেকোনো প্রশ্ন লিখুন/বলুন — প্রশ্ন হলে সহকারী স্থানীয় AI দিয়ে উত্তর দেবে।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        Button(enabled = !listening, onClick = { micPerm.launch(Manifest.permission.RECORD_AUDIO) }) { Text(if (listening) "🎤 শুনছি…" else "🎤 চেপে বলুন") }
-        if (listening) OutlinedButton(onClick = { voice.stop(); listening = false }) { Text("মাইক বন্ধ") }
+        Button(enabled = !listening, onClick = { micPerm.launch(Manifest.permission.RECORD_AUDIO) }) { Text(if (listening) (when (stage) { "hearing" -> "🎤 শুনছি…"; "processing" -> "⏳ বুঝছি…"; "retrying" -> "🎤 আবার চেষ্টা…"; "starting" -> "🎤 মাইক চালু হচ্ছে…"; else -> "🎤 বলুন…" }) else "🎤 Tap and speak") }
+        if (listening) OutlinedButton(onClick = { voice.stop(); listening = false }) { Text("Stop mic") }
     }
     OutlinedTextField(transcript, { transcript = it }, label = { Text("নির্দেশ (লিখেও দিতে পারেন / শোনা লেখা ঠিক করুন)") }, modifier = Modifier.fillMaxWidth())
-    Button(enabled = transcript.isNotBlank(), onClick = { interpret(transcript) }) { Text("পাঠান") }
+    Button(enabled = transcript.isNotBlank(), onClick = { interpret(transcript) }) { Text("Send") }
     msg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     cmd?.let { c ->
         Text("বোঝা গেছে: ${describe(c)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
         when (c) {
-            is VoiceCommand.OpenFile -> when (val r = FileMatcher.find(c.query, docs.map { it.name })) {
+            is VoiceCommand.OpenFile -> when (val r = FileMatcher.find(c.query, docs.map { it.name }) { app.personal.banglaai.library.BundledBooks.aliasesFor(it) }) {
                 FileMatcher.Result.None -> Text(if (docs.isEmpty()) "এখনো কোনো ফাইল যোগ করা নেই।" else "এই নামে কোনো ফাইল পাওয়া যায়নি।", color = MaterialTheme.colorScheme.error)
-                is FileMatcher.Result.One -> Button(onClick = { onOpen(docs.first { it.name == r.name }, c.then); cmd = null }) { Text("নিশ্চিত — “${r.name}” খুলুন") }
+                is FileMatcher.Result.One -> Button(onClick = { onOpen(docs.first { it.name == r.name }, c.then); cmd = null }) { Text("Confirm — open “${r.name}”") }
                 is FileMatcher.Result.Many -> { Text("একাধিক ফাইল মিলেছে — কোনটি?"); r.names.forEach { n -> OutlinedButton(onClick = { onOpen(docs.first { it.name == n }, c.then); cmd = null }, modifier = Modifier.fillMaxWidth()) { Text(n) } } }
             }
             is VoiceCommand.Ambiguous -> {}

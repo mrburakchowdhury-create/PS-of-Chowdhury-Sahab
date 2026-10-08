@@ -62,7 +62,7 @@ fun KnowledgeScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("← ফিরে যান") }; Text("জ্ঞানভাণ্ডার", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f)) }
+        Row(verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("← Back") }; Text("জ্ঞানভাণ্ডার", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f)) }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             FilterChip(selected = cat == null, onClick = { cat = null }, label = { Text("সব") })
             KnowledgeBase.categories.forEach { c -> FilterChip(selected = cat == c.id, onClick = { cat = c.id }, label = { Text(c.label) }) }
@@ -83,7 +83,7 @@ fun KnowledgeScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
                     OutlinedButton(enabled = items.isNotEmpty(), onClick = { saver.launch("জ্ঞানভাণ্ডার.txt") }) { Text("এই তালিকা TXT-এ রাখুন") }
                 }
                 err?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-                answer?.let { a -> SelectionContainer { Text(a) }; TextButton(onClick = { ReadAloudController.speakExplanation(ctx, a) }) { Text("🔊 শুনুন") } }
+                answer?.let { a -> SelectionContainer { Text(a) }; TextButton(onClick = { ReadAloudController.speakExplanation(ctx, a) }) { Text("🔊 Listen") } }
             }
         }
     }
@@ -100,7 +100,7 @@ private fun KCard(k: KItem, expanded: Boolean, toggle: () -> Unit, speak: () -> 
                 if (k.sources.isEmpty()) Text("⚠ নির্দিষ্ট উৎস যাচাই করা হয়নি — এটি সাধারণ ব্যাখ্যা (${k.ref.removePrefix("সূত্র: ")})। গুরুত্বপূর্ণ সিদ্ধান্তের আগে নিজে যাচাই করুন।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 else k.sources.forEach { Text("উৎস: ${it.line()}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 if (k.uncertainty.isNotBlank()) Text("অনিশ্চয়তা/সীমা: ${k.uncertainty}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
-                TextButton(onClick = speak) { Text("🔊 শুনুন") }
+                TextButton(onClick = speak) { Text("🔊 Listen") }
             }
         }
     }

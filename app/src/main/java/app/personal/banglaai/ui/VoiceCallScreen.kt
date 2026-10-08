@@ -46,7 +46,7 @@ import java.io.File
  * Status: logic unit-tested; speech recognition, offline Bengali voice and model speed are device-test pending.
  */
 @Composable
-fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> Unit) {
+fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onGoModel: () -> Unit = {}, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val store = remember { AvatarStore(ctx, vault) }
@@ -60,6 +60,10 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
     var note by remember { mutableStateOf<String?>(null) }
     var typed by remember { mutableStateOf("") }
     var speakerReady by remember { mutableStateOf<Boolean?>(null) }
+    var voiceErr by remember { mutableStateOf<String?>(null) }   // a speech-recogniser problem: shown big, the call stays open (typing and "Speak" retry still work)
+    var partial by remember { mutableStateOf("") }               // live text while the owner speaks, so they SEE the phone hears them
+    var stage by remember { mutableStateOf("") }
+    var checkTick by remember { mutableIntStateOf(0) }
 
     val voice = remember { VoiceInput(ctx) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
@@ -74,9 +78,12 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
             { docNames.map { it.name } },
             { n -> docNames.firstOrNull { it.name == n }?.let { d -> wf.job(d, DocWorkflow.Kind.Extract)?.total } ?: 0 },
             { n, pg -> docNames.firstOrNull { it.name == n }?.let { d -> (wf.translations.get(d.id, pg)?.text ?: wf.effective(d.id, pg)?.text?.takeIf { t -> app.personal.banglaai.speech.SpeechText.isMostlyBengali(t) }) } },
-            { n -> docNames.firstOrNull { it.name == n }?.let { d -> wf.chapters(d).map { it.title to it.page } }.orEmpty() })
+            { n -> docNames.firstOrNull { it.name == n }?.let { d -> wf.chapters(d).map { it.title to it.page } }.orEmpty() },
+            { n, pg -> docNames.firstOrNull { it.name == n }?.let { d -> wf.effective(d.id, pg)?.text } },
+            { n -> app.personal.banglaai.library.BundledBooks.aliasesFor(n) })
     }
     var reading by remember { mutableStateOf(false) }
+    val translatedOnce = remember { HashSet<Pair<String, Int>>() }   // a page is translated at most once per call (no endless retry)
     var rate by remember { mutableFloatStateOf(1f) }
     val idleRef = remember { arrayOfNulls<() -> Unit>(1) }
     val speakerRef = remember { arrayOfNulls<CallSpeaker>(1) }
@@ -137,31 +144,45 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
                 if (!speaker.isSpeaking) finishTurn()   // nothing queued (no voice / empty): go back to listening
             }
         }
-        when (val o = session.handle(app.personal.banglaai.speech.VoiceCommands.parse(text))) {
+        when (val o = session.handle(app.personal.banglaai.speech.VoiceCommands.withNamedDocument(text, app.personal.banglaai.speech.VoiceCommands.parse(text), docNames.map { it.name }) { app.personal.banglaai.library.BundledBooks.aliasesFor(it) })) {
             is CallReaderSession.Outcome.NotACommand -> generate(Prompts.CALL_SYSTEM, Prompts.callPrompt(history, text), text)
             is CallReaderSession.Outcome.Say -> say(o.text)
             CallReaderSession.Outcome.StartReading -> readStep()
             is CallReaderSession.Outcome.Explain -> generate(Prompts.EXPLAIN_SYSTEM, Prompts.explain(o.segment, o.pageContext), "(ব্যাখ্যা) ${o.segment.take(80)}")
+            is CallReaderSession.Outcome.NeedsTranslation -> {
+                val d = docNames.firstOrNull { it.name == o.doc }; val model = wf.usableModel(); val src = d?.let { wf.effective(it.id, o.page) }
+                if (d == null || src == null || model == null || !translatedOnce.add(o.doc to o.page)) say(if (model == null) "এই পৃষ্ঠার বাংলা অনুবাদ নেই, আর AI model বসানো নেই।" else "এই পৃষ্ঠা অনুবাদ করা যায়নি।")
+                else {
+                    answer = "পৃষ্ঠা ${o.page} বাংলায় অনুবাদ হচ্ছে… (প্রথমবার কয়েক মিনিট লাগতে পারে)"
+                    scope.launch {
+                        val r = runCatching { withContext(Dispatchers.IO) { LocalLlm(model, File(cacheDir, "llm")).use { it.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(src.text, wf.glossary.relevantTo(src.text).map { g -> g.source to g.bengali })) } } }
+                        if (my != turn) return@launch   // interrupted or ended meanwhile
+                        r.onSuccess { out -> wf.translations.put(d.id, app.personal.banglaai.doc.PageText(o.page, out.trim(), src.printedLabel)); think(text) }
+                            .onFailure { say("অনুবাদ ব্যর্থ হয়েছে।") }
+                    }
+                }
+            }
             is CallReaderSession.Outcome.Rate -> { rate = (rate + if (o.faster) 0.15f else -0.15f).coerceIn(0.5f, 2f); speaker.setRate(rate); say(if (o.faster) "ঠিক আছে, একটু দ্রুত বলছি।" else "ঠিক আছে, আস্তে বলছি।") }
         }
     }
 
     fun listenNext() {
         if (machine.phase != Phase.Listening) return
-        phase = Phase.Listening; level = 0f
+        phase = Phase.Listening; level = 0f; voiceErr = null; partial = ""; stage = "starting"
         scope.launch {
             delay(350)   // let the recognizer/audio route settle between turns
             if (machine.phase != Phase.Listening) return@launch
             runCatching { voice.listen({ t ->
-                level = 0f
+                level = 0f; partial = ""; stage = ""
                 if (machine.phase != Phase.Listening) return@listen
                 if (VoiceCallMachineHelper.interrupt(t)) { actRef[0]?.invoke(Action.Listen); return@listen }
                 actRef[0]?.invoke(machine.onHeard(t))
             }, { e ->
-                level = 0f
+                level = 0f; partial = ""; stage = ""
                 if (machine.phase != Phase.Listening) return@listen
-                if (e == "কিছু শোনা যায়নি") actRef[0]?.invoke(machine.onSilence()) else endCall(e)
-            }, { level = it }) }.onFailure { endCall("কথা শোনা চালু করা যায়নি (${it.javaClass.simpleName}) — ‘ফোন পরীক্ষা’ পর্দা দেখুন") }
+                if (e == VoiceInput.NOTHING_HEARD) actRef[0]?.invoke(machine.onSilence())
+                else voiceErr = e   // do NOT end the call: the owner can tap "Speak" again or type
+            }, { level = it }, "bn-BD", { partial = it }, { stage = it }) }.onFailure { voiceErr = "কথা শোনা চালু করা যায়নি (${it.javaClass.simpleName})" }
         }
     }
 
@@ -180,13 +201,15 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
     fun start() {
         ReadAloudController.stop()   // no background reading while the call is on
         note = null; heard = ""; answer = ""; history.clear()
-        if (wf.usableModel() == null) { note = "কোনো AI মডেল বসানো নেই। হোমে ফিরে 'মডেল ফাইল বসান' চাপুন।"; return }
-        if (!voice.available()) { note = "এই ফোনে অফলাইন (on-device) ভয়েস চেনা নেই, তাই কথা শোনা যাবে না; ইন্টারনেট-ভিত্তিক বিকল্পে যাওয়া হয় না। নিচের ঘরে লিখে কলের মতো চালাতে পারেন।" }
+        if (wf.usableModel() == null) { note = "AI model নেই — উপরের লাল বাক্সে ‘Open AI Model’ চাপুন।"; return }
+        if (!voice.available()) { voiceErr = "এই ফোনে অফলাইন (on-device) ভয়েস চেনা নেই, তাই কথা শোনা যাবে না; ইন্টারনেট-ভিত্তিক বিকল্পে যাওয়া হয় না। নিচের ঘরে লিখে কলের মতো চালাতে পারেন।" }
         runCatching { act(machine.start()) }.onFailure { endCall("কল শুরু করা যায়নি (${it.javaClass.simpleName})") }
     }
     val micPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) start() else note = "মাইক্রোফোনের অনুমতি ছাড়া ভয়েস কল চলবে না।"
+        checkTick++
+        if (ok) start() else note = "মাইক্রোফোনের অনুমতি ছাড়া ভয়েস কল চলবে না — উপরের বাক্সে ‘Allow microphone’ চাপুন।"
     }
+    val hasModel = remember(checkTick, phase) { wf.usableModel() != null }
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) { if (store.save(uri)) { photo = store.load(); note = null } else note = "ছবিটি পড়া যায়নি।" }
     }
@@ -203,31 +226,37 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
     val active = phase != Phase.Idle && phase != Phase.Ended
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { if (active) endCall(null); onBack() }) { Text("← ফিরে যান") }
-            Text("ভয়েস কল", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            TextButton(onClick = { if (active) endCall(null); onBack() }) { Text("← Back") }
+            Text("Voice Call", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
         }
+        if (!active) ReadinessPanel(wf, needModel = true, needMic = true, needHearing = true, needSpeaking = true, onGoModel = onGoModel, onChanged = { checkTick++ })
         AvatarOrb(photo?.asImageBitmap(), phase, level, wordTick,
             Modifier.fillMaxWidth(0.85f).clickable(enabled = phase == Phase.Speaking || phase == Phase.Thinking) { act(machine.onInterrupt()) })
         Text(when (phase) {
-            Phase.Idle -> "কল শুরু করুন"; Phase.Listening -> "🎤 শুনছি… বলুন"; Phase.Thinking -> "ভাবছি… (ছবিতে চাপলে থামে)"
+            Phase.Idle -> "Ready to call"; Phase.Listening -> when { voiceErr != null -> "🎤 শোনা যাচ্ছে না — নিচে দেখুন"; stage == "hearing" -> "🎤 শুনছি…"; stage == "processing" -> "⏳ বুঝছি…"; stage == "retrying" -> "🎤 আবার চেষ্টা করছি…"; stage == "starting" -> "🎤 মাইক চালু হচ্ছে…"; else -> "🎤 শুনছি… বলুন" }; Phase.Thinking -> "ভাবছি… (ছবিতে চাপলে থামে)"
             Phase.Speaking -> "🔊 বলছি… (ছবিতে চাপলে থামিয়ে আপনাকে শুনব)"; Phase.Ended -> "কল শেষ"
         }, style = MaterialTheme.typography.titleMedium, color = SkyBlue, textAlign = TextAlign.Center)
         if (active) Text("মাইক শুধু ‘শুনছি’ অবস্থায় চালু থাকে। এই অ্যাপ অডিও রেকর্ড বা সংরক্ষণ করে না।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-        if (heard.isNotBlank()) Text("আপনি: $heard", style = MaterialTheme.typography.bodyMedium)
+        if (partial.isNotBlank()) Text("আপনি (শুনছি): $partial", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+        else if (heard.isNotBlank()) Text("আপনি: $heard", style = MaterialTheme.typography.bodyMedium)
+        voiceErr?.let { e ->
+            Text("⚠️ $e", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            if (active && machine.phase == Phase.Listening) Button(onClick = { listenNext() }) { Text("🎤 Speak again") }
+        }
         if (answer.isNotBlank()) Text("সহকারী: $answer", style = MaterialTheme.typography.bodyMedium)
         if (speakerReady == false && active) Text("⚠️ ফোনে অফলাইন বাংলা কণ্ঠ নেই, তাই উত্তর শুধু লেখায় দেখানো হবে (ফোনের সেটিংস → Text-to-speech থেকে বাংলা ভয়েস নামান)।", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         note?.let { Text(it, color = if (phase == Phase.Ended) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
         if (!active) {
-            Text("কলে বলতে পারেন: “ইতিহাস ফাইলটা খোলো এবং পনেরো নম্বর পৃষ্ঠা থেকে পড়ো”, “বুঝিয়ে বলো”, “আবার পড়ো”, “আস্তে পড়ো”। পড়ার সময় থামাতে ছবিতে চাপুন (তখন মাইক বন্ধ থাকে, তাই মুখে থামানো যায় না)।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            Button(onClick = { micPerm.launch(Manifest.permission.RECORD_AUDIO) }) { Text("📞 কল শুরু করুন") }
-            OutlinedButton(onClick = { pickPhoto.launch("image/*") }) { Text(if (photo == null) "🖼️ অন্য ছবি বসান (স্থির, মুখ নড়বে না)" else "🖼️ ছবি বদলান") }
-            if (photo != null) TextButton(onClick = { store.clear(); photo = null }) { Text("আমার মূল ছবিতে ফিরুন") }
+            Text("কলে বলতে পারেন: “দ্য প্রিন্স খোলো এবং দশ নম্বর পৃষ্ঠা পড়ো”, “বুঝিয়ে বলো”, “আবার পড়ো”, “আস্তে পড়ো”। পড়ার সময় থামাতে ছবিতে চাপুন (তখন মাইক বন্ধ থাকে, তাই মুখে থামানো যায় না)।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Button(enabled = hasModel, onClick = { if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) start() else micPerm.launch(Manifest.permission.RECORD_AUDIO) }) { Text("📞 Call") }
+            OutlinedButton(onClick = { pickPhoto.launch("image/*") }) { Text(if (photo == null) "🖼️ Set picture (still, mouth will not move)" else "🖼️ Change picture") }
+            if (photo != null) TextButton(onClick = { store.clear(); photo = null }) { Text("Use my original picture") }
             Text("ছবি শুধু এই ফোনে, এনক্রিপ্টেড অবস্থায় থাকে — কোথাও পাঠানো হয় না। আপনার ছবি কথা বলার সময় মুখ নাড়ে ও চোখ পিটপিট করে (সরল ২-ডি অ্যানিমেশন, নিখুঁত লিপ-সিঙ্ক নয়)। অন্য ছবি বসালে সেটা স্থির থাকে।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         } else {
-            Button(onClick = { endCall(null) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("📵 কল শেষ") }
+            Button(onClick = { endCall(null) }, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("📵 End call") }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(typed, { typed = it }, label = { Text("মুখে না বলে লিখেও বলতে পারেন") }, modifier = Modifier.weight(1f), maxLines = 3)
-                Button(enabled = typed.isNotBlank() && machine.phase == Phase.Listening, onClick = { val t = typed; typed = ""; voice.stop(); act(machine.onHeard(t)) }) { Text("পাঠান") }
+                OutlinedTextField(typed, { typed = it }, label = { Text("Type instead of speaking") }, modifier = Modifier.weight(1f), maxLines = 3)
+                Button(enabled = typed.isNotBlank() && machine.phase == Phase.Listening, onClick = { val t = typed; typed = ""; voice.stop(); act(machine.onHeard(t)) }) { Text("Send") }
             }
         }
     }

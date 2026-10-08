@@ -56,22 +56,31 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
 
     if (editImage) { ImageEditScreen(doc, wf) { editImage = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row { TextButton(onClick = onBack) { Text("← ফিরে যান") }; Text(doc.name, Modifier.padding(top = 12.dp)) }
+        Row { TextButton(onClick = onBack) { Text("← Back") }; Text(doc.name, Modifier.padding(top = 12.dp)) }
         if (!wf.isSupported(doc)) {
             Text("এই ফরম্যাট (${doc.name.substringAfterLast('.', "?")}) এখনো সমর্থিত নয়। এখন PDF, TXT, DOCX, PPTX, XLSX, EPUB, CSV এবং ছবি (JPG/PNG, OCR-সহ)-এর লেখা বের করা যায়।")
             return@Column
         }
         if (initialCommand != null && ext == null) Text("ভয়েস নির্দেশ ধরা হয়নি: এই ফাইলের লেখা এখনো বের করা হয়নি। আগে 'লেখা বের করুন' চালান, তারপর আবার বলুন।", color = MaterialTheme.colorScheme.tertiary)
-        if (wf.isImage(doc)) OutlinedButton(onClick = { editImage = true }) { Text("🖼️ ছবি দেখুন / বড় করুন / কাটুন / ঘোরান") }
+        if (wf.isImage(doc)) {
+            OutlinedButton(onClick = { editImage = true }) { Text("🖼️ View / zoom / crop / rotate the photo") }
+            if (ext == null || ext.count(app.personal.banglaai.jobs.PageStatus.DONE) == 0) {
+                Text("ছবি থেকে লেখা পড়তে ভাষা বেছে এক চাপে স্ক্যান করুন (OCR; ছবির লেখা যত পরিষ্কার, ফল তত ভালো):", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TesseractOcr.Lang.entries.forEach { l -> FilterChip(selected = l in langs, onClick = { langs = if (l in langs) langs - l else langs + l }, label = { Text(l.label) }) }
+                }
+                Button(enabled = running == null && langs.isNotEmpty(), onClick = { start("OCR") { wf.extract(doc, false) { d, t -> JobRunner.progress = d to t }; wf.ocr(doc, langs.toList()) { d, t -> JobRunner.progress = d to t } } }) { Text("🔍 Scan text (OCR)") }
+            }
+        }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
         running?.let { Text("চলছে: $it — ${progress.first}/${progress.second}"); LinearProgressIndicator(progress = { if (progress.second == 0) 0f else progress.first / progress.second.toFloat() }, modifier = Modifier.fillMaxWidth()) }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = running == null, onClick = { start("লেখা বের করা") { wf.extract(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
-                Text(if (ext?.status == JobStatus.PAUSED) "লেখা বের করা — চালিয়ে যান" else "লেখা বের করুন")
+                Text(if (ext?.status == JobStatus.PAUSED) "Extract text — resume" else "Extract text")
             }
             if (!wf.isCode(doc)) Button(enabled = running == null && ext != null, onClick = { start("বাংলা অনুবাদ") { wf.translate(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
-                Text(if (tr?.status == JobStatus.PAUSED) "অনুবাদ — চালিয়ে যান" else "বাংলায় অনুবাদ করুন")
+                Text(if (tr?.status == JobStatus.PAUSED) "Translate — resume" else "Translate to Bengali")
             }
         }
         if (wf.isCode(doc)) Text("সোর্স-কোড ফাইল: অনুবাদ নেই (মূল কোড অক্ষত থাকে)। কোড বুঝতে হোম থেকে 'কোড ব্যাখ্যা' ব্যবহার করুন।", style = MaterialTheme.typography.bodySmall)
@@ -83,11 +92,11 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TesseractOcr.Lang.entries.forEach { l -> FilterChip(selected = l in langs, onClick = { langs = if (l in langs) langs - l else langs + l }, label = { Text(l.label) }) }
             }
-            Button(enabled = running == null && langs.isNotEmpty(), onClick = { start("OCR") { wf.ocr(doc, langs.toList()) { d, t -> JobRunner.progress = d to t } } }) { Text("OCR চালান") }
+            Button(enabled = running == null && langs.isNotEmpty(), onClick = { start("OCR") { wf.ocr(doc, langs.toList()) { d, t -> JobRunner.progress = d to t } } }) { Text("Run OCR") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(enabled = running != null, onClick = { wf.pause() }) { Text("থামান") }
-            OutlinedButton(enabled = running != null, onClick = { wf.cancel() }) { Text("বাতিল") }
+            OutlinedButton(enabled = running != null, onClick = { wf.pause() }) { Text("Pause") }
+            OutlinedButton(enabled = running != null, onClick = { wf.cancel() }) { Text("Cancel") }
         }
         Text("অনুবাদ শুরু হবে শুধু আপনি বাটন চাপলেই। স্থানীয় AI মডেল ছাড়া অনুবাদ হয় না; এই অ্যাপের ইন্টারনেট অনুমতি নেই, তাই নিজে কিছু পাঠাতে পারে না।", style = MaterialTheme.typography.bodySmall)
 

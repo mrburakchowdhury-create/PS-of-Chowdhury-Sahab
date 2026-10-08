@@ -34,8 +34,8 @@ fun SavedQaSection(wf: DocWorkflow, doc: app.personal.banglaai.storage.VaultDoc?
             Text("এটি সংরক্ষিত AI-উত্তর (অনুমান থাকতে পারে) — উদ্ধৃতি হিসেবে নিতে হলে উৎসে মিলিয়ে নিন।", style = MaterialTheme.typography.labelSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (x.docId.isNotBlank() && x.page > 0) TextButton(onClick = { onOpen(x.docId, x.page) }) { Text("উৎস খুলুন (পৃষ্ঠা ${x.page})") }
-                TextButton(onClick = { ReadAloudController.speakExplanation(ctx, x.answer) }) { Text("🔊 শুনুন") }
-                TextButton(onClick = { wf.savedQa.delete(x.id); reload() }) { Text("মুছুন") }
+                TextButton(onClick = { ReadAloudController.speakExplanation(ctx, x.answer) }) { Text("🔊 Listen") }
+                TextButton(onClick = { wf.savedQa.delete(x.id); reload() }) { Text("Delete") }
             }
         } }
     }

@@ -12,6 +12,8 @@ class CallReaderSession(
     private val totalPages: (String) -> Int,                 // 0 when the file's text has not been extracted yet
     private val pageText: (String, Int) -> String?,          // translation if present, else extracted text
     private val chapters: (String) -> List<Pair<String, Int>>,
+    private val rawText: (String, Int) -> String? = { _, _ -> null },   // extracted text whatever its language (to tell "not translated yet" from "nothing there")
+    private val aliases: (String) -> String = { "" },   // other names a file is known by (a Bengali title for a bundled English book)
 ) {
     sealed interface Outcome {
         data object NotACommand : Outcome
@@ -19,6 +21,8 @@ class CallReaderSession(
         data object StartReading : Outcome
         data class Explain(val segment: String, val pageContext: String?) : Outcome
         data class Rate(val faster: Boolean) : Outcome
+        /** The page has text but only in another language: the screen translates it (local model) and then repeats the same command. */
+        data class NeedsTranslation(val doc: String, val page: Int) : Outcome
     }
 
     var doc: String? = null; private set
@@ -45,7 +49,7 @@ class CallReaderSession(
     }
 
     private fun open(c: VoiceCommand.OpenFile): Outcome {
-        when (val r = FileMatcher.find(c.query, names())) {
+        when (val r = FileMatcher.find(c.query, names(), aliases)) {
             FileMatcher.Result.None -> return Outcome.Say(if (names().isEmpty()) "এখনো কোনো ফাইল যোগ করা নেই।" else "এই নামে কোনো ফাইল পাইনি।")
             is FileMatcher.Result.Many -> return Outcome.Say("একাধিক ফাইল মিলেছে: ${r.names.take(4).joinToString("; ")}। আরও স্পষ্ট করে নাম বলুন।")
             is FileMatcher.Result.One -> {
@@ -58,20 +62,22 @@ class CallReaderSession(
         }
     }
 
+    private fun untranslated(page: Int): Outcome? = doc?.takeIf { page in 1..total && !rawText(it, page).isNullOrBlank() }?.let { Outcome.NeedsTranslation(it, page) }
+
     private fun needDoc() = Outcome.Say("আগে বলুন কোন ফাইল খুলব — যেমন: ইতিহাস ফাইলটা খোলো।")
 
     private fun readRange(from: Int, to: Int): Outcome {
         val f = textOf ?: return needDoc()
         if (from > total) return Outcome.Say("ফাইলে মোট $total পৃষ্ঠা — $from নম্বর পৃষ্ঠা নেই।")
         plan = ReadingPlan(f, minOf(to, total))   // the plan stops at the last requested page
-        val start = plan!!.startAt(from) ?: return Outcome.Say("পৃষ্ঠা $from থেকে $to-এর মধ্যে পড়ার মতো লেখা নেই (স্ক্যান হলে আগে OCR, অ-বাংলা হলে আগে অনুবাদ লাগবে)।")
+        val start = plan!!.startAt(from) ?: return untranslated(from) ?: Outcome.Say("পৃষ্ঠা $from থেকে $to-এর মধ্যে পড়ার মতো লেখা নেই (স্ক্যান হলে আগে OCR, অ-বাংলা হলে আগে অনুবাদ লাগবে)।")
         pos = start; return Outcome.StartReading
     }
 
     private fun readPage(page: Int): Outcome {
         textOf?.let { f -> if (plan?.pageCount != total) plan = ReadingPlan(f, total) }   // back to the whole document
         val pl = plan ?: return needDoc()
-        val start = pl.startAt(page) ?: return Outcome.Say("পৃষ্ঠা $page থেকে পড়ার মতো কোনো লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR লাগবে; আর মূল লেখা বাংলা না হলে আগে বাংলা অনুবাদ করতে হবে — বাংলা কণ্ঠ অন্য ভাষা পড়তে পারে না)।")
+        val start = pl.startAt(page) ?: return untranslated(page) ?: Outcome.Say("পৃষ্ঠা $page থেকে পড়ার মতো কোনো লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR লাগবে; আর মূল লেখা বাংলা না হলে আগে বাংলা অনুবাদ করতে হবে — বাংলা কণ্ঠ অন্য ভাষা পড়তে পারে না)।")
         pos = start; return Outcome.StartReading
     }
 

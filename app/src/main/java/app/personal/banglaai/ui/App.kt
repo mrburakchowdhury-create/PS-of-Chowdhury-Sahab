@@ -125,7 +125,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
                 is PinStore.Result.Locked -> { wait = r.seconds; msg = null }
             }
             pin = ""
-        }) { Text("খুলুন") }
+        }) { Text("Open") }
         if (bio) {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = {
@@ -140,7 +140,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
 }
 
 /** First thing on Home: says plainly what is missing (usually the AI model) and gives one-tap access to the assistant and the phone check. */
-private enum class HomeTab { Menu, Files, Model, Voice, Terms, Settings, Status }
+private enum class HomeTab { Menu, Files, Model, Terms, Settings, Status, Setup }
 
 @Composable
 private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Float, themeMode: String, onTheme: (String) -> Unit, onFontScale: (Float) -> Unit) {
@@ -206,8 +206,9 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     val takeDocPhoto = rememberPhotoCapture { f ->
         scope.launch {
             busy = "ছবি এনক্রিপ্ট করে রাখা হচ্ছে…"; error = null
-            runCatching { withContext(Dispatchers.IO) { try { vault.import(Uri.fromFile(f)) } finally { f.delete() } } }.onFailure { error = it.message ?: "ব্যর্থ" }
+            val saved = runCatching { withContext(Dispatchers.IO) { try { vault.import(Uri.fromFile(f)) } finally { f.delete() } } }.onFailure { error = it.message ?: "ব্যর্থ" }.getOrNull()
             busy = null; refresh()
+            if (saved != null) { openPage = null; openDoc = saved }   // straight to the photo: view it, scan its text (OCR), translate, read
         }
     }
     val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -235,11 +236,11 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     }
     DisposableEffect(Unit) { onDispose { app.personal.banglaai.ai.LocalLlm.cancelInteractive() } }   // leaving Home (lock / close) stops any answer still being written for a screen that is gone
     openDoc?.let { d -> DocScreen(d, workflow, pendingCmd, openPage) { openDoc = null; pendingCmd = null; openPage = null }; return }
-    if (libOpen) { LibraryScreen(workflow, vault, activity.cacheDir) { libOpen = false }; return }
+    if (libOpen) { LibraryScreen(workflow, vault, activity.cacheDir, onOpenDoc = { d, pg -> libOpen = false; openPage = pg; openDoc = d }, onOpenQuick = { libOpen = false; kbOpen = true }) { libOpen = false }; return }
     if (kbOpen) { KnowledgeScreen(workflow, activity.cacheDir) { kbOpen = false }; return }
-    if (liveOpen) { LiveTranslateScreen(workflow, activity.cacheDir) { liveOpen = false }; return }
-    if (callOpen) { VoiceCallScreen(workflow, vault, activity.cacheDir) { callOpen = false }; return }
-    if (chatOpen) { ChatScreen(workflow, activity.cacheDir, chatStart) { chatOpen = false; chatStart = null }; return }
+    if (liveOpen) { LiveTranslateScreen(workflow, activity.cacheDir, onGoModel = { liveOpen = false; tab = HomeTab.Model }) { liveOpen = false }; return }
+    if (callOpen) { VoiceCallScreen(workflow, vault, activity.cacheDir, onGoModel = { callOpen = false; tab = HomeTab.Model }) { callOpen = false }; return }
+    if (chatOpen) { ChatScreen(workflow, activity.cacheDir, chatStart, onGoModel = { chatOpen = false; chatStart = null; tab = HomeTab.Model }) { chatOpen = false; chatStart = null }; return }
     if (diagOpen) { DiagnosticsScreen(workflow, activity.cacheDir) { diagOpen = false }; return }
     if (codeOpen) { CodeScreen(workflow, activity.cacheDir, activity.noBackupFilesDir) { codeOpen = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -249,11 +250,11 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
                 modifier = Modifier.fillMaxHeight().graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
                     .drawWithContent { drawContent(); drawRect(androidx.compose.ui.graphics.Brush.radialGradient(0f to Color.Black, 0.62f to Color.Black, 1f to Color.Transparent, center = center, radius = size.maxDimension * 0.55f), blendMode = androidx.compose.ui.graphics.BlendMode.DstIn) },
                 contentScale = ContentScale.Fit)
-            OutlinedButton(onClick = onLock, modifier = Modifier.align(Alignment.TopEnd)) { Text("🔒 বন্ধ করুন") }
+            OutlinedButton(onClick = onLock, modifier = Modifier.align(Alignment.TopEnd)) { Text("🔒 Lock") }
         } else Image(painterResource(R.drawable.home_banner), contentDescription = "চৌধুরী সাহেবের পিএস", modifier = Modifier.fillMaxWidth().height(56.dp).clip(MaterialTheme.shapes.large), contentScale = ContentScale.Crop)
         if (tab != HomeTab.Menu) Row(verticalAlignment = Alignment.CenterVertically) {
             Text("চৌধুরী সাহেবের পিএস", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            OutlinedButton(onClick = { tab = HomeTab.Menu }) { Text("← হোম") }
+            OutlinedButton(onClick = { tab = HomeTab.Menu }) { Text("← Home") }
         }
         app.personal.banglaai.storage.ModelImporter.copiedMb?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text("মডেল কপি হচ্ছে… $it MB / ${app.personal.banglaai.storage.ModelImporter.totalMb?.let { "$it MB" } ?: "কয়েক GB"} — স্ক্রিন জাগিয়ে রাখা হয়েছে, অ্যাপ বন্ধ করবেন না") }
         app.personal.banglaai.storage.ModelImporter.lastOk?.let { Text("✅ $it", color = MaterialTheme.colorScheme.tertiary) }
@@ -275,49 +276,55 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             pendingJobs.forEach { (d, n, c) -> TextButton(onClick = { openPage = null; openDoc = d }) { Text("${d.name} — $n থামানো ($c)") } }
         }
         val hasModel = remember(modelList, workflow.chosenModel) { workflow.usableModel() != null }
-        Text(if (hasModel) "✅ AI মডেল বসানো আছে" else "❌ AI মডেল বসানো নেই — নিচে '🤖 AI মডেল' চেপে বসান", color = if (hasModel) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+        Text(if (hasModel) "✅ AI মডেল বসানো আছে" else "❌ AI model বসানো নেই — Setup → AI Model থেকে বসান (এটা ছাড়া অনুবাদ, কল, লাইভ, উত্তর চলবে না)", color = if (hasModel) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         val ic = androidx.compose.material.icons.Icons.Rounded; val st = TileStyle
         TileGrid(listOf(
-            Tile("ভয়েস কল", ic.Call, st.call.first, st.call.second) { callOpen = true },
-            Tile("লাইভ অনুবাদ", ic.Translate, st.live.first, st.live.second) { liveOpen = true },
-            Tile("সহকারী", ic.Forum, st.chat.first, st.chat.second) { chatStart = null; chatOpen = true },
-            Tile("ফাইল যোগ (PDF)", ic.UploadFile, st.add.first, st.add.second, enabled = busy == null) { pickDoc.launch(arrayOf("*/*")) },
-            Tile("আমার ফাইল", ic.FolderOpen, st.files.first, st.files.second) { tab = HomeTab.Files },
-            Tile("ছবি তুলুন", ic.PhotoCamera, st.camera.first, st.camera.second, enabled = busy == null) { takeDocPhoto() },
-            Tile("ভয়েস নির্দেশ", ic.Mic, st.voice.first, st.voice.second) { tab = HomeTab.Voice },
-            Tile("কোড বিশ্লেষণ", ic.Code, st.code.first, st.code.second) { codeOpen = true },
-            Tile("AI মডেল", ic.SmartToy, st.model.first, st.model.second) { tab = HomeTab.Model },
-            Tile("লাইব্রেরি (বই)", ic.LibraryBooks, st.lib.first, st.lib.second) { libOpen = true },
-            Tile("জ্ঞানভাণ্ডার", ic.AutoStories, st.kb.first, st.kb.second) { kbOpen = true },
-            Tile("পরিভাষা ও শব্দ", ic.MenuBook, st.terms.first, st.terms.second) { tab = HomeTab.Terms },
-            Tile("সেটিংস", ic.Settings, st.settings.first, st.settings.second) { tab = HomeTab.Settings },
-            Tile("ফোন পরীক্ষা", ic.MonitorHeart, st.diag.first, st.diag.second) { diagOpen = true },
-            Tile("ফিচারের অবস্থা", ic.Info, st.status.first, st.status.second) { tab = HomeTab.Status },
+            Tile("Voice Call", ic.Call, st.call.first, st.call.second) { callOpen = true },
+            Tile("Live Translate", ic.Translate, st.live.first, st.live.second) { liveOpen = true },
+            Tile("Assistant", ic.Forum, st.chat.first, st.chat.second) { chatStart = null; chatOpen = true },
+            Tile("Files", ic.FolderOpen, st.files.first, st.files.second) { tab = HomeTab.Files },
+            Tile("Scan (camera)", ic.PhotoCamera, st.camera.first, st.camera.second, enabled = busy == null) { takeDocPhoto() },
+            Tile("Books", ic.LibraryBooks, st.lib.first, st.lib.second) { libOpen = true },
+            Tile("Dictionary", ic.MenuBook, st.terms.first, st.terms.second) { tab = HomeTab.Terms },
+            Tile("Code", ic.Code, st.code.first, st.code.second) { codeOpen = true },
+            Tile("Setup", ic.Settings, st.settings.first, st.settings.second) { tab = HomeTab.Setup },
         ))
-        Text("যোগ করার পর নিজে থেকে কোনো অনুবাদ বা AI কাজ শুরু হয় না।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("কোনো ফাইল যোগ করার পর নিজে থেকে অনুবাদ বা AI কাজ শুরু হয় না — আপনি বাটন চাপলে শুরু হয়।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             HomeTab.Files -> {
-        SectionTitle("আমার ফাইল (এনক্রিপ্টেড)")
+        SectionTitle("Files (encrypted)")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { pickDoc.launch(arrayOf("*/*")) }, enabled = busy == null) { Text("ফাইল যোগ করুন") }
-            OutlinedButton(onClick = { takeDocPhoto() }, enabled = busy == null) { Text("📷 ছবি তুলুন") }
+            Button(onClick = { pickDoc.launch(arrayOf("*/*")) }, enabled = busy == null) { Text("➕ Add file") }
+            OutlinedButton(onClick = { takeDocPhoto() }, enabled = busy == null) { Text("📷 Scan") }
         }
-        if (docs.isEmpty()) Text("এখনো কোনো ফাইল নেই।")
-        docs.forEach { d ->
+        HorizontalDivider()
+        HomeVoice(docs, { d, then -> pendingCmd = then; openDoc = d }) { q -> chatStart = q; chatOpen = true }
+        HorizontalDivider()
+        val bookIds = remember(docs) { app.personal.banglaai.library.BundledBooks(activity, vault, workflow).docIds() }
+        val mine = docs.filter { it.id !in bookIds }; val builtIn = docs.filter { it.id in bookIds }
+        if (mine.isEmpty()) Text("এখনো নিজের কোনো ফাইল নেই — ‘Add file’ চাপুন।")
+        mine.forEach { d ->
             Card(Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Text(d.name); Text(fmtSize(d.size), style = MaterialTheme.typography.bodySmall) }
-                    TextButton(onClick = { openDoc = d }) { Text("খুলুন") }
-                    TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { vault.delete(d.id); workflow.deleteDerived(d) }; refresh() } }) { Text("মুছুন") }
+                    TextButton(onClick = { openDoc = d }) { Text("Open") }
+                    TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { vault.delete(d.id); workflow.deleteDerived(d) }; refresh() } }) { Text("Delete") }
                 }
             }
         }
-        Text("যোগ করার পর নিজে থেকে কোনো অনুবাদ বা AI কাজ শুরু হয় না।", style = MaterialTheme.typography.bodySmall)
+        if (builtIn.isNotEmpty()) {
+            SectionTitle("Built-in books (${builtIn.size})")
+            builtIn.forEach { d -> Card(Modifier.fillMaxWidth()) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) { Text("📖 " + d.name.removeSuffix(".txt")); Text(app.personal.banglaai.library.BundledBooks.aliasesFor(d.name).split(' ').take(3).joinToString(" "), style = MaterialTheme.typography.bodySmall) }
+                TextButton(onClick = { openPage = null; openDoc = d }) { Text("Open") }
+            } } }
+        }
+        Text("কোনো ফাইল যোগ করার পর নিজে থেকে অনুবাদ বা AI কাজ শুরু হয় না।", style = MaterialTheme.typography.bodySmall)
 
             }
             HomeTab.Model -> {
         SectionTitle("AI মডেল (ম্যানুয়ালি বসান)")
-        Button(onClick = { pickModel.launch(arrayOf("*/*")) }, enabled = busy == null && !importing) { Text("মডেল ফাইল বসান") }
+        Button(onClick = { pickModel.launch(arrayOf("*/*")) }, enabled = busy == null && !importing) { Text("Import model file") }
         Text("খালি জায়গা: ${fmtSize(models.freeBytes())}", style = MaterialTheme.typography.bodySmall)
         if (modelList.isEmpty()) Text("কোনো মডেল বসানো নেই — অনুবাদ/প্রশ্নোত্তর এখনো কাজ করবে না।")
         modelList.forEach { m ->
@@ -336,10 +343,10 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
                     if (workflow.isUsable(m)) {
                         val active = workflow.usableModel()?.name == m.name
                         if (active) Text("✔ ব্যবহার হচ্ছে", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
-                        else TextButton(onClick = { workflow.chosenModel = m.name; scope.launch { refresh() } }) { Text("এটি ব্যবহার করুন") }
+                        else TextButton(onClick = { workflow.chosenModel = m.name; scope.launch { refresh() } }) { Text("Use this model") }
                     }
                     if (m.sha256.isBlank()) TextButton(enabled = !importing, onClick = { app.personal.banglaai.storage.ModelImporter.startVerify(models, m.name) }) { Text("যাচাই করুন") }
-                    TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { models.delete(m.name) }; refresh() } }) { Text("মুছুন") }
+                    TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { models.delete(m.name) }; refresh() } }) { Text("Delete") }
                 }
             }
         }
@@ -347,11 +354,18 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         Text("SHA-256 মিলিয়ে নিন মডেলের অফিসিয়াল পাতায় দেওয়া checksum-এর সঙ্গে।", style = MaterialTheme.typography.bodySmall)
 
             }
-            HomeTab.Voice -> {
-        HomeVoice(docs, { d, then -> pendingCmd = then; openDoc = d }) { q -> chatStart = q; chatOpen = true }
-
+            HomeTab.Setup -> {
+        SectionTitle("Setup")
+        Text("প্রথমে AI Model বসান — অনুবাদ, প্রশ্নোত্তর, ভয়েস কল ও লাইভ অনুবাদ এটা ছাড়া চলে না।", style = MaterialTheme.typography.bodySmall)
+        Button(onClick = { tab = HomeTab.Model }, modifier = Modifier.fillMaxWidth()) { Text("🤖 AI Model") }
+        OutlinedButton(onClick = { tab = HomeTab.Settings }, modifier = Modifier.fillMaxWidth()) { Text("⚙️ Settings (theme, text size, voice, privacy, backup)") }
+        OutlinedButton(onClick = { diagOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("🩺 Phone check (microphone, voice, model test)") }
+        OutlinedButton(onClick = { tab = HomeTab.Status }, modifier = Modifier.fillMaxWidth()) { Text("ℹ️ What works and what is not tested yet") }
+        OutlinedButton(onClick = { kbOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("📚 Quick answers (short topic cards with sources)") }
             }
             HomeTab.Terms -> {
+        DictionaryPanel(workflow, activity.cacheDir)
+        HorizontalDivider()
         GlossarySection(workflow)
         SavedQaSection(workflow, null) { id, p -> docs.firstOrNull { it.id == id }?.let { openPage = p; openDoc = it } }
 

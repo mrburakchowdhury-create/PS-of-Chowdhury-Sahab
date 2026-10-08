@@ -30,18 +30,61 @@ object BengaliNumbers {
         put("একশ", 100); put("উনত্রিশ", 29); put("উনচল্লিশ", 39); put("উনপঞ্চাশ", 49); put("উনষাট", 59); put("উনসত্তর", 69); put("উনআশি", 79); put("উননব্বই", 89)
         put("পনের", 15); put("এগার", 11); put("বার", 12); put("তের", 13); put("সতের", 17); put("আঠার", 18)
     }
-    fun parse(token: String): Int? = words[token]
+    private val ordinals = mapOf("প্রথম" to 1, "দ্বিতীয়" to 2, "তৃতীয়" to 3, "চতুর্থ" to 4, "পঞ্চম" to 5, "ষষ্ঠ" to 6, "সপ্তম" to 7, "অষ্টম" to 8, "নবম" to 9, "দশম" to 10)
+    fun parse(token: String): Int? = words[token] ?: ordinals[token]
 }
 
-/** Matches a spoken file name to the imported documents. Never picks silently when several fit. */
+/**
+ * Matches a spoken file name to the imported documents. Never picks silently when several fit.
+ * Speech recognition rarely writes a name exactly as stored, so matching is forgiving in the ways that are safe: article words ("দ্য", "the", "বইটা") are ignored,
+ * a spoken word may carry a Bengali ending ("প্রিন্সের", "প্রিন্সটা") and [extra] gives other names a file is known by (a Bengali title for an English book).
+ */
 object FileMatcher {
     sealed interface Result { data object None : Result; data class One(val name: String) : Result; data class Many(val names: List<String>) : Result }
-    private fun norm(s: String) = app.personal.banglaai.ai.Bm25Index.tokens(s.substringBeforeLast('.', s))
-    fun find(query: String, names: List<String>): Result {
-        val q = app.personal.banglaai.ai.Bm25Index.tokens(query)
-        val hits = if (q.isEmpty()) names else names.filter { n -> val t = norm(n).joinToString(" "); q.all { t.contains(it) } }
-        return when (hits.size) { 0 -> Result.None; 1 -> Result.One(hits[0]); else -> Result.Many(hits) }
+    private val ignorable = setOf("দ্য", "দি", "দা", "the", "বই", "বইটা", "বইটি", "বইয়ের", "বইটার", "ফাইল", "book", "file", "এর", "টা", "টি")
+    private fun toks(s: String) = app.personal.banglaai.ai.Bm25Index.tokens(s)
+    private fun stem(t: String): String { for (e in listOf("গুলোর", "গুলো", "দের", "ের", "টির", "টার", "টা", "টি", "কে", "র", "য়", "ে")) if (t.endsWith(e) && t.length > e.length + 2) return t.dropLast(e.length); return t }
+
+    fun find(query: String, names: List<String>, extra: (String) -> String = { "" }): Result {
+        val q0 = toks(query); val q = q0.filter { it !in ignorable }.ifEmpty { q0 }
+        if (q.isEmpty()) return resultOf(names)
+        data class Hit(val name: String, val exactAll: Boolean, val matched: Int)
+        val hits = names.map { n ->
+            val cand = toks(n.substringBeforeLast('.', n)).toSet() + toks(extra(n)).toSet()
+            val candStems = cand.map(::stem).toSet()
+            var exact = 0; var loose = 0
+            for (t in q) {
+                if (t in cand || stem(t) in candStems) exact++
+                else if (cand.any { c -> (c.startsWith(t) && t.length >= 3) || (t.startsWith(c) && c.length >= 3) || c.contains(t) && t.length >= 4 }) loose++
+            }
+            Hit(n, exact == q.size, exact + loose)
+        }
+        val full = hits.filter { it.matched == q.size }
+        val exactOnes = full.filter { it.exactAll }
+        if (exactOnes.size == 1) return Result.One(exactOnes[0].name)
+        if (full.isNotEmpty()) return resultOf((if (exactOnes.isNotEmpty()) exactOnes else full).map { it.name })
+        // nothing matched every word: accept a clear best partial match (at least half the words, and strictly better than the rest)
+        val best = hits.maxByOrNull { it.matched }?.takeIf { it.matched * 2 >= q.size && it.matched > 0 } ?: return Result.None
+        val top = hits.filter { it.matched == best.matched }
+        return resultOf(top.map { it.name })
     }
+    /**
+     * Finds a document that is NAMED inside a longer spoken sentence ("দ্য প্রিন্স থেকে দশ নম্বর পৃষ্ঠা পড়ো"). Only distinctive words count (3+ letters, not articles or
+     * reading words), and a sentence with no such word matches nothing — so "পনেরো নম্বর পৃষ্ঠা পড়ো" never opens a file by accident.
+     */
+    fun findIn(sentence: String, names: List<String>, ignore: Set<String>, extra: (String) -> String = { "" }): Result {
+        val words = toks(sentence).filter { it !in ignorable && it !in ignore && !it.all(Char::isDigit) && it.length >= 3 }
+        if (words.isEmpty()) return Result.None
+        val scored = names.map { n ->
+            val cand = toks(n.substringBeforeLast('.', n)).toSet() + toks(extra(n)).toSet(); val stems = cand.map(::stem).toSet()
+            n to words.count { t -> t in cand || stem(t) in stems }
+        }.filter { it.second > 0 }
+        if (scored.isEmpty()) return Result.None
+        val top = scored.maxOf { it.second }
+        return resultOf(scored.filter { it.second == top }.map { it.first })
+    }
+
+    private fun resultOf(l: List<String>) = when (l.size) { 0 -> Result.None; 1 -> Result.One(l[0]); else -> Result.Many(l) }
 }
 
 /**
@@ -54,6 +97,10 @@ object VoiceCommands {
     fun normalizeDigits(s: String) = s.map { digitMap[it] ?: it }.joinToString("")
     private val anchors = setOf("নম্বর", "নং", "পৃষ্ঠা", "পাতা", "অধ্যায়", "চ্যাপ্টার", "page", "chapter", "পৃষ্ঠার", "অধ্যায়ের", "চ্যাপ্টারের", "নম্বরের", "থেকে", "পর্যন্ত", "হতে")
     private val filler = setOf("এই", "ওই", "সেই", "ফাইল", "ফাইলটা", "ফাইলটি", "ফাইলটাকে", "খোলো", "খুলো", "খুলুন", "ওপেন", "খুলে", "করো", "করুন", "করে", "এবং", "আর", "তারপর", "তারপরে", "থেকে", "পড়া", "পড়ো", "পড়ে", "পড়", "শুরু", "নম্বর", "নং", "পৃষ্ঠা", "পাতা", "অধ্যায়", "চ্যাপ্টার", "page", "chapter", "open", "দাও", "শোনাও", "আমাকে", "আমার", "একটু", "অ্যাপ", "হও", "ওপেন", "ও")
+
+    /** Words that can sit in a reading command without being part of a file name. */
+    private val nameStop = setOf("পড়ো", "পড়", "পড়ে", "পড়ুন", "শোনাও", "শোনান", "দ্য", "দি", "বই", "বইটা", "বইটি", "বইয়ের", "এখান", "সেখান", "এখানে", "এটা", "সেটা", "ওটা", "আগের", "পরের",
+        "আবার", "আস্তে", "জোরে", "দ্রুত", "ধীরে", "পুরো", "সম্পূর্ণ", "শেষ", "থেকেই", "পর্যন্ত", "হতে", "to", "from", "read", "the", "book", "ধরে", "নিয়ে", "দেখাও", "বলো", "বল")
 
     /** Tokens with number words converted to digits where they sit next to an anchor word. */
     internal fun tokens(transcript: String): List<String> {
@@ -102,6 +149,25 @@ object VoiceCommands {
             else -> VoiceCommand.Ambiguous("${if (chapter) "অধ্যায়ের" else "পৃষ্ঠার"} নম্বর বোঝা যায়নি (অঙ্কে বা পরিচিত বাংলা সংখ্যা-শব্দে বলুন)")
         }
     }
+
+    /** Reading words and anchors that, together with a document name, mean "open that document and read" even without "খোলো". */
+    private val readish = Regex("পড়ো|পড়ুন|পড়|শোনাও|পৃষ্ঠা|পাতা|অধ্যায়|চ্যাপ্টার|খোলো|খুলো|খুলুন|ওপেন|\\bread\\b|\\bpage\\b|\\bchapter\\b|\\bopen\\b")
+
+    /**
+     * When no document is open yet and the sentence names one (a bundled book by its Bengali or English name, or any file), turns a bare read request into
+     * "open that document, then read". Other sentences are returned unchanged, so ordinary questions still go to the assistant.
+     */
+    fun withNamedDocument(transcript: String, parsed: VoiceCommand, names: List<String>, extra: (String) -> String = { "" }): VoiceCommand {
+        if (parsed is VoiceCommand.OpenFile || parsed is VoiceCommand.Stop || parsed is VoiceCommand.Pause || parsed is VoiceCommand.Slower || parsed is VoiceCommand.Faster) return parsed
+        if (!readish.containsMatchIn(transcript.lowercase())) return parsed
+        val ignore = filler + nameStop + anchors
+        return when (val r = FileMatcher.findIn(transcript, names, ignore, extra)) {
+            FileMatcher.Result.None -> parsed
+            is FileMatcher.Result.One -> VoiceCommand.OpenFile(r.name.substringBeforeLast('.'), then(parsed))
+            is FileMatcher.Result.Many -> VoiceCommand.OpenFile(tokens(transcript).filter { it !in ignore && !it.all(Char::isDigit) && it.length >= 3 }.joinToString(" "), then(parsed))
+        }
+    }
+    private fun then(p: VoiceCommand): VoiceCommand = when (p) { is VoiceCommand.ReadPage, is VoiceCommand.ReadChapter, is VoiceCommand.ReadRange -> p; else -> VoiceCommand.ReadPage(1) }
 
     /** Only these may run without a confirming tap (they reduce activity). */
     fun safeWithoutConfirm(c: VoiceCommand) = c is VoiceCommand.Stop || c is VoiceCommand.Pause

@@ -52,4 +52,12 @@ class CallReaderSessionTest {
         var n = 0; do { n++ } while (s.advance()); assertTrue(n >= 1 && s.current() == null)
         assertTrue((say(s, "দশ থেকে বিশ নম্বর পৃষ্ঠা পড়ো") as Outcome.Say).text.contains("মোট 3 পৃষ্ঠা"))
     }
+
+    @Test fun anEnglishPageWithoutTranslationAsksTheScreenToTranslateInsteadOfSayingThereIsNothing() {
+        val s = CallReaderSession({ listOf("The Prince.txt") }, { 5 }, { _, p -> if (p == 1) "বাংলা পাতা।" else null }, { emptyList() }, { _, p -> if (p == 2) "Princes are of two kinds." else null })
+        s.handle(VoiceCommands.parse("The Prince ফাইলটা খোলো"))
+        assertEquals(Outcome.NeedsTranslation("The Prince.txt", 2), say(s, "দুই নম্বর পৃষ্ঠা পড়ো"))
+        assertTrue(say(s, "চার নম্বর পৃষ্ঠা পড়ো") is Outcome.Say)   // no text at all: plain sentence, not a translation request
+        assertTrue(say(s, "এক নম্বর পৃষ্ঠা পড়ো") is Outcome.StartReading)
+    }
 }

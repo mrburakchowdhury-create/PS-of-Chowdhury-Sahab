@@ -56,7 +56,7 @@ fun ImageEditScreen(doc: VaultDoc, wf: DocWorkflow, onBack: () -> Unit) {
     val shown = remember(src, rot) { src?.let { s -> if (rot == 0) s else Bitmap.createBitmap(s, 0, 0, s.width, s.height, Matrix().apply { postRotate(rot.toFloat()) }, true) } }
 
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("← ফিরে যান") }; Text("ছবি: ${doc.name}", Modifier.weight(1f), maxLines = 1) }
+        Row(verticalAlignment = Alignment.CenterVertically) { TextButton(onClick = onBack) { Text("← Back") }; Text("ছবি: ${doc.name}", Modifier.weight(1f), maxLines = 1) }
         if (failed) Text("ছবি পড়া যায়নি।", color = MaterialTheme.colorScheme.error)
         shown?.let { bmp ->
             BoxWithConstraints(Modifier.fillMaxWidth().height(420.dp).clipToBounds()) {

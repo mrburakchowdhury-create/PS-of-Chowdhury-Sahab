@@ -6,7 +6,7 @@ import app.personal.banglaai.ai.Bm25Index
 /** A searchable piece of a book: [book] title, [label] where in the book (chapter / page), and the text itself. */
 data class Passage(val book: String, val label: String, val text: String)
 
-data class BundledBook(val id: String, val title: String, val author: String, val file: String, val note: String)
+data class BundledBook(val id: String, val title: String, val author: String, val file: String, val note: String, val aliases: String = "")
 
 /**
  * "লাইব্রেরি": the owner's reference books. Two kinds: (1) public-domain books bundled with the app, and (2) books the owner adds himself (PDF/EPUB/TXT, encrypted in the vault).
@@ -15,14 +15,14 @@ data class BundledBook(val id: String, val title: String, val author: String, va
  */
 object Library {
     val bundled = listOf(
-        BundledBook("prince", "The Prince (দ্য প্রিন্স)", "নিকোলো ম্যাকিয়াভেলি", "library/the_prince.txt", "অনুবাদ: W. K. Marriott (১৯০৮), সর্বজনীন-ডোমেইন"),
-        BundledBook("artofwar", "The Art of War (যুদ্ধের কৌশল)", "সান জু", "library/art_of_war.txt", "অনুবাদ: Lionel Giles (১৯১০), সর্বজনীন-ডোমেইন"),
-        BundledBook("gracian", "The Art of Worldly Wisdom (বিচক্ষণ জীবন-কৌশল)", "বালতাসার গ্রাসিয়ান (১৬৪৭)", "library/gracian.txt", "অনুবাদ: Joseph Jacobs (১৮৯২), সর্বজনীন-ডোমেইন; স্ক্যান-OCR, কিছু বর্ণ-ভুল থাকতে পারে"),
-        BundledBook("arthashastra", "Kautilya's Arthashastra (অর্থশাস্ত্র)", "কৌটিল্য (চাণক্য)", "library/arthashastra.txt", "অনুবাদ: R. Shamasastry (১৯১৫), সর্বজনীন-ডোমেইন; স্ক্যান-OCR, কিছু বর্ণ-ভুল থাকতে পারে"),
-        BundledBook("callieres", "On the Manner of Negotiating with Princes (কূটনীতির ক্লাসিক)", "ফ্রাঁসোয়া দ্য ক্যালিয়ের (১৭১৬)", "library/callieres.txt", "অনুবাদ: A. F. Whyte (১৯১৯), সর্বজনীন-ডোমেইন"),
-        BundledBook("discourses", "Discourses on Livy (লিভির আলোচনা)", "নিকোলো ম্যাকিয়াভেলি", "library/discourses.txt", "অনুবাদ: Ninian Hill Thomson (১৮৮৩), সর্বজনীন-ডোমেইন"),
-        BundledBook("crowd", "The Crowd (জনতার মনোবিজ্ঞান)", "গুস্তাভ লে বঁ", "library/the_crowd.txt", "ইংরেজি অনুবাদ (১৮৯৬), সর্বজনীন-ডোমেইন"),
-        BundledBook("onwar", "On War (যুদ্ধ ও রাষ্ট্রনীতি)", "কার্ল ফন ক্লাউজেভিৎস", "library/on_war.txt", "অনুবাদ: J. J. Graham (১৮৭৩), সর্বজনীন-ডোমেইন"),
+        BundledBook("prince", "The Prince (দ্য প্রিন্স)", "নিকোলো ম্যাকিয়াভেলি", "library/the_prince.txt", "অনুবাদ: W. K. Marriott (১৯০৮), সর্বজনীন-ডোমেইন", "দ্য প্রিন্স দি প্রিন্স প্রিন্স ম্যাকিয়াভেলি রাজপুত্র"),
+        BundledBook("artofwar", "The Art of War (যুদ্ধের কৌশল)", "সান জু", "library/art_of_war.txt", "অনুবাদ: Lionel Giles (১৯১০), সর্বজনীন-ডোমেইন", "যুদ্ধের কৌশল দ্য আর্ট অফ ওয়ার আর্ট অফ ওয়ার সান জু সুন ৎজু"),
+        BundledBook("gracian", "The Art of Worldly Wisdom (বিচক্ষণ জীবন-কৌশল)", "বালতাসার গ্রাসিয়ান (১৬৪৭)", "library/gracian.txt", "অনুবাদ: Joseph Jacobs (১৮৯২), সর্বজনীন-ডোমেইন; স্ক্যান-OCR, কিছু বর্ণ-ভুল থাকতে পারে", "বিচক্ষণ জীবন-কৌশল গ্রাসিয়ান ওয়ার্ল্ডলি উইজডম worldly wisdom"),
+        BundledBook("arthashastra", "Kautilya's Arthashastra (অর্থশাস্ত্র)", "কৌটিল্য (চাণক্য)", "library/arthashastra.txt", "অনুবাদ: R. Shamasastry (১৯১৫), সর্বজনীন-ডোমেইন; স্ক্যান-OCR, কিছু বর্ণ-ভুল থাকতে পারে", "অর্থশাস্ত্র কৌটিল্য চাণক্য kautilya chanakya"),
+        BundledBook("callieres", "On the Manner of Negotiating with Princes (কূটনীতির ক্লাসিক)", "ফ্রাঁসোয়া দ্য ক্যালিয়ের (১৭১৬)", "library/callieres.txt", "অনুবাদ: A. F. Whyte (১৯১৯), সর্বজনীন-ডোমেইন", "কূটনীতির ক্লাসিক ক্যালিয়ের কালিয়ের নেগোশিয়েটিং diplomacy"),
+        BundledBook("discourses", "Discourses on Livy (লিভির আলোচনা)", "নিকোলো ম্যাকিয়াভেলি", "library/discourses.txt", "অনুবাদ: Ninian Hill Thomson (১৮৮৩), সর্বজনীন-ডোমেইন", "লিভির আলোচনা ডিসকোর্সেস লিভি ম্যাকিয়াভেলি livy"),
+        BundledBook("crowd", "The Crowd (জনতার মনোবিজ্ঞান)", "গুস্তাভ লে বঁ", "library/the_crowd.txt", "ইংরেজি অনুবাদ (১৮৯৬), সর্বজনীন-ডোমেইন", "জনতার মনোবিজ্ঞান দ্য ক্রাউড ক্রাউড লে বঁ লেবন le bon"),
+        BundledBook("onwar", "On War (যুদ্ধ ও রাষ্ট্রনীতি)", "কার্ল ফন ক্লাউজেভিৎস", "library/on_war.txt", "অনুবাদ: J. J. Graham (১৮৭৩), সর্বজনীন-ডোমেইন", "যুদ্ধ ও রাষ্ট্রনীতি অন ওয়ার ক্লাউজেভিৎস ক্লজউইৎস clausewitz"),
     )
 
     private val heading = Regex("(?i)^\\s*(chapter|book)\\s+[ivxlc]+\\b.*$")

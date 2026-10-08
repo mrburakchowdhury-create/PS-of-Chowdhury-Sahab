@@ -128,7 +128,7 @@ fun CodeScreen(wf: DocWorkflow, cacheDir: File, noBackupDir: File, onBack: () ->
     }
 
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        TextButton(onClick = onBack) { Text("← ফিরে যান") }
+        TextButton(onClick = onBack) { Text("← Back") }
         Text("কোড বিশ্লেষণ", style = MaterialTheme.typography.headlineSmall)
         Text("কোড কখনো চালানো হয় না; শুধু পড়ে ব্যাখ্যা করা হয়। AI ভুল করতে পারে — বিশেষ করে জটিল কোডে। নিশ্চিত নয় এমন অংশ ‘অনুমান’ লিখতে মডেলকে বলা হয়, কিন্তু সে সবসময় মানবে — এমন নিশ্চয়তা নেই। বড় কোডের শুরুর অংশই নেওয়া হয়।", style = MaterialTheme.typography.bodySmall)
         busy?.let { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(it) }
@@ -158,7 +158,7 @@ fun CodeScreen(wf: DocWorkflow, cacheDir: File, noBackupDir: File, onBack: () ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Button(onClick = { check = StaticCheck.check(code, cur) }) { Text("🔎 স্থানীয় স্ট্যাটিক চেক (AI ছাড়া)") }
                 if (!reading) OutlinedButton(onClick = { ReadAloudController.speakPlan(ctx, ReadingPlan({ p -> CodeSpeech.literalLines(code).getOrNull(p - 1) }, code.lines().size, 300), lineText.toIntOrNull() ?: 1) }) { Text("🔊 আক্ষরিক পড়া") }
-                else OutlinedButton(onClick = { ReadAloudController.stop() }) { Text("⏹ থামান") }
+                else OutlinedButton(onClick = { ReadAloudController.stop() }) { Text("⏹ Stop") }
             }
             Text("আক্ষরিক পড়া মানে কোড যেমন লেখা তেমন — চিহ্নগুলো বাংলা শব্দে (যেমন `(` → “বন্ধনী খুলুন”); এটি ব্যাখ্যা নয়। ব্যাখ্যা নিচের AI-বোতামে।", style = MaterialTheme.typography.bodySmall)
             if (reading) {

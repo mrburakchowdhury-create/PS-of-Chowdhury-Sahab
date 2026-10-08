@@ -27,7 +27,7 @@ private data class Msg(val fromUser: Boolean, val text: String)
  * Each message is independent (no hidden long memory); answers stream in as the model writes them.
  */
 @Composable
-fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -> Unit) {
+fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: () -> Unit = {}, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val msgs = remember { mutableStateListOf<Msg>() }
@@ -38,6 +38,17 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
     var error by remember { mutableStateOf<String?>(null) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
     var stoppedByUser by remember { mutableStateOf(false) }
+    // microphone: one press = one sentence, written into the question box (so it can be corrected before sending)
+    val voice = remember { app.personal.banglaai.speech.VoiceInput(ctx) }
+    var listening by remember { mutableStateOf(false) }; var micMsg by remember { mutableStateOf<String?>(null) }; var heardPartial by remember { mutableStateOf("") }
+    DisposableEffect(Unit) { onDispose { voice.stop() } }
+    fun listen() {
+        ReadAloudController.pause(); listening = true; micMsg = null; heardPartial = ""
+        voice.listen({ t -> listening = false; heardPartial = ""; input = t }, { e -> listening = false; heardPartial = ""; micMsg = if (e == app.personal.banglaai.speech.VoiceInput.NOTHING_HEARD) "কিছু শোনা যায়নি — আবার চেপে বলুন" else e },
+            null, "bn-BD", { heardPartial = it; input = it }, null)
+    }
+    val micPerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok -> if (ok) listen() else micMsg = "মাইক্রোফোনের অনুমতি দেওয়া হয়নি — লিখে প্রশ্ন করুন" }
+    var checkTick by remember { mutableIntStateOf(0) }
     val list = rememberLazyListState()
     DisposableEffect(Unit) { onDispose { llm[0]?.cancel(); llm[0]?.close(); } }   // free the model's RAM when leaving
 
@@ -67,9 +78,10 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
 
     Column(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("← ফিরে যান") }
-            Text("সহকারী", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            TextButton(onClick = onBack) { Text("← Back") }
+            Text("Assistant", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
         }
+        if (wf.usableModel() == null || checkTick < 0) ReadinessPanel(wf, needModel = true, needMic = false, needHearing = false, needSpeaking = false, onGoModel = onGoModel, onChanged = { checkTick++ })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !translate && !advisor, onClick = { translate = false; advisor = false }, label = { Text("প্রশ্ন / কথা") })
             FilterChip(selected = advisor, onClick = { translate = false; advisor = true }, label = { Text("পরামর্শদাতা") })
@@ -85,16 +97,21 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onBack: () -
                     Column(Modifier.padding(12.dp)) {
                         Text(if (m.fromUser) "আপনি" else "সহকারী", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         SelectionContainer { Text(m.text.ifBlank { "…" }) }
-                        if (!m.fromUser && m.text.isNotBlank() && busy == null) TextButton(onClick = { ReadAloudController.speakExplanation(ctx, m.text) }) { Text("🔊 শুনুন") }
+                        if (!m.fromUser && m.text.isNotBlank() && busy == null) TextButton(onClick = { ReadAloudController.speakExplanation(ctx, m.text) }) { Text("🔊 Listen") }
                     }
                 }
             }
         }
-        busy?.let { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text(it, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); OutlinedButton(onClick = { stoppedByUser = true; llm[0]?.cancel() }) { Text("থামান") } } }
+        busy?.let { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text(it, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); OutlinedButton(onClick = { stoppedByUser = true; llm[0]?.cancel() }) { Text("Stop") } } }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(input, { input = it }, label = { Text(if (translate) "অনুবাদের লেখা" else "প্রশ্ন") }, modifier = Modifier.weight(1f), maxLines = 5)
-            Button(enabled = busy == null && input.isNotBlank(), onClick = { send(input) }) { Text("পাঠান") }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Button(enabled = busy == null && input.isNotBlank(), onClick = { send(input) }) { Text("Send") }
+                OutlinedButton(enabled = busy == null, onClick = { if (listening) { voice.stop(); listening = false } else if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) listen() else micPerm.launch(android.Manifest.permission.RECORD_AUDIO) }) { Text(if (listening) "⏹ Stop" else "🎤 Speak") }
+            }
         }
+        if (listening) Text(if (heardPartial.isBlank()) "🎤 শুনছি… বলুন" else "🎤 $heardPartial", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        micMsg?.let { Text("⚠️ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
     }
 }
