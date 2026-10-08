@@ -168,8 +168,17 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     }
 
     /** The first imported model that is not a known-bad copy. Returns null if none is imported. */
-    fun usableModel(): File? = models.list().firstOrNull { it.name.endsWith(".litertlm") &&
-        KnownModels.verdict(it.name, it.size, it.sha256).let { v -> v !is KnownModels.Verdict.Mismatch && v !is KnownModels.Verdict.Pending } }
+    private fun prefs() = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    /** Name of the model the owner chose to use (several can be stored, but only ONE is ever loaded into RAM). */
+    var chosenModel: String?
+        get() = prefs().getString("model_pref", null)
+        set(v) { prefs().edit().putString("model_pref", v).apply(); LocalLlm.releaseAll() }   // the old model's RAM is given back
+
+    fun isUsable(m: app.personal.banglaai.storage.ModelFile) = m.name.endsWith(".litertlm") &&
+        KnownModels.verdict(m.name, m.size, m.sha256).let { v -> v !is KnownModels.Verdict.Mismatch && v !is KnownModels.Verdict.Pending }
+
+    /** The chosen model if it is stored and verified, else the first verified one (E2B sorts before E4B, i.e. the lighter one). */
+    fun usableModel(): File? = models.list().filter(::isUsable).let { ok -> ok.firstOrNull { it.name == chosenModel } ?: ok.firstOrNull() }
         ?.let { File(context.noBackupFilesDir, "models/${it.name}") }
 
     fun translate(doc: VaultDoc, retryFailed: Boolean, onProgress: (Int, Int) -> Unit): JobStatus {

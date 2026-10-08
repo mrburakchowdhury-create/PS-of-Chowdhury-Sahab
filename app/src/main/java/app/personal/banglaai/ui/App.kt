@@ -291,11 +291,17 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
                             KnownModels.Verdict.Unknown -> "⚠️ আমাদের যাচাই-করা তালিকায় নেই; অফিসিয়াল checksum নিজে মিলিয়ে নিন"
                         }, style = MaterialTheme.typography.bodySmall)
                     }
+                    if (workflow.isUsable(m)) {
+                        val active = workflow.usableModel()?.name == m.name
+                        if (active) Text("✔ ব্যবহার হচ্ছে", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall)
+                        else TextButton(onClick = { workflow.chosenModel = m.name; scope.launch { refresh() } }) { Text("এটি ব্যবহার করুন") }
+                    }
                     if (m.sha256.isBlank()) TextButton(enabled = !importing, onClick = { app.personal.banglaai.storage.ModelImporter.startVerify(models, m.name) }) { Text("যাচাই করুন") }
                     TextButton(onClick = { scope.launch { withContext(Dispatchers.IO) { models.delete(m.name) }; refresh() } }) { Text("মুছুন") }
                 }
             }
         }
+        if (modelList.size > 1) Text("দুটো মডেল রাখা যায়, কিন্তু একসঙ্গে একটাই চলে (RAM বাঁচাতে)। বদলাতে চাইলে ‘এটি ব্যবহার করুন’ চাপুন; প্রথম প্রশ্নে নতুন মডেল লোড হতে সময় লাগবে।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
         Text("SHA-256 মিলিয়ে নিন মডেলের অফিসিয়াল পাতায় দেওয়া checksum-এর সঙ্গে।", style = MaterialTheme.typography.bodySmall)
 
             }
