@@ -84,13 +84,18 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onOpenDoc: (Vau
     fun ask() {
         if (busy != null || q.isBlank()) return
         passageBn.clear(); busy = "বই খোঁজা হচ্ছে…"; answer = null; err = null; sources = emptyList(); note = null; openSrc = -1
-        var cutNote: String? = null
+        var cutNote: String? = null; var coverage = ""
         scope.launch {
             runCatching { withContext(Dispatchers.IO) {
                 val all = ArrayList<Passage>()
                 Library.bundled.forEach { all += Library.bundledPassages(ctx, it) }
                 userDocs.forEach { d -> val total = wf.job(d, DocWorkflow.Kind.Extract)?.total ?: 0
                     for (p in 1..total) wf.effective(d.id, p)?.text?.takeIf { it.isNotBlank() }?.let { t -> all += Library.chunk(d.name, t).map { c -> c.copy(label = "পৃষ্ঠা $p") } } }
+                run {   // coverage: what was actually searched (bundled books are complete by construction; your own files count only pages whose text was extracted)
+                    val inScope = scope1?.let { sc -> all.map { it.book }.distinct().filter { it == sc } } ?: all.map { it.book }.distinct()
+                    val partial = userDocs.filter { d -> d.name in inScope }.mapNotNull { d -> wf.job(d, DocWorkflow.Kind.Extract)?.let { j -> if (j.count(PageStatus.DONE) < j.total) "${d.name}: ${j.count(PageStatus.DONE)}/${j.total} পৃষ্ঠা" else null } }
+                    coverage = "খোঁজা হয়েছে ${inScope.size}টি বইয়ে (${all.count { it.book in inScope }}টি অংশ)." + if (partial.isEmpty()) " সবগুলোর লেখা পুরোপুরি পড়া হয়েছে।" else " ⚠ অসম্পূর্ণ লেখা (এসব বইয়ের বাকি পৃষ্ঠা খোঁজা হয়নি): ${partial.joinToString("; ")}"
+                }
                 val index = Library.Index(scope1?.let { sc -> all.filter { it.book == sc } } ?: all)
                 val model = wf.usableModel()
                 // Bengali question -> English search words WITHOUT the model (concept list + dictionary glosses); the model's own expansion is added on top
@@ -116,6 +121,7 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onOpenDoc: (Vau
                 sources = found; answer = ans
                 note = when { found.isEmpty() -> "কোনো বইয়ে মিল পাওয়া যায়নি।" + if (!hadModel) " (AI model ছাড়া শুধু শব্দ-মিল খোঁজা হয়েছে; অন্য শব্দে প্রশ্ন করে দেখুন, অথবা ইংরেজি শব্দ ব্যবহার করুন।)" else ""
                     !hadModel -> "AI model বসানো নেই — তাই বাংলা উত্তর নেই; নিচে পুরো বই থেকে সবচেয়ে মিল-থাকা মূল অংশ (ইংরেজি) দেখানো হলো। প্রতিটি অংশ ‘Open in reader’ দিয়ে বইয়ে খুলে পড়তে পারেন।" else -> cutNote }
+                note = (note?.let { it + "\n" } ?: "") + "📚 " + coverage
             }.onFailure { err = it.message ?: it.javaClass.simpleName }
             busy = null
         }
