@@ -38,6 +38,7 @@ class OcrJob(
                 val r = ocr.recognize(bmp, langs)
                 if (stop.get()) { job.status = stopStatus; jobs.save(job); return job.status }
                 if (r.text.isNotBlank()) { texts.put(job.docId, PageText(p, r.text, null, ocr = true)); job.mark(p, PageStatus.DONE) }
+            } catch (e: app.personal.banglaai.security.VaultLockedException) { job.status = JobStatus.PAUSED; runCatching { jobs.save(job) }; return job.status   // locked mid-page: paused, not failed
             } catch (e: Throwable) { job.mark(p, PageStatus.FAILED) } finally { bmp.recycle() }
             if (++n % checkpointEvery == 0) jobs.save(job)
             onProgress(n, todo.size)

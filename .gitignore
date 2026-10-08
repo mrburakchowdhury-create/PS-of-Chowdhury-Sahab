@@ -11,3 +11,6 @@ local.properties
 
 # the shared TEST-build key is deliberately committed (non-secret); real release keys must never be
 !app/debug-shared.keystore
+
+# OCR language data (tessdata_fast, Apache-2.0) MUST be committed: the app bundles it in assets/tessdata (a global *.traineddata ignore silently left it out of every APK)
+!app/src/main/assets/tessdata/*.traineddata

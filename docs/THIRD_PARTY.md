@@ -15,3 +15,5 @@
 
 নোটিশ: Apache-2.0 লাইসেন্সের শর্তমতো এই উপাদানগুলোর লাইসেন্স ও কপিরাইট নোটিশ বজায় থাকবে। যে মডেল/ডেটা আপনি পরে নিজে বসাবেন, তার লাইসেন্স আপনাকেই যাচাই করতে হবে।
 **এড়ানো হয়েছে:** MuPDF (AGPL), Gemma 3n (HF-এ gated), Meta MMS-TTS বাংলা (`facebook/mms-tts-ben`: HF API-তে যাচাইকৃত লাইসেন্স `cc-by-nc-4.0`, অর্থাৎ অবাণিজ্যিক-শর্তযুক্ত; ডিফল্ট করা হয়নি — ব্যক্তিগত ব্যবহারে চলবে কি না আপনি সিদ্ধান্ত নিন)।
+
+**0.3.0-এ যোগ/পরিবর্তন:** Tesseract4Android এখন source থেকে rebuild করা 4.9.0 (`third_party/tesseract4android/`, Apache-2.0, 16 KB-এর জন্য NDK r29 + linker flags); androidx `graphics-path`-এর JNI .so AOSP source থেকে rebuild (`third_party/graphics-path/`, Apache-2.0); tessdata_fast ফাইল `assets/tessdata/` (Apache-2.0, `LICENSE.txt` সহ, upstream `main`-এর সঙ্গে SHA-256 মিলিয়ে দেখা)।

@@ -16,12 +16,13 @@ class ImportRefused(msg: String) : Exception(msg)
  *  - nothing is executed: macros (vbaProject.bin), embedded objects, external links and scripts are ignored; formulas are never
  *    evaluated — only the value cached in the file is shown;
  *  - zip entry names are never used as file paths (everything stays in memory);
- *  - limits: ≤ 2000 entries, ≤ 64 MB per entry and ≤ 256 MB total after decompression (zip-bomb guard); larger -> [ImportRefused];
+ *  - limits: ≤ 2000 entries (ALL physical entries, incl. directories/skipped/duplicates; duplicates refused), ≤ 64 MB per entry and ≤ 256 MB total after decompression
+    (every expanded byte counts, also bytes read only to be skipped), ≤ 30 s, cancellable (zip-bomb guard); larger -> [ImportRefused];
  *  - XML is read with a pull parser that does not resolve external entities.
  * Empty results are reported as empty, never invented. Layout (tables, footnotes) is flattened to text; this is stated in the UI.
  */
 object OfficeImporter {
-    private const val MAX_ENTRIES = 2000; private const val MAX_ENTRY = 64L shl 20; private const val MAX_TOTAL = 256L shl 20
+    private const val MAX_ENTRIES = 2000; private const val MAX_ENTRY = 64L shl 20; private const val MAX_TOTAL = 256L shl 20; private const val MAX_MILLIS = 30_000L
     val supported = setOf("docx", "pptx", "xlsx", "epub", "csv")
     /** Plain-text source files: shown as-is, split by lines so indentation is never altered. Never executed. */
     val codeExtensions = setOf("py", "js", "ts", "jsx", "tsx", "java", "kt", "kts", "c", "h", "cpp", "cc", "hpp", "cs", "go", "rs", "php", "sql", "html", "htm", "css", "sh", "bash", "swift", "rb", "json", "xml", "yml", "yaml", "md", "ini", "toml", "log")
@@ -30,29 +31,45 @@ object OfficeImporter {
 
     fun extension(name: String) = name.substringAfterLast('.', "").lowercase()
 
-    fun extract(name: String, input: InputStream): List<Section> = when (extension(name)) {
-        "docx" -> docx(readZip(input))
-        "pptx" -> pptx(readZip(input))
-        "xlsx" -> xlsx(readZip(input))
-        "epub" -> epub(readZip(input))
+    fun extract(name: String, input: InputStream, cancelled: () -> Boolean = { false }): List<Section> = when (extension(name)) {
+        "docx" -> docx(readZip(input, cancelled = cancelled))
+        "pptx" -> pptx(readZip(input, cancelled = cancelled))
+        "xlsx" -> xlsx(readZip(input, cancelled = cancelled))
+        "epub" -> epub(readZip(input, cancelled = cancelled))
         "csv" -> csv(input.readUpTo(MAX_ENTRY).toString(Charsets.UTF_8))
         else -> throw ImportRefused("এই ফরম্যাট সমর্থিত নয়")
     }
 
-    private fun readZip(input: InputStream): Map<String, ByteArray> {
-        val out = LinkedHashMap<String, ByteArray>(); var total = 0L
+    /**
+     * Reads the XML-like parts of an OOXML/EPUB zip into memory. EVERY physical entry counts (directories, skipped binaries, duplicates), EVERY expanded byte
+     * counts (also bytes that are read only to be thrown away), and a time limit and a cancel hook stop slow or hostile files early with a plain Bengali message.
+     */
+    internal fun readZip(
+        input: InputStream, maxEntries: Int = MAX_ENTRIES, maxEntry: Long = MAX_ENTRY, maxTotal: Long = MAX_TOTAL,
+        maxMillis: Long = MAX_MILLIS, cancelled: () -> Boolean = { false },
+    ): Map<String, ByteArray> {
+        val out = LinkedHashMap<String, ByteArray>(); val seen = HashSet<String>(); var total = 0L; var entries = 0
+        val deadline = System.nanoTime() + maxMillis * 1_000_000L
+        val b = ByteArray(16384)
         ZipInputStream(input).use { z ->
             while (true) {
+                if (cancelled()) throw ImportRefused("কাজ বাতিল করা হয়েছে")
                 val e = z.nextEntry ?: break
-                if (out.size >= MAX_ENTRIES) throw ImportRefused("ফাইলে অস্বাভাবিক বেশি অংশ আছে")
-                if (e.isDirectory) continue
+                if (++entries > maxEntries) throw ImportRefused("ফাইলে অস্বাভাবিক বেশি অংশ আছে (সীমা $maxEntries) — প্রত্যাখ্যাত")
                 val n = e.name
-                if (!(n.endsWith(".xml") || n.endsWith(".rels") || n.endsWith(".xhtml") || n.endsWith(".html") || n.endsWith(".htm") || n.endsWith(".opf"))) { z.closeEntry(); continue }   // skip binaries/macros
-                val buf = java.io.ByteArrayOutputStream(); val b = ByteArray(16384); var size = 0L
-                while (true) { val r = z.read(b); if (r < 0) break; size += r; total += r
-                    if (size > MAX_ENTRY || total > MAX_TOTAL) throw ImportRefused("ফাইলটি খুলে অতিরিক্ত বড় হয় (সম্ভাব্য zip-bomb) — প্রত্যাখ্যাত")
-                    buf.write(b, 0, r) }
-                out[n] = buf.toByteArray()
+                if (!seen.add(n)) throw ImportRefused("ফাইলে একই নামের অংশ দুবার আছে — সন্দেহজনক, প্রত্যাখ্যাত")
+                if (e.isDirectory) continue
+                val keep = n.endsWith(".xml") || n.endsWith(".rels") || n.endsWith(".xhtml") || n.endsWith(".html") || n.endsWith(".htm") || n.endsWith(".opf")   // binaries/macros are not kept
+                val buf = if (keep) java.io.ByteArrayOutputStream() else null; var size = 0L
+                while (true) {
+                    val r = z.read(b); if (r < 0) break
+                    size += r; total += r
+                    if (size > maxEntry || total > maxTotal) throw ImportRefused("ফাইলটি খুলে অতিরিক্ত বড় হয় (সম্ভাব্য zip-bomb) — প্রত্যাখ্যাত")
+                    if (System.nanoTime() > deadline) throw ImportRefused("ফাইল খুলতে অতিরিক্ত সময় লাগছে — প্রত্যাখ্যাত")
+                    if (cancelled()) throw ImportRefused("কাজ বাতিল করা হয়েছে")
+                    buf?.write(b, 0, r)   // skipped entries are still READ (counted above), never trusted to be small
+                }
+                if (buf != null) out[n] = buf.toByteArray()
             }
         }
         if (out.isEmpty()) throw ImportRefused("ফাইল নষ্ট বা পাসওয়ার্ড-সুরক্ষিত (পড়া যায়নি)")

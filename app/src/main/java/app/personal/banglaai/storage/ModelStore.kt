@@ -43,6 +43,7 @@ class ModelStore(private val context: Context) {
                     while (true) { val n = src.read(buf); if (n < 0) break; dst.write(buf, 0, n); md.update(buf, 0, n); total += n; onProgress(total) }
                 }
             }
+            check(declared < 0 || total == declared) { "কপি অসম্পূর্ণ: ফাইলের আকার $declared বাইট, কপি হয়েছে $total বাইট — উৎস ফাইল/কার্ড ঠিক আছে কি না দেখে আবার চেষ্টা করুন" }
             check(tmp.renameTo(out)) { "সংরক্ষণ ব্যর্থ" }
             val hex = md.digest().joinToString("") { "%02x".format(it) }
             File(dir, "$name.sha256").writeText(hex)

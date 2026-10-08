@@ -48,11 +48,13 @@ class ExtractionJob(
             if (stop.get()) { job.status = stopStatus; jobs.save(job); return job.status }
             pauseCheck()?.let { pausedBecause = it; job.status = JobStatus.PAUSED; jobs.save(job); return job.status }
             val r = extractor.page(p)
-            when {
-                r.failed -> job.mark(p, PageStatus.FAILED)
-                r.text.isBlank() -> job.mark(p, PageStatus.UNREADABLE)
-                else -> { texts.put(job.docId, r); job.mark(p, PageStatus.DONE) }
-            }
+            try {
+                when {
+                    r.failed -> job.mark(p, PageStatus.FAILED)
+                    r.text.isBlank() -> job.mark(p, PageStatus.UNREADABLE)
+                    else -> { texts.put(job.docId, r); job.mark(p, PageStatus.DONE) }
+                }
+            } catch (e: app.personal.banglaai.security.VaultLockedException) { job.status = JobStatus.PAUSED; runCatching { jobs.save(job) }; return job.status }   // locked mid-page: paused, page stays pending
             if (++sinceCheckpoint >= checkpointEvery) { jobs.save(job); sinceCheckpoint = 0 }
             onProgress(job.count(PageStatus.DONE), job.total)
         }

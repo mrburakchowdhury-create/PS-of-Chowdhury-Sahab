@@ -28,7 +28,9 @@ class ManifestSecurityTest {
 
     @Test fun onlyLauncherActivityIsExportedAndNoServicesReceiversProviders() {
         assertEquals(1, Regex("android:exported=\"true\"").findAll(manifest).count())
-        assertFalse("<receiver must not be declared by the app", manifest.contains("<receiver"))
+        // no receiver of our own; the only <receiver> allowed is the one that REMOVES the library-added (exported) androidx.profileinstaller receiver from the merged manifest
+        val receivers = Regex("<receiver[^>]*>").findAll(manifest).map { it.value }.toList()
+        assertTrue("only a tools:node=remove receiver is allowed: $receivers", receivers.all { it.contains("tools:node=\"remove\"") && it.contains("androidx.profileinstaller.ProfileInstallReceiver") })
         val providers = Regex("<provider[^>]*>").findAll(manifest).map { it.value }.toList()
         assertEquals(1, providers.size)   // only the camera-photo FileProvider
         assertTrue(providers[0].contains("androidx.core.content.FileProvider") && providers[0].contains("android:exported=\"false\""))

@@ -29,5 +29,19 @@ class ReadingPlan(private val pageText: (Int) -> String?, val pageCount: Int, pr
         return null
     }
 
+    /**
+     * A copy that no longer needs the vault: the text of up to [maxPages] pages from [fromPage] on (at most [maxChars] characters in total) is read NOW and kept in
+     * memory for playback only. Used when the screen locks while the owner has allowed limited background reading; everything beyond the copy is simply not read.
+     */
+    fun snapshot(fromPage: Int, maxPages: Int, maxChars: Int): ReadingPlan {
+        val kept = HashMap<Int, String>(); var chars = 0
+        for (pg in fromPage.coerceAtLeast(1)..minOf(pageCount, fromPage + maxPages - 1)) {
+            val t = runCatching { pageText(pg) }.getOrNull().orEmpty()
+            if (chars + t.length > maxChars) break
+            kept[pg] = t; chars += t.length
+        }
+        return ReadingPlan({ kept[it] }, pageCount, maxChars = this.maxChars)
+    }
+
     fun segmentAt(p: ReadingPosition): Segment? = segments(p.page).getOrNull(p.segment)
 }

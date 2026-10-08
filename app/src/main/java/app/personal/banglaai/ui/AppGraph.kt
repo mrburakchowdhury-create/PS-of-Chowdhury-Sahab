@@ -12,4 +12,6 @@ object AppGraph {
     @Synchronized fun vault(c: Context): Vault = v ?: Vault(c.applicationContext, keys(c)).also { v = it }
     @Synchronized fun models(c: Context): ModelStore = m ?: ModelStore(c.applicationContext).also { m = it }
     @Synchronized fun workflow(c: Context): DocWorkflow = w ?: DocWorkflow(c.applicationContext, vault(c), models(c)).also { w = it }
+    @Synchronized fun workflowIfCreated(): DocWorkflow? = w
+    @Synchronized fun keysIfCreated() = k
 }

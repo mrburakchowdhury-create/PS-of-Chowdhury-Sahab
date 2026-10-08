@@ -116,7 +116,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
                     val res = runCatching { keys.unlockWithPin(pinChars) }
                     if (res.getOrDefault(false)) {
                         // arm biometric unlock (best effort; the PIN always works)
-                        if (activity.canUseStrongBiometric() && !keys.hasBio()) runCatching { keys.masterForWrapping()?.let { m -> keys.setBioBlob(app.personal.banglaai.security.BiometricGate.wrap(m)) } }
+                        if (activity.canUseStrongBiometric() && !keys.hasBio()) runCatching { keys.masterForWrapping()?.let { m -> try { keys.setBioBlob(app.personal.banglaai.security.BiometricGate.wrap(m)) } finally { m.fill(0) } } }
                         onUnlocked()
                     } else msg = "ভল্ট খোলা যায়নি" + (res.exceptionOrNull()?.let { " (ত্রুটি: ${it.javaClass.simpleName})" } ?: " (PIN মেলেনি — অ্যাপ আনইনস্টল করে নতুন করে সেটআপ করুন)")
                 }
@@ -165,6 +165,8 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
 
     var backupPass by remember { mutableStateOf("") }
     val backup = remember { BackupService(vault, workflow) }
+    var restoring by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { withContext(Dispatchers.IO) { runCatching { backup.recoverInterrupted() } } }   // cleans up after a restore that was killed half-way
     val saveBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
         scope.launch {
@@ -177,11 +179,17 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     val restoreBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri ?: return@rememberLauncherForActivityResult
         scope.launch {
-            busy = "ব্যাকআপ থেকে ফেরত আনা হচ্ছে…"; error = null
+            busy = "ব্যাকআপ থেকে ফেরত আনা হচ্ছে…"; error = null; restoring = true
             runCatching { withContext(Dispatchers.IO) { activity.contentResolver.openInputStream(uri)!!.use { backup.restore(it, backupPass.toCharArray()) } } }
-                .onSuccess { error = "✅ ফেরত এসেছে: ${it.restored}টি ফাইল (আগে থেকে থাকায় বাদ: ${it.skipped}টি)" }
-                .onFailure { error = if (it is PassphraseBackup.BadBackup) it.message else "পাসফ্রেজ ভুল অথবা ফাইল নষ্ট" }
-            busy = null; refresh()
+                .onSuccess { error = "✅ ফেরত এসেছে: ${it.restored}টি ফাইল (আগে থেকে থাকায় বাদ: ${it.skipped}টি); নোট/বুকমার্ক/পরিভাষা/শব্দভান্ডার/পড়ার অবস্থান: ${it.userItems}টি যোগ হয়েছে" }
+                .onFailure { error = when (it) {
+                    is PassphraseBackup.BadBackup -> it.message
+                    is BackupService.StorageFull -> it.message
+                    is java.util.concurrent.CancellationException -> "ফেরানো বাতিল হয়েছে — আপনার ভল্ট অপরিবর্তিত আছে"
+                    is app.personal.banglaai.security.VaultLockedException -> "অ্যাপ লক হয়ে যাওয়ায় ফেরানো থেমেছে — আপনার ভল্ট অপরিবর্তিত আছে; আবার খুলে চেষ্টা করুন"
+                    is IllegalStateException -> it.message
+                    else -> "ফেরানো ব্যর্থ (${it.javaClass.simpleName}) — আপনার ভল্ট অপরিবর্তিত আছে" } }
+            busy = null; restoring = false; refresh()
         }
     }
 
@@ -338,7 +346,15 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             }
             HomeTab.Settings -> {
         SectionTitle("সেটিংস")
-        var shots by remember { mutableStateOf(activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean("allow_screenshots", true)) }
+        var bgRead by remember { mutableStateOf(activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean(app.personal.banglaai.speech.ReadAloudController.BG_READ_KEY, false)) }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(checked = bgRead, onCheckedChange = { bgRead = it; activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().putBoolean(app.personal.banglaai.speech.ReadAloudController.BG_READ_KEY, it).apply() })
+            Column(Modifier.weight(1f)) {
+                Text("স্ক্রিন বন্ধ হলেও পড়া চালিয়ে যান")
+                Text(if (bgRead) "চালু: স্ক্রিন বন্ধ/অ্যাপ লক হলে ভল্ট বন্ধ হয়ে যায়, তবে পড়ার বাকি অংশ (সর্বোচ্চ ${app.personal.banglaai.speech.ReadAloudController.BG_MAX_PAGES} পৃষ্ঠা) শুধু মেমরিতে খোলা অবস্থায় পড়া চলে; শেষ বা বন্ধ করলে মুছে যায়।" else "বন্ধ (ডিফল্ট): স্ক্রিন বন্ধ বা অ্যাপ লক হলে পড়া থেমে যায় এবং ভল্ট পুরো বন্ধ হয়।", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        var shots by remember { mutableStateOf(activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean("allow_screenshots", false)) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch(checked = shots, onCheckedChange = { shots = it; activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().putBoolean("allow_screenshots", it).apply(); activity.applyScreenshotPolicy() })
             Column(Modifier.weight(1f)) {
@@ -359,12 +375,13 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         OutlinedButton(onClick = { StorageStats.clearCache(activity); stats = StorageStats.read(activity) }) { Text("ক্যাশ মুছুন (ফাইল/অনুবাদ মোছে না)") }
 
         SectionTitle("এনক্রিপ্টেড ব্যাকআপ ও রিকভারি")
-        Text("পাসফ্রেজ থেকে চাবি তৈরি হয়; কোনো গোপন master key নেই। ফোন রিসেট/অ্যাপ মুছলে অ্যাপের ভেতরের ডেটা চলে যায় — ব্যাকআপ ও পাসফ্রেজ আপনার কাছে থাকলে ফেরানো যায়। পাসফ্রেজ হারালে ব্যাকআপ চিরতরে অপাঠ্য।", style = MaterialTheme.typography.bodySmall)
+        Text("পাসফ্রেজ থেকে চাবি তৈরি হয়; কোনো গোপন master key নেই। ফোন রিসেট/অ্যাপ মুছলে অ্যাপের ভেতরের ডেটা চলে যায় — ব্যাকআপ ও পাসফ্রেজ আপনার কাছে থাকলে ফেরানো যায়। পাসফ্রেজ হারালে ব্যাকআপ চিরতরে অপাঠ্য।\nব্যাকআপে থাকে: মূল ফাইল, বের করা লেখা, অনুবাদ, কাজের অবস্থা, নোট ও বুকমার্ক, পরিভাষা, শব্দভান্ডার, শেষ পড়ার অবস্থান। থাকে না: AI মডেল, লাইব্রেরির নিজের-বই তালিকা, অবতার-ছবি, সেটিংস, PIN। ফেরানোর সময় আগে পুরো ফাইল যাচাই হয়; কোনো সমস্যা হলে ভল্ট আগের মতোই থাকে। আগে থেকে থাকা ফাইল বদলায় না।", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(value = backupPass, onValueChange = { backupPass = it }, label = { Text("ব্যাকআপ পাসফ্রেজ (কমপক্ষে ${PassphraseBackup.MIN_PASSPHRASE} অক্ষর)") }, singleLine = true,
             visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = busy == null && backupPass.length >= PassphraseBackup.MIN_PASSPHRASE, onClick = { saveBackup.launch("banglaai-backup.bai") }) { Text("ব্যাকআপ তৈরি") }
             OutlinedButton(enabled = busy == null && backupPass.isNotEmpty(), onClick = { restoreBackup.launch(arrayOf("*/*")) }) { Text("ব্যাকআপ থেকে ফেরান") }
+            if (restoring) OutlinedButton(onClick = { BackupService.requestCancel() }) { Text("বাতিল") }
         }
 
             }

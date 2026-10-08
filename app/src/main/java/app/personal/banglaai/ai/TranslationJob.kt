@@ -49,6 +49,7 @@ class TranslationJob(
             } catch (e: InterruptedException) {
                 job.status = stopStatus; jobs.save(job); return job.status
             } catch (e: Throwable) {
+                if (e is app.personal.banglaai.security.VaultLockedException) { job.status = JobStatus.PAUSED; runCatching { jobs.save(job) }; return job.status }   // locked mid-page: paused, not failed
                 // pause/cancel makes the running model call throw: that is an interruption, not a failed page (page stays PENDING and is redone whole on resume)
                 if (stop.get()) { job.status = stopStatus; jobs.save(job); return job.status }
                 job.mark(p, PageStatus.FAILED)

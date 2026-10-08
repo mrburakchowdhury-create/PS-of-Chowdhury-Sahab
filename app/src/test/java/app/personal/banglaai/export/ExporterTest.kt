@@ -37,3 +37,28 @@ class ExporterTest {
 
     @Test fun missingListIsExact() = assertEquals(listOf(2), Exporter.missing(pages))
 }
+
+class ExporterLongDocumentTest {
+    /** 400 pages of Bengali + Arabic + Urdu text with XML-hostile characters: nothing may be lost or break the files. */
+    private val pages = (1..400).map { p ->
+        ExportPage(p, if (p % 10 == 0) "ix-$p" else null, "العلم نور والجهل ظلام — صفحة $p & <tag> \u0001 ‫ علم حاصل کرنا $p", "এটি পৃষ্ঠা $p-এর বাংলা অনুবাদ। জ্ঞান অর্জন করা সবার জন্য জরুরি। " + "দীর্ঘ বাক্য ".repeat(40), p % 50 == 0)
+    }
+    private val opt = ExportOptions("দীর্ঘ বই — العلم", includeOriginal = true, originalIsRtl = true)
+
+    @Test fun txtKeepsEveryPageInOrder() {
+        val t = Exporter.txt(pages, opt)
+        for (p in listOf(1, 137, 400)) assertTrue(t.contains("পৃষ্ঠা $p")); assertTrue(t.indexOf("পৃষ্ঠা 2") < t.indexOf("পৃষ্ঠা 399"))
+        assertTrue(t.contains("মোট 400 পৃষ্ঠার মধ্যে অনূদিত 400।"))
+        assertTrue(t.contains("আসল পাঠ") || t.contains("العلم نور"))
+    }
+
+    @Test fun docxStaysWellFormedAndHasEveryPage() {
+        val bo = ByteArrayOutputStream(); Exporter.docx(pages, opt, bo)
+        val entries = HashMap<String, ByteArray>()
+        ZipInputStream(ByteArrayInputStream(bo.toByteArray())).use { z -> while (true) { val e = z.nextEntry ?: break; entries[e.name] = z.readBytes() } }
+        val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(entries.getValue("word/document.xml")))
+        val text = doc.documentElement.textContent
+        assertTrue(text.contains("পৃষ্ঠা 400")); assertTrue(text.contains("এটি পৃষ্ঠা 250-এর বাংলা অনুবাদ")); assertTrue(text.contains("صفحة 399"))
+        assertFalse("control characters must be stripped", text.contains('\u0001'))
+    }
+}

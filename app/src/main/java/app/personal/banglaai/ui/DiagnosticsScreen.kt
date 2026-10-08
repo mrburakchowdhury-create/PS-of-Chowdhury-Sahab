@@ -43,7 +43,7 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
     DisposableEffect(Unit) {
         val w = (ctx as? android.app.Activity)?.window
         // the screen shows no private data, so screenshots are allowed here — but never against the owner's explicit 'no screenshots' setting
-        if (ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).getBoolean("allow_screenshots", true)) w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        if (ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).getBoolean("allow_screenshots", false)) w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         onDispose { (ctx as? app.personal.banglaai.MainActivity)?.applyScreenshotPolicy() }
     }
     ReadAloudController.get(ctx)   // starts the TTS engine so its state below is real

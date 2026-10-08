@@ -66,6 +66,12 @@ class TtsReader(context: Context, private val onState: (State) -> Unit, private 
     fun previous() { val p = pos ?: return; plan?.previous(p)?.let { jump(it) } }
     fun position() = pos
 
+    /** See [ReadingPlan.snapshot]: after this the reader no longer touches the vault. False if there is nothing to keep. */
+    fun freezeForBackground(maxPages: Int, maxChars: Int): Boolean {
+        val p = pos ?: return false; val pl = plan ?: return false
+        plan = pl.snapshot(p.page, maxPages, maxChars); return true
+    }
+
     private fun jump(p: ReadingPosition) { pos = p; if (state == State.Playing) speakCurrent() else onSegment(plan?.segmentAt(p), p) }
 
     private fun advance() { val n = pos?.let { plan?.next(it) }; if (n == null) { set(State.Ready); onSegment(null, pos) } else { pos = n; speakCurrent() } }

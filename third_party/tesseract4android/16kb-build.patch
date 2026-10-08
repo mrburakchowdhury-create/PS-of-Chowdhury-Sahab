@@ -1,0 +1,30 @@
+diff --git a/tesseract4android/build.gradle b/tesseract4android/build.gradle
+index 7849353..8d3f422 100644
+--- a/tesseract4android/build.gradle
++++ b/tesseract4android/build.gradle
+@@ -6,7 +6,7 @@ plugins {
+ android {
+ 	namespace 'cz.adaptech.tesseract4android'
+ 	compileSdk 35
+-	ndkVersion "27.2.12479018"
++	ndkVersion "29.0.14206865"
+ 
+ 	defaultConfig {
+ 		minSdk 21
+@@ -21,13 +21,14 @@ android {
+ 
+ 				// Support 16 KB page sizes with NDK r27
+ 				// This can be removed with NDK r28, which supports it by default.
+-				arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
++				// NDK r29 aligns LOAD segments to 16 KB by default, but still ends GNU_RELRO on a 4 KB boundary; common-page-size makes lld pad RELRO to 16 KB as well.
++				arguments "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
+ 			}
+ 		}
+ 		ndk {
+ 			// Specify the ABI configurations that Gradle should build and package.
+ 			// By default it compiles all available ABIs.
+-			//abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
++			abiFilters 'x86_64', 'arm64-v8a'
+ 		}
+ 	}
+ 	externalNativeBuild {

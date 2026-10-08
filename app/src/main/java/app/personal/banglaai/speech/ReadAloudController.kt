@@ -29,6 +29,20 @@ object ReadAloudController {
     /** Speaks the app's own explanation text (the user asked for it); never saved as a reading position. */
     fun speakExplanation(context: Context, text: String) { adHoc = true; get(context).play(ReadingPlan({ SpeechText.clean(text) }, 1), ReadingPosition(1, 0)) }
 
+    /**
+     * Called by [app.personal.banglaai.security.AppLock] just BEFORE the vault key session ends. Default: reading stops. Only if the owner switched on
+     * "keep reading when the screen locks" in Settings, a bounded copy of the pages still to be read is kept in memory for playback (the vault itself stays locked).
+     */
+    fun onVaultLock(context: Context) {
+        val r = reader ?: return
+        if (state != TtsReader.State.Playing && state != TtsReader.State.Paused) return
+        if (adHoc) return   // the app's own explanation: its text is already in memory, nothing in the vault is involved
+        val allow = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE).getBoolean(BG_READ_KEY, false)
+        if (allow && r.freezeForBackground(BG_MAX_PAGES, BG_MAX_CHARS)) return
+        r.stop()
+    }
+    const val BG_READ_KEY = "bg_read_ok"; const val BG_MAX_PAGES = 40; const val BG_MAX_CHARS = 400_000
+
     fun setPositionSaver(f: ((ReadingPosition) -> Unit)?) { onPosition = f }
 
     fun pause() { reader?.pause() }

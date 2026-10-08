@@ -26,12 +26,24 @@ class TesseractOcr(private val context: Context) : AutoCloseable {
         HIN("hin", "हिन्दी", 1_122_751, "4c73ffc59d497c186b19d1e90f5d721d678ea6b2e277b719bee4e2af12271825"),
     }
 
+    companion object {
+        /** Languages whose bundled data file is missing from this APK (empty = all present). Checked by the screens before starting OCR. */
+        fun missingPacks(context: Context): List<Lang> {
+            val have = runCatching { context.assets.list("tessdata")?.toSet() }.getOrNull().orEmpty()
+            return Lang.entries.filter { "${it.code}.traineddata" !in have }
+        }
+    }
+
     private fun ensureData(l: Lang) {
         val dir = File(root, "tessdata").apply { mkdirs() }; val f = File(dir, "${l.code}.traineddata")
-        if (f.exists() && f.length() == l.size) return
+        if (f.exists() && f.length() == l.size) return   // size AND (when copied) SHA-256 were checked at copy time; a wrong-size leftover is re-copied below
         val tmp = File(dir, "${l.code}.tmp"); val md = MessageDigest.getInstance("SHA-256")
-        context.assets.open("tessdata/${l.code}.traineddata").use { i -> tmp.outputStream().use { o ->
-            val b = ByteArray(1 shl 16); while (true) { val n = i.read(b); if (n < 0) break; o.write(b, 0, n); md.update(b, 0, n) } } }
+        try {
+            context.assets.open("tessdata/${l.code}.traineddata").use { i -> tmp.outputStream().use { o ->
+                val b = ByteArray(1 shl 16); while (true) { val n = i.read(b); if (n < 0) break; o.write(b, 0, n); md.update(b, 0, n) } } }
+        } catch (e: java.io.IOException) {
+            tmp.delete(); error("${l.label} ভাষার OCR ডেটা অ্যাপে পাওয়া যায়নি — অ্যাপের এই সংস্করণ ঠিকমতো তৈরি হয়নি। সঠিক সংস্করণ ইনস্টল করুন; ততক্ষণ এই ভাষায় OCR চলবে না।")
+        }
         val hex = md.digest().joinToString("") { "%02x".format(it) }
         if (!hex.equals(l.sha256, true)) { tmp.delete(); error("OCR ডেটা (${l.code}) নষ্ট — checksum মেলেনি") }
         check(tmp.renameTo(f))

@@ -16,7 +16,21 @@ jobs:
         run: ./gradlew --no-daemon lintDebug
       - name: Unit tests
         run: ./gradlew --no-daemon testDebugUnitTest
-      - name: Build debug and release (unsigned)
+      - name: Optional private release key (repository secrets; never in the repo)
+        env:
+          KS_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "RELEASE_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "RELEASE_KEYSTORE_PASSWORD=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_ALIAS=${{ secrets.RELEASE_KEY_ALIAS }}" >> "$GITHUB_ENV"
+            echo "RELEASE_KEY_PASSWORD=${{ secrets.RELEASE_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "Release will be signed with the private key from repository secrets."
+          else
+            echo "::warning::No RELEASE_KEYSTORE_B64 secret: the release APK is signed with the committed, NON-SECRET interim key (installs over earlier test builds, but is not private)."
+          fi
+      - name: Build debug and release
         run: ./gradlew --no-daemon assembleDebug assembleRelease
       - name: Verify INTERNET permission is absent in merged manifests
         run: |
@@ -24,5 +38,21 @@ jobs:
             M=$(find app/build -name AndroidManifest.xml -path "*merged_manifests/$v*" | head -1)
             echo "$v: $M"; test -n "$M"; ! grep -q 'android.permission.INTERNET"' "$M"
           done
+      - name: Release APK hard checks (not debuggable, only launcher exported, no INTERNET, OCR packs bundled, signature valid)
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          python3 tools/check_apk.py app/build/outputs/apk/release/app-release.apk "$BT/aapt2" "$BT/apksigner"
+      - name: 16 KB page-size check of every native library in the APKs (ZIP offset, LOAD alignment, RELRO end)
+        run: |
+          python3 tools/check_elf16k.py app/build/outputs/apk/release/app-release.apk
+          python3 tools/check_elf16k.py app/build/outputs/apk/debug/app-debug.apk
+      - name: Show APK identity (version, certificate, SHA-256)
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          for f in app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/debug/app-debug.apk; do
+            echo "== $f"; sha256sum "$f"; "$BT/aapt2" dump badging "$f" | head -1; "$BT/apksigner" verify --print-certs "$f" | grep -E "certificate (DN|SHA-256)"
+          done
       - uses: actions/upload-artifact@v4
         with: { name: choudhury-sahebs-ps-debug-apk, path: app/build/outputs/apk/debug/*.apk }
+      - uses: actions/upload-artifact@v4
+        with: { name: choudhury-sahebs-ps-release-apk, path: app/build/outputs/apk/release/*.apk }

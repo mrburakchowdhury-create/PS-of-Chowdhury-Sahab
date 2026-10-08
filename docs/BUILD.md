@@ -35,3 +35,10 @@ ANDROID_HOME=... tools/sign_release.sh ~/banglaai-release.jks banglaai
 `app/src/androidTest/` — `SmokeCoreTest` (Keystore + Tink Vault, PDF নিষ্কাশন, অধ্যায়, এক্সপোর্ট TXT/DOCX/PDF, ব্যাকআপ→মুছে→ফেরত, Tesseract-এর আসল native লাইব্রেরি, PIN, বায়োমেট্রিক-কী) ও `SmokeUiTest` (প্রথম চালু → PIN → হোম → সহকারী → ফোন-পরীক্ষা)।
 চালাতে: ফোন USB-তে (developer options + USB debugging) বা KVM-সহ ইমুলেটরে `./gradlew connectedDebugAndroidTest` (x86_64 ইমুলেটরে `-Pemu` যোগ করুন)।
 **এগুলো এখনো কোনো আসল Android-এ চালানো হয়নি**: এই বিল্ড-মেশিনে KVM নেই; সফটওয়্যার-ইমুলেটরে Android 14 প্রতিবার watchdog-এ ভেঙে পড়েছে।
+
+
+## Release সই (প্রাইভেট key)
+CI-র release APK প্রাইভেট key দিয়ে সই হয় যদি এই repository secrets থাকে: `RELEASE_KEYSTORE_B64` (keystore ফাইলের base64), `RELEASE_KEYSTORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`। key বানানো: `tools/sign_release.sh`-এর মন্তব্যে `keytool` কমান্ড দেওয়া আছে; key, পাসওয়ার্ড কখনো repo বা চ্যাটে দেবেন না। secrets না থাকলে APK আগের পাবলিক "PS Debug" key-তে সই হয় (আপডেট বসে, কিন্তু key গোপন নয়)। **key বদলালে ফোনে আগের অ্যাপ আনইনস্টল করতে হয়** (অ্যান্ড্রয়েডের নিয়ম) — তাই সত্যিকারের ডেটা রাখার আগেই একবার প্রাইভেট key-তে সরে যান।
+
+## নেটিভ লাইব্রেরি (16 KB) ও APK-যাচাই
+`third_party/README.md` দেখুন। যাচাই: `python3 tools/check_elf16k.py <apk>` ও `python3 tools/check_apk.py <release apk> <aapt2> <apksigner>`।

@@ -50,19 +50,55 @@ class Vault(private val context: Context, private val keys: app.personal.banglaa
         }
     }
 
-    /** Restores a document from a backup stream under its ORIGINAL id (so derived data still maps). Never overwrites an existing id. */
-    @Synchronized fun restore(id: String, name: String, added: Long, input: java.io.InputStream): VaultDoc? {
-        if (File(dir, "$id.enc").exists()) return null
-        val tmp = File(dir, "$id.tmp"); val out = File(dir, "$id.enc")
-        try {
-            var total = 0L
-            aead.newEncryptingStream(FileOutputStream(tmp), id.toByteArray()).use { dst ->
-                val buf = ByteArray(64 * 1024); while (true) { val n = input.read(buf); if (n < 0) break; dst.write(buf, 0, n); total += n }
+    // ---- staged restore (backup): nothing is visible in the vault until [publishStaged] ----
+
+    /** A fresh private folder inside the vault area for one restore attempt. Delete it with [deleteStaging] whatever happens. */
+    fun newStaging(): File = File(dir, "staging-" + UUID.randomUUID()).apply { mkdirs() }
+    fun deleteStaging(d: File) { if (d.parentFile == dir && d.name.startsWith("staging-")) d.deleteRecursively() }
+    fun usableSpace(): Long = dir.usableSpace
+    /** Parent of the restore journal (inside the vault area, so it is not part of any backup and not visible to the app's file pickers). */
+    fun journalDir(): File = dir
+    @Synchronized fun contains(id: String): Boolean = readIndex().any { it.id == id }
+
+    /** Encrypts [input] into [target] exactly like a normal import (same key, same associated data = [id]) so the file can later be renamed into place. Returns the plaintext size. */
+    fun encryptInto(target: File, id: String, input: java.io.InputStream, limit: Long, cancelled: () -> Boolean = { false }): Long {
+        var total = 0L
+        aead.newEncryptingStream(FileOutputStream(target), id.toByteArray()).use { dst ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                if (cancelled()) throw java.util.concurrent.CancellationException("বাতিল")
+                val n = input.read(buf); if (n < 0) break
+                total += n; require(total <= limit) { "ব্যাকআপের একটি ফাইল অনুমোদিত সীমার চেয়ে বড়" }
+                dst.write(buf, 0, n)
             }
-            check(tmp.renameTo(out)) { "সংরক্ষণ ব্যর্থ" }
-            val doc = VaultDoc(id, name, total, added); writeIndex(readIndex() + doc); return doc
-        } catch (e: Throwable) { tmp.delete(); out.delete(); throw e }
+        }
+        return total
     }
+
+    /**
+     * Makes all staged documents visible at once: every file is renamed into place, then the index is written ONCE (that single atomic write is the commit point).
+     * If anything fails before it, the renames are undone and the vault is exactly as before. Ids that already exist are refused (never overwritten).
+     */
+    @Synchronized fun publishStaged(docs: List<Pair<VaultDoc, File>>) {
+        val have = readIndex().map { it.id }.toSet()
+        require(docs.none { it.first.id in have }) { "একই আইডির ডকুমেন্ট আগে থেকেই আছে" }
+        val moved = ArrayList<File>()
+        try {
+            for ((d, f) in docs) { val out = File(dir, "${d.id}.enc"); check(!out.exists() && f.renameTo(out)) { "সংরক্ষণ ব্যর্থ" }; moved += out }
+            writeIndex(readIndex() + docs.map { it.first })
+        } catch (e: Throwable) { moved.forEach { it.delete() }; throw e }
+    }
+
+    /** Encrypted originals that no index entry points to (left by a crash between "file written" and "index written"). Returns how many were removed. */
+    @Synchronized fun removeOrphans(): Int {
+        val known = readIndex().map { "${it.id}.enc" }.toSet() + "index.enc"
+        val orphans = dir.listFiles { f -> f.isFile && (f.name.endsWith(".enc") && f.name !in known) }.orEmpty()
+        orphans.forEach { it.delete() }
+        return orphans.size
+    }
+
+    /** Leftover staging folders of a restore that was killed. Only call while no restore is running. */
+    fun removeStaleStaging() { dir.listFiles { f -> f.isDirectory && f.name.startsWith("staging-") }?.forEach { it.deleteRecursively() } }
 
     /** Small-blob encryption for derived data (job checkpoints, page text). [aad] binds the blob to its owner id. */
     fun seal(plain: ByteArray, aad: ByteArray): ByteArray = sealWith(aead, plain, aad)

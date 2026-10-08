@@ -26,7 +26,7 @@ object JobRunner {
         if (label != null) return
         label = name; error = null; progress = 0 to 0
         scope.launch {
-            runCatching { block() }.onFailure { error = it.message ?: it.javaClass.simpleName }
+            runCatching { block() }.onFailure { error = if (it is app.personal.banglaai.security.VaultLockedException) "ভল্ট বন্ধ হওয়ায় কাজ থেমেছে — আবার খুলে ‘চালিয়ে যান’ চাপুন; শেষ চেকপয়েন্ট থেকে চলবে।" else it.message ?: it.javaClass.simpleName }
             label = null; tick++
         }
     }

@@ -68,12 +68,24 @@ class VaultLockedException : IllegalStateException("ভল্ট বন্ধ �
  * by a Keystore RSA key that needs a fresh STRONG biometric to use. Without the PIN (or a matching biometric on this phone) the files stay sealed.
  * S lives in process memory after unlock so background jobs keep running while the screen is locked; it is gone when the process dies.
  */
-class KeyVault(private val ctx: Context, private val pepper: Pepper = KeystorePepper(), private val iterations: Int = 210_000) {
+class KeyVault(
+    private val ctx: Context, private val pepper: Pepper = KeystorePepper(), private val iterations: Int = 210_000,
+    /** Finds the keyset of an OLDER app version (Keystore-only protection) or null if there is none. Replaceable so the upgrade path can be tested without a real Keystore. */
+    private val legacyLoader: (Context) -> KeysetHandle? = ::loadLegacyKeyset,
+) {
     private val prefs = ctx.getSharedPreferences("vault_key2", Context.MODE_PRIVATE)
     @Volatile private var master: ByteArray? = null
     @Volatile private var cached: StreamingAead? = null
+    private val session = java.util.concurrent.atomic.AtomicInteger(0)   // bumped by every unlock and every lock: a stream made in an older session is dead
 
     val isUnlocked get() = master != null
+    fun sessionId() = session.get()
+
+    /** Ends the unlock session: wipes OUR copy of the master secret, drops the cached crypto object and kills every stream made in this session. Safe to call twice. */
+    @Synchronized fun lock() {
+        session.incrementAndGet()
+        master?.fill(0); master = null; cached = null
+    }
     fun hasBio() = prefs.contains(P_BIO)
 
     /** Unlocks with the PIN; creates (fresh install) or migrates (older install) the key on first use. False = wrong PIN. */
@@ -100,25 +112,24 @@ class KeyVault(private val ctx: Context, private val pepper: Pepper = KeystorePe
         val s = master ?: throw VaultLockedException()
         StreamingAeadConfig.register()
         val h = KeysetHandle.read(BinaryKeysetReader.withBytes(d(prefs.getString(P_KEYSET, null)!!)), GcmAead(SecretKeySpec(s, "AES")))
-        return h.getPrimitive(StreamingAead::class.java).also { cached = it }
+        val sid = session.get()
+        return GuardedStreamingAead(h.getPrimitive(StreamingAead::class.java)) { session.get() == sid && master != null }.also { cached = it }
     }
 
     private fun outerOpen(b: ByteArray) = if (prefs.getBoolean(P_NOPEPPER, false)) b else pepper.unwrap(b)
 
     private fun adopt(s: ByteArray) {
         require(s.size == 32)
-        master = s; cached = null
-        streamingAead()   // proves S really opens the keyset; throws otherwise
+        session.incrementAndGet(); master = s; cached = null
+        try { streamingAead() }   // proves S really opens the keyset; throws otherwise
+        catch (t: Throwable) { session.incrementAndGet(); master = null; cached = null; throw t }   // a wrong secret must not stay installed (the caller's array is theirs to wipe)
     }
 
     private fun createOrMigrate(pin: CharArray) {
         StreamingAeadConfig.register()
         val s = ByteArray(32).also { SecureRandom().nextBytes(it) }
-        val legacyPrefs = ctx.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE)
-        val legacy = legacyPrefs.contains(LEGACY_NAME)
-        val handle = if (legacy) AndroidKeysetManager.Builder().withSharedPref(ctx, LEGACY_NAME, LEGACY_PREFS)
-            .withKeyTemplate(KeyTemplates.get("AES256_GCM_HKDF_4KB")).withMasterKeyUri("android-keystore://banglaai_vault_master").build().keysetHandle
-        else KeysetHandle.generateNew(KeyTemplates.get("AES256_GCM_HKDF_4KB"))
+        val old = legacyLoader(ctx); val legacy = old != null   // an older install's keyset is carried over (same key => every existing file stays readable)
+        val handle = old ?: KeysetHandle.generateNew(KeyTemplates.get("AES256_GCM_HKDF_4KB"))
         val out = ByteArrayOutputStream(); handle.write(BinaryKeysetWriter.withOutputStream(out), GcmAead(SecretKeySpec(s, "AES")))
         val keyset = out.toByteArray()
         storePin(s, pin)
@@ -149,6 +160,12 @@ class KeyVault(private val ctx: Context, private val pepper: Pepper = KeystorePe
     private companion object {
         const val P_KEYSET = "keyset"; const val P_SALT = "salt"; const val P_PIN = "pinwrap"; const val P_BIO = "biowrap"; const val P_NOPEPPER = "nopepper"
         const val LEGACY_NAME = "vault_keyset"; const val LEGACY_PREFS = "vault_keyset_prefs"
+        fun loadLegacyKeyset(ctx: Context): KeysetHandle? {
+            if (!ctx.getSharedPreferences(LEGACY_PREFS, Context.MODE_PRIVATE).contains(LEGACY_NAME)) return null
+            StreamingAeadConfig.register()
+            return AndroidKeysetManager.Builder().withSharedPref(ctx, LEGACY_NAME, LEGACY_PREFS)
+                .withKeyTemplate(KeyTemplates.get("AES256_GCM_HKDF_4KB")).withMasterKeyUri("android-keystore://banglaai_vault_master").build().keysetHandle
+        }
         val AAD_PIN = "banglaai-pin-wrap".toByteArray()
     }
 }

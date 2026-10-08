@@ -13,6 +13,7 @@ import app.personal.banglaai.storage.KnownModels
 import app.personal.banglaai.storage.ModelStore
 import app.personal.banglaai.storage.Vault
 import app.personal.banglaai.storage.VaultDoc
+import app.personal.banglaai.importer.readUpTo
 import java.io.File
 
 /**
@@ -51,8 +52,9 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun isImage(doc: VaultDoc) = doc.name.lowercase().let { it.endsWith(".jpg") || it.endsWith(".jpeg") || it.endsWith(".png") }
     fun isSupported(doc: VaultDoc) = isImage(doc) || doc.name.lowercase().let { it.endsWith(".pdf") || it.endsWith(".txt") || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.supported || app.personal.banglaai.importer.OfficeImporter.extension(it) in app.personal.banglaai.importer.OfficeImporter.codeExtensions }
 
-    fun pause() { extraction?.pause(); translation?.pause(); ocrJob?.pause(); llm?.cancel() }
-    fun cancel() { extraction?.cancel(); translation?.cancel(); ocrJob?.cancel(); llm?.cancel() }
+    @Volatile private var officeStop = false
+    fun pause() { officeStop = true; extraction?.pause(); translation?.pause(); ocrJob?.pause(); llm?.cancel() }
+    fun cancel() { officeStop = true; extraction?.cancel(); translation?.cancel(); ocrJob?.cancel(); llm?.cancel() }
 
     /** Blocking; call on a background thread. Safe to call again to resume (finished pages are skipped). */
     fun extract(doc: VaultDoc, retryFailed: Boolean, onProgress: (Int, Int) -> Unit): JobStatus {
@@ -138,7 +140,8 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
 
     /** DOCX/PPTX/XLSX/EPUB/CSV: sections (slide/sheet/chapter/part) become "pages". Refused files raise a clear Bengali message. */
     private fun extractOffice(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
-        val sections = vault.open(doc.id).use { app.personal.banglaai.importer.OfficeImporter.extract(doc.name, it) }
+        officeStop = false
+        val sections = vault.open(doc.id).use { app.personal.banglaai.importer.OfficeImporter.extract(doc.name, it) { officeStop } }
         val id = jobId(doc, Kind.Extract)
         val job = JobState(id, doc.id, Kind.Extract.key, sections.size.coerceAtLeast(1))
         if (sections.isEmpty()) job.mark(1, app.personal.banglaai.jobs.PageStatus.UNREADABLE)
@@ -153,7 +156,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
 
     /** Source-code file: line-based sections (indentation kept), original untouched, nothing run. */
     private fun extractCode(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
-        val text = vault.open(doc.id).use { String(it.readBytes(), Charsets.UTF_8) }
+        val text = vault.open(doc.id).use { String(plainBytes(it), Charsets.UTF_8) }
         val sections = app.personal.banglaai.importer.OfficeImporter.splitCode(text).ifEmpty { listOf(app.personal.banglaai.importer.Section("খালি", "")) }
         val id = jobId(doc, Kind.Extract); val job = JobState(id, doc.id, Kind.Extract.key, sections.size)
         sections.forEachIndexed { i, sec ->
@@ -163,8 +166,12 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         job.status = JobStatus.DONE; jobs.save(job); onProgress(job.total, job.total); return job.status
     }
 
+    /** Plain-text/code files are read whole into memory: refuse absurdly large ones with a clear message instead of running out of memory. */
+    private fun plainBytes(i: java.io.InputStream): ByteArray = i.readUpTo(MAX_TEXT_FILE + 1).also { require(it.size <= MAX_TEXT_FILE) { "টেক্সট/কোড ফাইল ${MAX_TEXT_FILE shr 20} MB-এর বেশি বড় — ভাগ করে দিন" } }
+    private companion object { const val MAX_TEXT_FILE = 64L shl 20 }
+
     private fun extractTxt(doc: VaultDoc, onProgress: (Int, Int) -> Unit): JobStatus {
-        val dec = vault.open(doc.id).use { app.personal.banglaai.importer.TextDecoding.decode(it.readBytes()) }
+        val dec = vault.open(doc.id).use { app.personal.banglaai.importer.TextDecoding.decode(plainBytes(it)) }
         textNote = if (dec.guessed) "এই TXT ফাইলের এনকোডিং UTF-8 নয়; ${dec.charset} ধরে পড়া হয়েছে (আন্দাজ) — অক্ষর ভাঙা দেখালে ফাইলটি UTF-8-এ সেভ করে আবার দিন।" else null
         val text = dec.text
         val pages = app.personal.banglaai.ai.Chunker.split(text, 3000).ifEmpty { listOf("") }
