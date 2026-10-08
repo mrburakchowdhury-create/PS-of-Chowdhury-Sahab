@@ -36,6 +36,8 @@ class LibraryTest {
         val all = Library.bundled.flatMap { load(it) }; val idx = Library.Index(all)
         assertTrue(idx.search("ambassador negotiator secrecy of negotiation", 4).any { it.book.startsWith("On the Manner") })
         assertTrue(idx.search("crowds are credulous leaders prestige", 4).any { it.book.startsWith("The Crowd") })
+        assertTrue(idx.search("a king should appoint ministers spies treasury taxation", 4).any { it.book.startsWith("Kautilya") })
+        assertTrue(idx.search("never reveal the full extent of your knowledge keep people in suspense", 6).any { it.book.startsWith("The Art of Worldly") })
         assertTrue(idx.search("war is the continuation of policy by other means", 4).any { it.book.startsWith("On War") })
     }
 

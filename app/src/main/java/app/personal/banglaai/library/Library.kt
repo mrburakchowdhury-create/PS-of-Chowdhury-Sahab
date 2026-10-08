@@ -17,6 +17,8 @@ object Library {
     val bundled = listOf(
         BundledBook("prince", "The Prince (দ্য প্রিন্স)", "নিকোলো ম্যাকিয়াভেলি", "library/the_prince.txt", "অনুবাদ: W. K. Marriott (১৯০৮), সর্বজনীন-ডোমেইন"),
         BundledBook("artofwar", "The Art of War (যুদ্ধের কৌশল)", "সান জু", "library/art_of_war.txt", "অনুবাদ: Lionel Giles (১৯১০), সর্বজনীন-ডোমেইন"),
+        BundledBook("gracian", "The Art of Worldly Wisdom (বিচক্ষণ জীবন-কৌশল)", "বালতাসার গ্রাসিয়ান (১৬৪৭)", "library/gracian.txt", "অনুবাদ: Joseph Jacobs (১৮৯২), সর্বজনীন-ডোমেইন; স্ক্যান-OCR, কিছু বর্ণ-ভুল থাকতে পারে"),
+        BundledBook("arthashastra", "Kautilya's Arthashastra (অর্থশাস্ত্র)", "কৌটিল্য (চাণক্য)", "library/arthashastra.txt", "অনুবাদ: R. Shamasastry (১৯১৫), সর্বজনীন-ডোমেইন; স্ক্যান-OCR, কিছু বর্ণ-ভুল থাকতে পারে"),
         BundledBook("callieres", "On the Manner of Negotiating with Princes (কূটনীতির ক্লাসিক)", "ফ্রাঁসোয়া দ্য ক্যালিয়ের (১৭১৬)", "library/callieres.txt", "অনুবাদ: A. F. Whyte (১৯১৯), সর্বজনীন-ডোমেইন"),
         BundledBook("discourses", "Discourses on Livy (লিভির আলোচনা)", "নিকোলো ম্যাকিয়াভেলি", "library/discourses.txt", "অনুবাদ: Ninian Hill Thomson (১৮৮৩), সর্বজনীন-ডোমেইন"),
         BundledBook("crowd", "The Crowd (জনতার মনোবিজ্ঞান)", "গুস্তাভ লে বঁ", "library/the_crowd.txt", "ইংরেজি অনুবাদ (১৮৯৬), সর্বজনীন-ডোমেইন"),
@@ -29,7 +31,7 @@ object Library {
     fun chunk(book: String, raw: String, max: Int = 1400): List<Passage> {
         val out = ArrayList<Passage>(); var label = "ভূমিকা"; val cur = StringBuilder(); var part = 0
         fun flush() { if (cur.isNotBlank()) { part++; out += Passage(book, "$label · অংশ $part", cur.toString().trim()); cur.clear() } }
-        for (para in raw.replace("\r", "").split(Regex("\n\\s*\n"))) {
+        for (para in raw.replace("\r", "").replace(Regex("(?<=\\p{L})-\\n(?=\\p{Ll})"), "").split(Regex("\n\\s*\n"))) {
             val p = para.trim(); if (p.isEmpty()) continue
             val h = p.lines().first().trim()
             if (heading.matches(h) && h.length < 140) { flush(); part = 0; label = h.trimEnd('.').take(60) }
