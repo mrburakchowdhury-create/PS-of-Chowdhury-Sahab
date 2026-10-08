@@ -133,10 +133,10 @@ private enum class HomeTab { Menu, Files, Model, Voice, Terms, Settings, Status 
 @Composable
 private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Float, onFontScale: (Float) -> Unit) {
     val scope = rememberCoroutineScope()
-    val vault = remember { Vault(activity) }; val models = remember { ModelStore(activity) }
+    val vault = remember { AppGraph.vault(activity) }; val models = remember { AppGraph.models(activity) }
     var docs by remember { mutableStateOf<List<VaultDoc>>(emptyList()) }
     var modelList by remember { mutableStateOf(models.list()) }
-    val workflow = remember { DocWorkflow(activity, vault, models) }
+    val workflow = remember { AppGraph.workflow(activity) }
     var openDoc by remember { mutableStateOf<VaultDoc?>(null) }
     var codeOpen by remember { mutableStateOf(false) }
     var chatOpen by remember { mutableStateOf(false) }
@@ -193,8 +193,9 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     }
     // Keep the display on while the big copy runs, and refresh the model list when it ends.
     val importing = app.personal.banglaai.storage.ModelImporter.running
-    DisposableEffect(importing) {
-        if (importing) activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    val jobBusy = JobRunner.label != null
+    DisposableEffect(importing || jobBusy) {
+        if (importing || jobBusy) activity.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { activity.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
     LaunchedEffect(importing) { if (!importing) refresh() }

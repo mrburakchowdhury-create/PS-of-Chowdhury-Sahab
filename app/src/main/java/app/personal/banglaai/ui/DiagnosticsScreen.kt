@@ -85,6 +85,12 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
                 Text(f.detail, style = MaterialTheme.typography.bodyMedium)
             } }
         }
+        SectionTitle("অ্যাপ কেন বন্ধ হয়েছিল (শুধু এই ফোনে জমা, কোথাও যায় না)")
+        var crash by remember { mutableStateOf(CrashLog.last(ctx)) }
+        val exits = remember { CrashLog.exitReasons(ctx) }
+        if (exits.isEmpty() && crash == null) Text("কোনো তথ্য নেই।", style = MaterialTheme.typography.bodySmall)
+        exits.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+        crash?.let { Text(it.take(900), style = MaterialTheme.typography.bodySmall.merge(app.personal.banglaai.ui.Ps.Mono)); TextButton(onClick = { CrashLog.clear(ctx); crash = null }) { Text("মুছে ফেলুন") } }
         SectionTitle("ভয়েস-চেনার ভাষা-প্যাক (কথা শুনে লেখা)")
         var packText by remember { mutableStateOf<String?>(null) }
         val vi = remember { VoiceInput(ctx) }

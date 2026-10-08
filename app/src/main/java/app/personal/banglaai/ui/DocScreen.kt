@@ -25,24 +25,17 @@ import kotlinx.coroutines.withContext
 @Composable
 fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.banglaai.speech.VoiceCommand? = null, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var running by remember { mutableStateOf<String?>(null) }
-    var progress by remember { mutableStateOf(0 to 0) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var tick by remember { mutableIntStateOf(0) }
+    val running = JobRunner.label            // jobs live in the process, not in this screen (see JobRunner)
+    val progress = JobRunner.progress
+    val error = JobRunner.error
+    val tick = JobRunner.tick
     var langs by remember { mutableStateOf(setOf(TesseractOcr.Lang.ENG)) }
     var editImage by remember { mutableStateOf(false) }
     var pageInput by remember { mutableStateOf("1") }
     val ext = remember(tick) { wf.job(doc, DocWorkflow.Kind.Extract) }
     val tr = remember(tick) { wf.job(doc, DocWorkflow.Kind.Translate) }
 
-    fun start(label: String, block: () -> JobStatus) {
-        if (running != null) return
-        running = label; error = null; progress = 0 to 0
-        scope.launch {
-            runCatching { withContext(Dispatchers.IO) { block() } }.onFailure { error = it.message ?: it.javaClass.simpleName }
-            running = null; tick++
-        }
-    }
+    fun start(label: String, block: () -> JobStatus) = JobRunner.start(label, block)
 
     var exportKind by remember { mutableStateOf("txt") }
     var rtlOriginal by remember { mutableStateOf(false) }
@@ -58,7 +51,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
         }
     }
 
-    if (editImage) { ImageEditScreen(doc, wf) { editImage = false; tick++ }; return }
+    if (editImage) { ImageEditScreen(doc, wf) { editImage = false }; return }
     Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row { TextButton(onClick = onBack) { Text("← ফিরে যান") }; Text(doc.name, Modifier.padding(top = 12.dp)) }
         if (!wf.isSupported(doc)) {
@@ -71,10 +64,10 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
         running?.let { Text("চলছে: $it — ${progress.first}/${progress.second}"); LinearProgressIndicator(progress = { if (progress.second == 0) 0f else progress.first / progress.second.toFloat() }, modifier = Modifier.fillMaxWidth()) }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(enabled = running == null, onClick = { start("লেখা বের করা") { wf.extract(doc, false) { d, t -> progress = d to t } } }) {
+            Button(enabled = running == null, onClick = { start("লেখা বের করা") { wf.extract(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
                 Text(if (ext?.status == JobStatus.PAUSED) "লেখা বের করা — চালিয়ে যান" else "লেখা বের করুন")
             }
-            Button(enabled = running == null && ext != null, onClick = { start("বাংলা অনুবাদ") { wf.translate(doc, false) { d, t -> progress = d to t } } }) {
+            Button(enabled = running == null && ext != null, onClick = { start("বাংলা অনুবাদ") { wf.translate(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
                 Text(if (tr?.status == JobStatus.PAUSED) "অনুবাদ — চালিয়ে যান" else "বাংলায় অনুবাদ করুন")
             }
         }
@@ -84,7 +77,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TesseractOcr.Lang.entries.forEach { l -> FilterChip(selected = l in langs, onClick = { langs = if (l in langs) langs - l else langs + l }, label = { Text(l.label) }) }
             }
-            Button(enabled = running == null && langs.isNotEmpty(), onClick = { start("OCR") { wf.ocr(doc, langs.toList()) { d, t -> progress = d to t } } }) { Text("OCR চালান") }
+            Button(enabled = running == null && langs.isNotEmpty(), onClick = { start("OCR") { wf.ocr(doc, langs.toList()) { d, t -> JobRunner.progress = d to t } } }) { Text("OCR চালান") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(enabled = running != null, onClick = { wf.pause() }) { Text("থামান") }

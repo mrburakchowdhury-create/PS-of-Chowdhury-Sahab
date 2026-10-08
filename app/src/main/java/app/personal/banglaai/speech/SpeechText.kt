@@ -21,4 +21,10 @@ object SpeechText {
         s = s.replace(Regex("\\s{2,}"), " ").replace(Regex("\\s+([,।.!?;:])"), "$1").replace(Regex("([,;:])\\s*[,;:]+"), "$1")
         return s.trim().trim(',', ';', ':').trim()
     }
+
+    /** True when most letters are Bengali. The phone's Bengali voice would garble English/Arabic/Urdu/Hindi text, so such text is never sent to it. */
+    fun isMostlyBengali(text: String): Boolean {
+        val letters = text.filter { it.isLetter() }; if (letters.length < 3) return true
+        return letters.count { it.code in 0x0980..0x09FF } * 2 >= letters.length
+    }
 }

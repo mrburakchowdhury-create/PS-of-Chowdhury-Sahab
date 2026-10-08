@@ -50,6 +50,8 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     fun plan() = ReadingPlan({ p -> (if (useTranslation) wf.translations.get(doc.id, p) else wf.texts.get(doc.id, p))?.text }, totalPages)
     fun play(page: Int, seg: Int = 0) {
         val pl = plan(); val start = if (seg == 0) pl.startAt(page) else ReadingPosition(page, seg)
+        val sample = start?.let { pl.segmentAt(it)?.text }
+        if (!useTranslation && sample != null && !app.personal.banglaai.speech.SpeechText.isMostlyBengali(sample)) { voiceMsg = "এই মূল লেখা বাংলা নয় — বাংলা কণ্ঠ একে ঠিকমতো পড়তে পারে না। আগে 'বাংলায় অনুবাদ করুন' চালিয়ে ‘বাংলা অনুবাদ’ বেছে পড়ুন।"; return }
         if (start == null) voiceMsg = if (useTranslation) "এই পৃষ্ঠা থেকে পড়ার মতো বাংলা অনুবাদ এখনো নেই। আগে ওপরে 'বাংলায় অনুবাদ করুন' চালান (মডেল লাগবে), অথবা লেখাটি বাংলা হলে নিচে 'বের করা মূল লেখা' বেছে নিন।" else "এই পৃষ্ঠা থেকে পড়ার মতো বের-করা লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR চালান)।" else {
             voiceMsg = null; ReadAloudController.play(ctx, pl, start)
             if (android.os.Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)   // only affects whether the controls are visible

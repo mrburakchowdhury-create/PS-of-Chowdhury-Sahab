@@ -59,7 +59,7 @@ class CallReaderSession(
 
     private fun readPage(page: Int): Outcome {
         val pl = plan ?: return needDoc()
-        val start = pl.startAt(page) ?: return Outcome.Say("পৃষ্ঠা $page থেকে পড়ার মতো কোনো লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR লাগবে)।")
+        val start = pl.startAt(page) ?: return Outcome.Say("পৃষ্ঠা $page থেকে পড়ার মতো কোনো লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR লাগবে; আর মূল লেখা বাংলা না হলে আগে বাংলা অনুবাদ করতে হবে — বাংলা কণ্ঠ অন্য ভাষা পড়তে পারে না)।")
         pos = start; return Outcome.StartReading
     }
 

@@ -73,7 +73,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
         CallReaderSession(
             { docNames.map { it.name } },
             { n -> docNames.firstOrNull { it.name == n }?.let { d -> wf.job(d, DocWorkflow.Kind.Extract)?.total } ?: 0 },
-            { n, pg -> docNames.firstOrNull { it.name == n }?.let { d -> (wf.translations.get(d.id, pg) ?: wf.texts.get(d.id, pg))?.text } },
+            { n, pg -> docNames.firstOrNull { it.name == n }?.let { d -> (wf.translations.get(d.id, pg)?.text ?: wf.texts.get(d.id, pg)?.text?.takeIf { t -> app.personal.banglaai.speech.SpeechText.isMostlyBengali(t) }) } },
             { n -> docNames.firstOrNull { it.name == n }?.let { d -> wf.chapters(d).map { it.title to it.page } }.orEmpty() })
     }
     var reading by remember { mutableStateOf(false) }

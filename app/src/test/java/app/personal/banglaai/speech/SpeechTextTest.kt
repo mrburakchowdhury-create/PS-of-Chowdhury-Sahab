@@ -18,4 +18,10 @@ class SpeechTextTest {
         assertEquals("রাসূল (সা.) ১৪ নম্বর হাদিসে বলেছেন, সত্য বলো।", SpeechText.clean("রাসূল (সা.) ১৪ নম্বর হাদিসে বলেছেন, সত্য বলো।"))
         assertEquals("1.5 ডলার", SpeechText.clean("1.5 ডলার"))
     }
+
+    @Test fun detectsBengaliVersusOtherScripts() {
+        assertTrue(SpeechText.isMostlyBengali("আজ আবহাওয়া ভালো, 12 তারিখ।"))
+        assertFalse(SpeechText.isMostlyBengali("The weather is nice today"))
+        assertFalse(SpeechText.isMostlyBengali("الحمد لله رب العالمين"))
+    }
 }

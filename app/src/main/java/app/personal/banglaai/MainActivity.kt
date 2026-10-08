@@ -32,6 +32,7 @@ class MainActivity : FragmentActivity() {
         // Hide content from screenshots and the recent-apps preview.
         app.personal.banglaai.ai.LocalLlm.preferGpu = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("gpu", false)
         applyScreenshotPolicy()
+        app.personal.banglaai.ui.CrashLog.install(this)
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
         // A crash or kill mid-extraction can leave a plaintext PDF working copy in the cache; remove any such leftovers at every start.
         cacheDir.listFiles { f -> f.name.startsWith("pdf-") || f.name == "photos" }?.forEach { it.deleteRecursively() }
