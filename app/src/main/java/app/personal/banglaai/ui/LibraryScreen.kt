@@ -101,7 +101,7 @@ fun LibraryScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () -> U
         err?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary) }
         answer?.let { a ->
-            Text("উত্তর (AI; শুধু নিচের উৎস-অংশ থেকে)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text("উত্তর (AI; মূলত নিচের উৎস-অংশের ভিত্তিতে — ‘আমার মন্তব্য/অনুমান’ অংশ বইয়ের কথা নয়; উৎসের সঙ্গে মিলিয়ে নিন)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             SelectionContainer { Text(a) }
             TextButton(onClick = { ReadAloudController.speakExplanation(ctx, a) }) { Text("🔊 শুনুন") }
         }

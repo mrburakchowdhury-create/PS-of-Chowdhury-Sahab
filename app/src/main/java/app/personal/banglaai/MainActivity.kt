@@ -24,7 +24,7 @@ class MainActivity : FragmentActivity() {
     private var leftAt = 0L
 
     private val screenOff = object : BroadcastReceiver() {
-        override fun onReceive(c: Context?, i: Intent?) { unlocked = false }
+        override fun onReceive(c: Context?, i: Intent?) { unlocked = false; app.personal.banglaai.ai.LocalLlm.cancelInteractive() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,7 +48,7 @@ class MainActivity : FragmentActivity() {
     override fun onStop() { super.onStop(); leftAt = SystemClock.elapsedRealtime(); window.decorView.postDelayed({ if (!isChangingConfigurations && !lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) app.personal.banglaai.ai.LocalLlm.releaseAll() }, 60_000L) }
 
     /** Android is short of memory: give the model's RAM back first (it is by far the biggest thing we hold). */
-    override fun onTrimMemory(level: Int) { super.onTrimMemory(level); if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND || level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) app.personal.banglaai.ai.LocalLlm.releaseAll() }
+    override fun onTrimMemory(level: Int) { super.onTrimMemory(level); if (level in android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW..android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL || level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) app.personal.banglaai.ai.LocalLlm.releaseAll() }   // not UI_HIDDEN (20): that fires on every Home press / file picker
 
     override fun onStart() {
         super.onStart()

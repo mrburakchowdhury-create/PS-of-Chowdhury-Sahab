@@ -83,7 +83,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
             OutlinedButton(enabled = running != null, onClick = { wf.pause() }) { Text("থামান") }
             OutlinedButton(enabled = running != null, onClick = { wf.cancel() }) { Text("বাতিল") }
         }
-        Text("অনুবাদ শুরু হবে শুধু আপনি বাটন চাপলেই। স্থানীয় AI মডেল ছাড়া অনুবাদ হয় না; কখনো ইন্টারনেটে পাঠানো হয় না।", style = MaterialTheme.typography.bodySmall)
+        Text("অনুবাদ শুরু হবে শুধু আপনি বাটন চাপলেই। স্থানীয় AI মডেল ছাড়া অনুবাদ হয় না; এই অ্যাপের ইন্টারনেট অনুমতি নেই, তাই নিজে কিছু পাঠাতে পারে না।", style = MaterialTheme.typography.bodySmall)
 
         ext?.let { Text("লেখা বের করা (${it.status}): ${it.coverageReport()}", style = MaterialTheme.typography.bodySmall)
             if (it.status == JobStatus.DONE && it.count(app.personal.banglaai.jobs.PageStatus.UNREADABLE) > 0)

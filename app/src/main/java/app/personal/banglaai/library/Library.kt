@@ -31,7 +31,7 @@ object Library {
     fun chunk(book: String, raw: String, max: Int = 1400): List<Passage> {
         val out = ArrayList<Passage>(); var label = "ভূমিকা"; val cur = StringBuilder(); var part = 0
         fun flush() { if (cur.isNotBlank()) { part++; out += Passage(book, "$label · অংশ $part", cur.toString().trim()); cur.clear() } }
-        for (para in raw.replace("\r", "").replace(Regex("(?<=\\p{L})-\\n(?=\\p{Ll})"), "").split(Regex("\n\\s*\n"))) {
+        for (para in raw.replace("\r", "").replace(Regex("(?<=\\p{L})-[ \\t]*\\n(?=\\p{Ll})"), "").split(Regex("\n\\s*\n"))) {
             val p = para.trim(); if (p.isEmpty()) continue
             val h = p.lines().first().trim()
             if (heading.matches(h) && h.length < 140) { flush(); part = 0; label = h.trimEnd('.').take(60) }

@@ -211,7 +211,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onBack: () ->
             Phase.Idle -> "কল শুরু করুন"; Phase.Listening -> "🎤 শুনছি… বলুন"; Phase.Thinking -> "ভাবছি… (ছবিতে চাপলে থামে)"
             Phase.Speaking -> "🔊 বলছি… (ছবিতে চাপলে থামিয়ে আপনাকে শুনব)"; Phase.Ended -> "কল শেষ"
         }, style = MaterialTheme.typography.titleMedium, color = SkyBlue, textAlign = TextAlign.Center)
-        if (active) Text("মাইক শুধু ‘শুনছি’ অবস্থায় চালু থাকে। কিছু রেকর্ড বা সংরক্ষণ হয় না।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        if (active) Text("মাইক শুধু ‘শুনছি’ অবস্থায় চালু থাকে। এই অ্যাপ অডিও রেকর্ড বা সংরক্ষণ করে না।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         if (heard.isNotBlank()) Text("আপনি: $heard", style = MaterialTheme.typography.bodyMedium)
         if (answer.isNotBlank()) Text("সহকারী: $answer", style = MaterialTheme.typography.bodyMedium)
         if (speakerReady == false && active) Text("⚠️ ফোনে অফলাইন বাংলা কণ্ঠ নেই, তাই উত্তর শুধু লেখায় দেখানো হবে (ফোনের সেটিংস → Text-to-speech থেকে বাংলা ভয়েস নামান)।", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)

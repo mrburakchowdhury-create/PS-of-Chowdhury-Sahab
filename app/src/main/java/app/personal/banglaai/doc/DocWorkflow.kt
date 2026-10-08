@@ -186,7 +186,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
         val model = usableModel() ?: error("কোনো AI মডেল বসানো নেই — আগে মডেল import করুন (স্থানীয় ছাড়া অনুবাদ করা হবে না)")
         val id = jobId(doc, Kind.Translate)
         val job = jobs.load(id) ?: JobState(id, doc.id, Kind.Translate.key, ext.total)
-        LocalLlm(model, File(context.cacheDir, "llm")).use { m ->
+        LocalLlm(model, File(context.cacheDir, "llm"), background = true).use { m ->
             llm = m
             try {
                 val runner = TranslationJob(job, texts, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it, glossary.relevantTo(it).map { g -> g.source to g.bengali })) }).also { translation = it }

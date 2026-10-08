@@ -8,39 +8,50 @@ import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.util.concurrent.Semaphore
 
 /**
  * On-device text model (LiteRT-LM). ONE engine is shared by the whole app: several screens used to load their own multi-GB copy at the same time,
  * which exhausts the phone's RAM (slowdown, app/phone restart) and re-paid the 10–60 s load on every request. Now the engine is loaded once, requests
  * are run one at a time, the context length is capped (smaller KV-cache), and the engine is freed after [IDLE_MS] of no use, when the app goes to the
- * background, or when Android asks for memory. [close] therefore only marks this user as done. No network is used.
+ * background, or when Android asks for memory. [close] therefore only marks this user as done. Interactive requests (screens) are cancelled when the screen goes away or the app locks ([cancelInteractive]); background jobs ([background] = true, e.g. a long translation) keep running. No network is used.
  * Status: compiles; speed/RAM on the phone are device-test pending. The same model file was verified on a desktop (docs/MODEL_EVAL.md).
  */
-class LocalLlm(private val modelFile: File, private val cacheDir: File) : AutoCloseable {
+class LocalLlm(private val modelFile: File, private val cacheDir: File, private val background: Boolean = false) : AutoCloseable {
     @Volatile private var current: com.google.ai.edge.litertlm.Conversation? = null
 
-    /** Loads (or reuses) the shared engine. Call off the main thread. */
-    fun load() { engine() }
+    private fun stillWanted(gen: Int) { if (!background && gen != Shared.interactiveGen) throw CancellationException("screen closed or app locked") }
     private fun engine(): Engine = Shared.engine(modelFile, cacheDir)
+
+    /** Loads (or reuses) the shared engine, taking its turn like a request so a memory-trim cannot free it half-way. Call off the main thread. */
+    fun load() { Shared.turn.acquire(); try { engine() } finally { Shared.turn.release(); Shared.touch() } }
 
     /** One independent request (fresh conversation, so chunks never leak into each other). Blocks; call off the main thread. */
     fun ask(system: String, prompt: String): String {
+        val gen = Shared.interactiveGen
         Shared.turn.acquire()
         try {
-            val conv = engine().createConversation(ConversationConfig(systemInstruction = Contents.of(system)))
-            current = conv
-            try { return conv.sendMessage(prompt).toString() } finally { current = null; conv.close() }
+            stillWanted(gen)
+            val eng = engine(); stillWanted(gen)
+            val conv = eng.createConversation(ConversationConfig(systemInstruction = Contents.of(system)))
+            current = conv; if (!background) Shared.activeInteractive = conv
+            try { return conv.sendMessage(prompt).toString() } finally { current = null; Shared.activeInteractive = null; conv.close() }
         } finally { Shared.turn.release(); Shared.touch() }
     }
 
     /** Streaming answer: [onText] gets each new piece as the model writes it. Call from a background coroutine (loading the model can take many seconds). */
     suspend fun askStream(system: String, prompt: String, onText: (String) -> Unit) {
+        val gen = Shared.interactiveGen
         Shared.turn.acquire()
         try {
-            val conv = engine().createConversation(ConversationConfig(systemInstruction = Contents.of(system)))
-            current = conv
-            try { conv.sendMessageAsync(prompt).collect { onText(it.toString()) } } finally { current = null; conv.close() }
+            currentCoroutineContext().ensureActive(); stillWanted(gen)
+            val eng = engine(); currentCoroutineContext().ensureActive(); stillWanted(gen)
+            val conv = eng.createConversation(ConversationConfig(systemInstruction = Contents.of(system)))
+            current = conv; if (!background) Shared.activeInteractive = conv
+            try { conv.sendMessageAsync(prompt).collect { onText(it.toString()) } } finally { current = null; Shared.activeInteractive = null; conv.close() }
         } finally { Shared.turn.release(); Shared.touch() }
     }
 
@@ -60,16 +71,21 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File) : AutoCl
         const val IDLE_MS = 4 * 60_000L
         const val MAX_TOKENS = 4096
 
-        /** Frees the model's RAM now (app in background, memory pressure, or the owner asked). */
+        /** Frees the model's RAM (app in background, memory pressure, or the owner asked) — only when no request is running; done off the main thread. */
         fun releaseAll() = Shared.releaseWhenIdle()
+
+        /** Stops every screen-owned request now (running or still waiting for its turn). Called when a screen closes or the app locks. Background jobs are not affected. */
+        fun cancelInteractive() { Shared.interactiveGen++; Shared.activeInteractive?.cancelProcess() }
     }
 
     private object Shared {
-        val turn = Semaphore(1)
+        val turn = Semaphore(1, true)
+        @Volatile var interactiveGen = 0
+        @Volatile var activeInteractive: com.google.ai.edge.litertlm.Conversation? = null
         private var eng: Engine? = null
         private var path: String? = null
         private val main = Handler(Looper.getMainLooper())
-        private val idle = Runnable { if (turn.tryAcquire()) try { release() } finally { turn.release() } else touch() }
+        private val idle = Runnable { releaseWhenIdle(retryLater = true) }
         val loaded get() = eng != null
 
         @Synchronized fun engine(modelFile: File, cacheDir: File): Engine {
@@ -87,8 +103,11 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File) : AutoCl
         }
 
         fun touch() { main.removeCallbacks(idle); if (eng != null) main.postDelayed(idle, IDLE_MS) }
-        /** Never frees the engine while a request is running. */
-        fun releaseWhenIdle() { if (turn.tryAcquire()) try { release() } finally { turn.release() } }
+
+        /** Never frees the engine while a request or a load is running, and never on the calling (possibly main) thread: closing a 3.4 GB engine takes time. */
+        fun releaseWhenIdle(retryLater: Boolean = false) {
+            if (turn.tryAcquire()) Thread { try { release() } finally { turn.release() } }.start() else if (retryLater) touch()
+        }
         @Synchronized fun release() { main.removeCallbacks(idle); runCatching { eng?.close() }; eng = null; path = null }
     }
 }
