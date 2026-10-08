@@ -29,6 +29,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     var rate by remember { mutableFloatStateOf(1.0f) }
     var useTranslation by remember { mutableStateOf(true) }
     var pageInput by remember { mutableStateOf("1") }
+    var endInput by remember { mutableStateOf("") }   // optional "read up to this page"
     var transcript by remember { mutableStateOf("") }
     var cmd by remember { mutableStateOf<VoiceCommand?>(null) }
     var voiceMsg by remember { mutableStateOf<String?>(null) }
@@ -47,7 +48,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     var initialDone by remember { mutableStateOf(false) }
     val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
-    fun plan() = ReadingPlan({ p -> (if (useTranslation) wf.translations.get(doc.id, p) else wf.texts.get(doc.id, p))?.text }, totalPages)
+    fun plan() = ReadingPlan({ p -> (if (useTranslation) wf.translations.get(doc.id, p) else wf.texts.get(doc.id, p))?.text }, endInput.toIntOrNull()?.coerceIn(1, totalPages) ?: totalPages)
     fun play(page: Int, seg: Int = 0) {
         val pl = plan(); val start = if (seg == 0) pl.startAt(page) else ReadingPosition(page, seg)
         val sample = start?.let { pl.segmentAt(it)?.text }
@@ -73,7 +74,8 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     }
     fun run(c: VoiceCommand) {
         when (c) {
-            is VoiceCommand.ReadPage -> { pageInput = c.page.toString(); play(c.page) }
+            is VoiceCommand.ReadPage -> { pageInput = c.page.toString(); endInput = ""; play(c.page) }
+            is VoiceCommand.ReadRange -> { pageInput = c.from.toString(); endInput = c.to.toString(); play(c.from) }
             VoiceCommand.Resume -> if (state == TtsReader.State.Paused) reader.resume() else {
                 prefs.getString(doc.id, null)?.split(":")?.let { play(it[0].toInt(), it[1].toInt()) } ?: play(pageInput.toIntOrNull() ?: 1) }
             VoiceCommand.Pause -> reader.pause(); VoiceCommand.Stop -> reader.stop()
@@ -125,6 +127,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 OutlinedTextField(value = pageInput, onValueChange = { pageInput = it.filter(Char::isDigit).take(5) }, label = { Text("পৃষ্ঠা") }, singleLine = true, modifier = Modifier.width(110.dp))
+                OutlinedTextField(value = endInput, onValueChange = { endInput = it.filter(Char::isDigit).take(5) }, label = { Text("পর্যন্ত") }, singleLine = true, modifier = Modifier.width(110.dp))
                 Button(onClick = { play(pageInput.toIntOrNull() ?: 1) }) { Text("▶ পড়ুন") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

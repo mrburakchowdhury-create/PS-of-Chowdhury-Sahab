@@ -23,6 +23,8 @@ class CallReaderSession(
 
     var doc: String? = null; private set
     private var plan: ReadingPlan? = null
+    private var total = 0
+    private var textOf: ((Int) -> String?)? = null
     var pos: ReadingPosition? = null; private set
 
     fun current(): Segment? = pos?.let { plan?.segmentAt(it) }
@@ -33,6 +35,7 @@ class CallReaderSession(
         is VoiceCommand.OpenFile -> open(cmd)
         is VoiceCommand.ReadPage -> readPage(cmd.page)
         is VoiceCommand.ReadChapter -> readChapter(cmd.chapter)
+        is VoiceCommand.ReadRange -> readRange(cmd.from, cmd.to)
         VoiceCommand.Resume, VoiceCommand.Repeat -> if (current() != null) Outcome.StartReading else Outcome.Say("এখনো কিছু পড়া শুরু হয়নি। বলুন: ফাইলের নাম, তারপর কত নম্বর পৃষ্ঠা থেকে পড়ব।")
         VoiceCommand.Explain -> current()?.let { Outcome.Explain(it.text, pageText(doc!!, it.page)) } ?: Outcome.Say("বোঝানোর মতো কিছু এখনো পড়া হয়নি।")
         VoiceCommand.Slower -> Outcome.Rate(false)
@@ -48,8 +51,8 @@ class CallReaderSession(
             is FileMatcher.Result.One -> {
                 val total = totalPages(r.name)
                 if (total <= 0) return Outcome.Say("“${r.name}” পেয়েছি, কিন্তু এর লেখা এখনো বের করা হয়নি। হোমে ফাইল খুলে আগে ‘লেখা বের করুন’ চালান।")
-                doc = r.name; pos = null
-                plan = ReadingPlan({ p -> pageText(r.name, p) }, total)
+                doc = r.name; pos = null; this.total = total
+                textOf = { p -> pageText(r.name, p) }; plan = ReadingPlan(textOf!!, total)
                 return c.then?.let { handle(it) } ?: Outcome.Say("“${r.name}” খুলেছি, মোট $total পৃষ্ঠা। কোন পৃষ্ঠা বা অধ্যায় থেকে পড়ব?")
             }
         }
@@ -57,7 +60,16 @@ class CallReaderSession(
 
     private fun needDoc() = Outcome.Say("আগে বলুন কোন ফাইল খুলব — যেমন: ইতিহাস ফাইলটা খোলো।")
 
+    private fun readRange(from: Int, to: Int): Outcome {
+        val f = textOf ?: return needDoc()
+        if (from > total) return Outcome.Say("ফাইলে মোট $total পৃষ্ঠা — $from নম্বর পৃষ্ঠা নেই।")
+        plan = ReadingPlan(f, minOf(to, total))   // the plan stops at the last requested page
+        val start = plan!!.startAt(from) ?: return Outcome.Say("পৃষ্ঠা $from থেকে $to-এর মধ্যে পড়ার মতো লেখা নেই (স্ক্যান হলে আগে OCR, অ-বাংলা হলে আগে অনুবাদ লাগবে)।")
+        pos = start; return Outcome.StartReading
+    }
+
     private fun readPage(page: Int): Outcome {
+        textOf?.let { f -> if (plan?.pageCount != total) plan = ReadingPlan(f, total) }   // back to the whole document
         val pl = plan ?: return needDoc()
         val start = pl.startAt(page) ?: return Outcome.Say("পৃষ্ঠা $page থেকে পড়ার মতো কোনো লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR লাগবে; আর মূল লেখা বাংলা না হলে আগে বাংলা অনুবাদ করতে হবে — বাংলা কণ্ঠ অন্য ভাষা পড়তে পারে না)।")
         pos = start; return Outcome.StartReading

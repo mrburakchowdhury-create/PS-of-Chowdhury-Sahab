@@ -5,6 +5,8 @@ sealed interface VoiceCommand {
     data class OpenFile(val query: String, val then: VoiceCommand?) : VoiceCommand
     data class ReadPage(val page: Int) : VoiceCommand
     data class ReadChapter(val chapter: Int) : VoiceCommand
+    /** "১০ থেকে ২০ পৃষ্ঠা পড়ো": read only these pages, then stop. */
+    data class ReadRange(val from: Int, val to: Int) : VoiceCommand
     data object Explain : VoiceCommand
     data object Resume : VoiceCommand
     data object Pause : VoiceCommand
@@ -50,7 +52,7 @@ object FileMatcher {
 object VoiceCommands {
     private val digitMap = "০১২৩৪৫৬৭৮৯".withIndex().associate { it.value to it.index.toString()[0] }
     fun normalizeDigits(s: String) = s.map { digitMap[it] ?: it }.joinToString("")
-    private val anchors = setOf("নম্বর", "নং", "পৃষ্ঠা", "পাতা", "অধ্যায়", "চ্যাপ্টার", "page", "chapter", "পৃষ্ঠার", "অধ্যায়ের", "চ্যাপ্টারের", "নম্বরের")
+    private val anchors = setOf("নম্বর", "নং", "পৃষ্ঠা", "পাতা", "অধ্যায়", "চ্যাপ্টার", "page", "chapter", "পৃষ্ঠার", "অধ্যায়ের", "চ্যাপ্টারের", "নম্বরের", "থেকে", "পর্যন্ত", "হতে")
     private val filler = setOf("এই", "ওই", "সেই", "ফাইল", "ফাইলটা", "ফাইলটি", "ফাইলটাকে", "খোলো", "খুলো", "খুলুন", "ওপেন", "খুলে", "করো", "করুন", "করে", "এবং", "আর", "তারপর", "তারপরে", "থেকে", "পড়া", "পড়ো", "পড়ে", "পড়", "শুরু", "নম্বর", "নং", "পৃষ্ঠা", "পাতা", "অধ্যায়", "চ্যাপ্টার", "page", "chapter", "open", "দাও", "শোনাও", "আমাকে", "আমার", "একটু", "অ্যাপ", "হও", "ওপেন", "ও")
 
     /** Tokens with number words converted to digits where they sit next to an anchor word. */
@@ -94,6 +96,8 @@ object VoiceCommands {
         return when {
             numbers.size == 1 -> numbers[0].toIntOrNull()?.takeIf { it in 1..99999 }?.let { if (chapter) VoiceCommand.ReadChapter(it) else VoiceCommand.ReadPage(it) }
                 ?: VoiceCommand.Ambiguous("সংখ্যা বোঝা যায়নি")
+            numbers.size == 2 && !chapter && listOf("থেকে", "হতে", "পর্যন্ত", "to").any { t.contains(it) } ->
+                numbers.map { it.toIntOrNull() }.let { n -> if (n.any { it == null || it !in 1..99999 }) VoiceCommand.Ambiguous("পৃষ্ঠার সংখ্যা বোঝা যায়নি") else VoiceCommand.ReadRange(minOf(n[0]!!, n[1]!!), maxOf(n[0]!!, n[1]!!)) }
             numbers.size > 1 -> VoiceCommand.Ambiguous("একাধিক সংখ্যা শোনা গেছে: ${numbers.joinToString(", ")}")
             else -> VoiceCommand.Ambiguous("${if (chapter) "অধ্যায়ের" else "পৃষ্ঠার"} নম্বর বোঝা যায়নি (অঙ্কে বা পরিচিত বাংলা সংখ্যা-শব্দে বলুন)")
         }
@@ -108,6 +112,7 @@ fun describe(c: VoiceCommand): String = when (c) {
     is VoiceCommand.OpenFile -> "ফাইল খোলা" + (if (c.query.isNotBlank()) " (নাম: ${c.query})" else "") + (c.then?.let { " এবং তারপর: ${describe(it)}" } ?: "")
     is VoiceCommand.ReadPage -> "পৃষ্ঠা ${c.page} থেকে পড়া"
     is VoiceCommand.ReadChapter -> "অধ্যায় ${c.chapter} থেকে পড়া"
+    is VoiceCommand.ReadRange -> "পৃষ্ঠা ${c.from} থেকে ${c.to} পর্যন্ত পড়া"
     VoiceCommand.Explain -> "এখন পড়া/বাছা অংশ সহজ বাংলায় বুঝিয়ে বলা (AI, মডেল লাগবে)"
     VoiceCommand.Resume -> "আগের জায়গা থেকে পড়া"; VoiceCommand.Pause -> "থামানো"; VoiceCommand.Stop -> "বন্ধ করা"
     VoiceCommand.Slower -> "আস্তে পড়া"; VoiceCommand.Faster -> "দ্রুত পড়া"; VoiceCommand.Repeat -> "আবার পড়া"

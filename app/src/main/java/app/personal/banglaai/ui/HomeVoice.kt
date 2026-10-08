@@ -58,7 +58,7 @@ fun HomeVoice(docs: List<VaultDoc>, onOpen: (VaultDoc, VoiceCommand?) -> Unit, o
             }
             is VoiceCommand.Ambiguous -> {}
             is VoiceCommand.Unknown -> {}   // never reached: unknown text is sent to the assistant right away (see interpret)
-            VoiceCommand.Resume, VoiceCommand.Slower, VoiceCommand.Faster, VoiceCommand.Repeat, is VoiceCommand.ReadPage, is VoiceCommand.ReadChapter, VoiceCommand.Explain ->
+            VoiceCommand.Resume, VoiceCommand.Slower, VoiceCommand.Faster, VoiceCommand.Repeat, is VoiceCommand.ReadPage, is VoiceCommand.ReadChapter, is VoiceCommand.ReadRange, VoiceCommand.Explain ->
                 Text("এই নির্দেশের জন্য আগে ফাইল খুলতে হবে। বলুন: “… ফাইলটা খোলো”।", style = MaterialTheme.typography.bodySmall)
             else -> {}
         }

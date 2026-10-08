@@ -42,4 +42,14 @@ class CallReaderSessionTest {
         assertTrue((say(s, "পাঁচ নম্বর অধ্যায় থেকে পড়ো") as Outcome.Say).text.contains("অধ্যায় 5 নেই"))
         assertEquals(Outcome.Rate(false), say(s, "আস্তে পড়ো"))
     }
+
+    @Test fun readsOnlyTheRequestedPageRange() {
+        val s = session(); say(s, "ইতিহাস ফাইলটা খোলো")
+        assertTrue(say(s, "এক থেকে তিন নম্বর পৃষ্ঠা পড়ো") is Outcome.StartReading)
+        val texts = ArrayList<String>(); do { texts += s.current()!!.text } while (s.advance())
+        assertEquals(listOf("প্রথম পাতার লেখা। দ্বিতীয় বাক্য।", "তৃতীয় পাতা।"), texts)
+        say(s, "ইতিহাস ফাইলটা খোলো"); say(s, "এক থেকে এক নম্বর পৃষ্ঠা পড়ো")
+        var n = 0; do { n++ } while (s.advance()); assertTrue(n >= 1 && s.current() == null)
+        assertTrue((say(s, "দশ থেকে বিশ নম্বর পৃষ্ঠা পড়ো") as Outcome.Say).text.contains("মোট 3 পৃষ্ঠা"))
+    }
 }

@@ -142,6 +142,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     var chatOpen by remember { mutableStateOf(false) }
     var callOpen by remember { mutableStateOf(false) }
     var liveOpen by remember { mutableStateOf(false) }
+    var kbOpen by remember { mutableStateOf(false) }
     var chatStart by remember { mutableStateOf<String?>(null) }
     var diagOpen by remember { mutableStateOf(false) }
     var tab by rememberSaveable { mutableStateOf(HomeTab.Menu) }
@@ -202,9 +203,10 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
     // A model file without a recorded checksum is verified automatically (reads the file once; no copy).
     LaunchedEffect(modelList, importing) { if (!importing) modelList.firstOrNull { it.sha256.isBlank() && it.name.endsWith(".litertlm") }?.let { app.personal.banglaai.storage.ModelImporter.startVerify(models, it.name) } }
 
-    androidx.activity.compose.BackHandler(enabled = tab != HomeTab.Menu && openDoc == null && !callOpen && !chatOpen && !diagOpen && !codeOpen) { tab = HomeTab.Menu }
+    androidx.activity.compose.BackHandler(enabled = tab != HomeTab.Menu && openDoc == null && !callOpen && !kbOpen && !chatOpen && !diagOpen && !codeOpen) { tab = HomeTab.Menu }
     var pendingCmd by remember { mutableStateOf<app.personal.banglaai.speech.VoiceCommand?>(null) }
     openDoc?.let { d -> DocScreen(d, workflow, pendingCmd) { openDoc = null; pendingCmd = null }; return }
+    if (kbOpen) { KnowledgeScreen(workflow, activity.cacheDir) { kbOpen = false }; return }
     if (liveOpen) { LiveTranslateScreen(workflow, activity.cacheDir) { liveOpen = false }; return }
     if (callOpen) { VoiceCallScreen(workflow, vault, activity.cacheDir) { callOpen = false }; return }
     if (chatOpen) { ChatScreen(workflow, activity.cacheDir, chatStart) { chatOpen = false; chatStart = null }; return }
@@ -244,6 +246,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             Tile("ভয়েস নির্দেশ", ic.Mic, st.voice.first, st.voice.second) { tab = HomeTab.Voice },
             Tile("কোড বিশ্লেষণ", ic.Code, st.code.first, st.code.second) { codeOpen = true },
             Tile("AI মডেল", ic.SmartToy, st.model.first, st.model.second) { tab = HomeTab.Model },
+            Tile("জ্ঞানভাণ্ডার", ic.AutoStories, st.kb.first, st.kb.second) { kbOpen = true },
             Tile("পরিভাষা ও শব্দ", ic.MenuBook, st.terms.first, st.terms.second) { tab = HomeTab.Terms },
             Tile("সেটিংস", ic.Settings, st.settings.first, st.settings.second) { tab = HomeTab.Settings },
             Tile("ফোন পরীক্ষা", ic.MonitorHeart, st.diag.first, st.diag.second) { diagOpen = true },

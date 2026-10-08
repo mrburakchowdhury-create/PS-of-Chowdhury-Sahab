@@ -73,4 +73,10 @@ class SpeechLogicTest {
         assertNull(plan.previous(ReadingPosition(1, 0)))
     }
     @Test fun nothingReadableAfterLastPage() = assertNull(plan.startAt(5))
+
+    @Test fun pageRangeCommand() {
+        assertEquals(VoiceCommand.ReadRange(10, 20), VoiceCommands.parse("১০ থেকে ২০ নম্বর পৃষ্ঠা পড়ো"))
+        assertEquals(VoiceCommand.ReadRange(5, 9), VoiceCommands.parse("নয় নম্বর পৃষ্ঠা থেকে পাঁচ পর্যন্ত পড়ো"))   // order is normalised
+        assertTrue(VoiceCommands.parse("৩ ও ৪ পৃষ্ঠা পড়ো") is VoiceCommand.Ambiguous)                       // no "from/to" word: never guessed
+    }
 }

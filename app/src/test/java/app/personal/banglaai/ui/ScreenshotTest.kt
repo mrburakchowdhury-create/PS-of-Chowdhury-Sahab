@@ -64,6 +64,8 @@ class ScreenshotTest {
         rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
         rule.onNodeWithText("ফোন পরীক্ষা").performClick(); rule.waitForIdle(); shot("8_diagnostics")
         rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
+        rule.onNodeWithText("জ্ঞানভাণ্ডার").performScrollTo().performClick(); rule.waitForIdle(); shot("11_knowledge")
+        rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
         FaceLoopConfig.disabled = true   // the portrait's endless frame loop would keep Compose from ever becoming idle
         rule.onNodeWithText("ভয়েস কল").performClick(); rule.waitForIdle(); shot("9_voice_call_idle")
         rule.onNodeWithText("← ফিরে যান").performClick(); rule.waitForIdle()
