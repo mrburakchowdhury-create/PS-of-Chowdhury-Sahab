@@ -441,6 +441,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
 
             }
             HomeTab.Status -> {
+        OwnerAboutSection()
         SectionTitle("ফিচারের অবস্থা (সৎ তালিকা)")
         Text("এই অ্যাপের সংস্করণ: ${runCatching { activity.packageManager.getPackageInfo(activity.packageName, 0).versionName }.getOrNull() ?: "?"} (GitHub-এর কমিট-কোডের শুরু; সর্বশেষ বিল্ডের সঙ্গে মিলিয়ে নিন)", style = MaterialTheme.typography.bodySmall)
         listOf(

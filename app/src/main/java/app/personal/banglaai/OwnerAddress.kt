@@ -5,7 +5,7 @@ package app.personal.banglaai
  * layer — never inside prompts, original document text, quotations, translations, exports, code or notifications, so those stay exactly as they were.
  */
 object OwnerAddress {
-    const val OWNER_ADDRESS_BN = "মিস্টার ফাতেহি চৌধুরী নাইম স্যার"
+    const val OWNER_ADDRESS_BN = app.personal.banglaai.security.OwnerIdentity.OWNER_NAME_BN
 
     /** "<address>, <text>" — once; text that already starts with the address (or is blank) is returned unchanged. */
     fun present(text: String): String {
