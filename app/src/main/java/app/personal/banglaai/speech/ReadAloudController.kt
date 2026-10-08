@@ -26,6 +26,9 @@ object ReadAloudController {
 
     fun play(context: Context, plan: ReadingPlan, from: ReadingPosition) { adHoc = false; get(context).play(plan, from) }
 
+    /** Plays a plan that is NOT a document (e.g. literal reading of code the user pasted): never saved as a reading position. [from] = first page (= line number) to speak. */
+    fun speakPlan(context: Context, plan: ReadingPlan, from: Int = 1) { adHoc = true; get(context).play(plan, plan.startAt(from) ?: return) }
+
     /** Speaks the app's own explanation text (the user asked for it); never saved as a reading position. */
     fun speakExplanation(context: Context, text: String) { adHoc = true; get(context).play(ReadingPlan({ SpeechText.clean(text) }, 1), ReadingPosition(1, 0)) }
 

@@ -26,6 +26,13 @@ object Prompts {
             (if (glossary.isEmpty()) "" else "ব্যবহারকারীর পরিভাষা (এই শব্দগুলো হুবহু এভাবে ব্যবহার করো):\n" + glossary.joinToString("\n") { "- ${sanitize(it.first).take(80)} → ${sanitize(it.second).take(120)}" } + "\n") +
             "উপরের লেখা বাংলায় অনুবাদ করো।"
 
+    /** Explain ONE line of the user's code with its surroundings. The lines are numbered by the program; the model must not renumber them. */
+    fun explainLine(code: String, line: Int, around: Int = 12): String {
+        val all = code.split("\n"); val from = maxOf(1, line - around); val to = minOf(all.size, line + around)
+        val body = (from..to).joinToString("\n") { "${it.toString().padStart(4)}| ${all[it - 1]}" }
+        return "<DOC>\n${sanitize(body)}\n</DOC>\nশুধু লাইন $line বাংলায় বোঝাও: উদ্দেশ্য, এই লাইনের variable/function/parameter, ডেটা কোথা থেকে আসে ও কোথায় যায়, আর উপরের/নিচের কোন লাইনের ওপর নির্ভর করে। কোড অনুবাদ করবে না; যা এই অংশ থেকে নিশ্চিত নয় তা 'অনুমান' লেখো।"
+    }
+
     fun explainCode(code: String, question: String) =
         "<DOC>\n${sanitize(code)}\n</DOC>\n${sanitize(question)}"
 
