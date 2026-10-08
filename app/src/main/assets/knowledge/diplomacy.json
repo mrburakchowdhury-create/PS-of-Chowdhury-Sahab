@@ -133,8 +133,16 @@
       "সীমা"
     ],
     "ref": "সূত্র: যোগাযোগ-দক্ষতার সাধারণ নীতি",
-    "sources": [],
-    "uncertainty": "ভদ্রভাবে 'না' বলার কূটনৈতিক পদ্ধতি নিয়ে কোনো নির্ভরযোগ্য খোলা-পাতা পাইনি। তাই সূত্রহীন।"
+    "sources": [
+      {
+        "url": "https://www.pon.harvard.edu/daily/negotiation-skills-daily/getting-to-no/",
+        "publisher": "Harvard Law School Program on Negotiation",
+        "title": "Getting to No (on William Ury, The Power of a Positive No)",
+        "pageDate": "2010-08-31",
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "PON সম্মানজনক 'না' বলা, বিকল্প প্রস্তাব এবং নিজের স্বার্থ/নীতি স্পষ্ট করার কথা সমর্থন করে। বাকি ধাপগুলো সমর্থিত নয়।"
   },
   {
     "id": "mediation",

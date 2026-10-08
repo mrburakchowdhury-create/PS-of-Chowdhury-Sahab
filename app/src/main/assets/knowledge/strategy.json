@@ -61,8 +61,16 @@
       "আস্থা"
     ],
     "ref": "সূত্র: যোগাযোগ-দক্ষতা প্রশিক্ষণের সাধারণ নীতি",
-    "sources": [],
-    "uncertainty": "সক্রিয় শোনা বিষয়ে নির্ভরযোগ্য খোলা-পাতা পাইনি (APA পাতা খালি আসে; HBR-এর 'What Great Listeners Actually Do' পেওয়ালে ভূমিকা মাত্র পড়া গেছে)। তাই সূত্রহীন।"
+    "sources": [
+      {
+        "url": "https://www.bowdoin.edu/mckeen-center/pdf/mentoring---helpful-communication-skills.pdf",
+        "publisher": "Bowdoin College McKeen Center",
+        "title": "Helpful Communication Skills (mentoring handout)",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "বাউডইন হ্যান্ডআউট সক্রিয় শোনা, চোখে চোখ, ফিরে বলা (paraphrase: তথ্য ও অনুভূতি) ও খোলা প্রশ্ন সমর্থন করে; এটি মেন্টরিং-সংক্রান্ত নির্দেশিকা, গবেষণাপত্র নয়।"
   },
   {
     "id": "bodylang",
@@ -148,8 +156,16 @@
       "দায়িত্ব"
     ],
     "ref": "সূত্র: ব্যবস্থাপনা-বিজ্ঞানের সাধারণ আলোচনা",
-    "sources": [],
-    "uncertainty": "ভালো নেতৃত্বের উপাদান নিয়ে কোনো নির্ভরযোগ্য খোলা-পাতা পাইনি (HBR 404)। তাই সূত্রহীন।"
+    "sources": [
+      {
+        "url": "https://online.hbs.edu/blog/post/leadership-skills",
+        "publisher": "Harvard Business School Online",
+        "title": "Leadership Skills (blog)",
+        "pageDate": "2021-09-16",
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "HBS অনলাইনের ব্লগ আস্থা, সৎ মতামত, খোলা যোগাযোগ, স্পষ্ট দৃষ্টিভঙ্গি ও সক্রিয় শোনার কথা বলে; এটি সংক্ষিপ্ত শিক্ষামূলক ব্লগ, গবেষণা-সমীক্ষা নয়। ভয়ের নেতৃত্ব নিয়ে দাবি অসমর্থিত।"
   },
   {
     "id": "scam",
@@ -213,7 +229,15 @@
       "আত্মবিশ্বাস"
     ],
     "ref": "সূত্র: যোগাযোগ-প্রশিক্ষণের সাধারণ নীতি",
-    "sources": [],
-    "uncertainty": "বক্তৃতার কাঠামো নিয়ে কোনো নির্ভরযোগ্য খোলা-পাতা পাইনি। তাই সূত্রহীন।"
+    "sources": [
+      {
+        "url": "https://writingcenter.unc.edu/tips-and-tools/speeches/",
+        "publisher": "UNC Writing Center",
+        "title": "Speeches",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "UNC গাইড শুরুতেই মূল বক্তব্য বলা, শ্রোতা বিশ্লেষণ, গল্প/উদাহরণ, সংক্ষিপ্ত বাক্য, এবং শেষে নির্দিষ্ট আহ্বান সমর্থন করে।"
   }
 ]

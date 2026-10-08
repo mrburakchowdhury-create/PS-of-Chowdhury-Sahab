@@ -10,8 +10,23 @@
       "বই"
     ],
     "ref": "সূত্র: প্রকাশনা ও গবেষণা-নৈতিকতার সাধারণ নীতি",
-    "sources": [],
-    "uncertainty": "তথ্য-যাচাই ও উৎস-নথিভুক্তির নিয়ম নিয়ে নির্ভরযোগ্য খোলা-পাতা পাইনি (SPJ নীতিমালা 403, UNICEF নির্দেশিকা 404)। এটি লেখার পরামর্শ, তথ্যদাবি নয়; সূত্রহীন।"
+    "sources": [
+      {
+        "url": "https://ifcncodeofprinciples.poynter.org/know-more/the-commitments-of-the-code-of-principles",
+        "publisher": "Poynter IFCN",
+        "title": "The commitments of the Code of Principles",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://www.spj.org/spj-code-of-ethics/",
+        "publisher": "Society of Professional Journalists",
+        "title": "SPJ Code of Ethics",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "IFCN ও SPJ সাংবাদিকতার মানদণ্ড: সব উৎস উল্লেখ, মূল (primary) উৎস, একাধিক নামধারী উৎসে যাচাই। বই-লেখকদের জন্য সরাসরি নিয়ম নয়।"
   },
   {
     "id": "harm",
@@ -24,8 +39,16 @@
       "দায়িত্ব"
     ],
     "ref": "সূত্র: সাংবাদিকতা ও প্রকাশনার নৈতিকতা-নির্দেশিকার সাধারণ নীতি",
-    "sources": [],
-    "uncertainty": "ক্ষতি-এড়ানো লেখার নীতি নিয়ে নির্ভরযোগ্য খোলা-পাতা পাইনি (SPJ নীতিমালা 403, UNICEF নির্দেশিকা 404)। এটি লেখার পরামর্শ, তথ্যদাবি নয়; সূত্রহীন।"
+    "sources": [
+      {
+        "url": "https://www.spj.org/spj-code-of-ethics/",
+        "publisher": "Society of Professional Journalists",
+        "title": "SPJ Code of Ethics: Minimize Harm",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "SPJ 'ক্ষতি কমানো' অংশ শিশু/ভুক্তভোগীর প্রতি সংবেদনশীলতা, সহানুভূতি, উত্তেজনা-লোভী কৌতূহল এড়ানো সমর্থন করে; এটি সাংবাদিকতার নীতি।"
   },
   {
     "id": "structure",
@@ -39,7 +62,7 @@
     ],
     "ref": "সূত্র: প্রকাশনার সাধারণ পরামর্শ",
     "sources": [],
-    "uncertainty": "ই-বুকের Q&A গঠন নিয়ে নির্ভরযোগ্য খোলা-পাতা পাইনি (SPJ নীতিমালা 403, UNICEF নির্দেশিকা 404)। এটি লেখার পরামর্শ, তথ্যদাবি নয়; সূত্রহীন।"
+    "uncertainty": "ই-বুকের প্রশ্ন-উত্তর কাঠামোর জন্য নির্ভরযোগ্য, খোলা উৎস পাওয়া যায়নি (Purdue OWL পেজ JS-নির্ভর, বিষয়বস্তু আসেনি)। এটি লেখকীয় পরামর্শ।"
   },
   {
     "id": "copyright",

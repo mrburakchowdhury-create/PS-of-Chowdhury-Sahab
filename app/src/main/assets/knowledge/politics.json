@@ -156,8 +156,23 @@
       "রাজতন্ত্র"
     ],
     "ref": "সূত্র: রাজনীতি-বিজ্ঞানের পাঠ্য আলোচনা",
-    "sources": [],
-    "uncertainty": "কোনো খোলা-যাওয়া নির্ভরযোগ্য পাতা পাইনি যা তিন ব্যবস্থার পার্থক্য সরাসরি ব্যাখ্যা করে (Britannica 403, Freedom House/OWID 404)। SEP 'Democracy' পাতা খোলা গেছে কিন্তু কর্তৃত্ববাদ-রাজতন্ত্রের সংজ্ঞা নেই। তাই সূত্রহীন রাখা হলো।"
+    "sources": [
+      {
+        "url": "https://plato.stanford.edu/entries/democracy/",
+        "publisher": "Stanford Encyclopedia of Philosophy",
+        "title": "Democracy",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      },
+      {
+        "url": "https://freedomhouse.org/reports/freedom-world/freedom-world-research-methodology",
+        "publisher": "Freedom House",
+        "title": "Freedom in the World Research Methodology",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "স্ট্যানফোর্ড এনসাইক্লোপিডিয়া গণতন্ত্রকে রাজতন্ত্র/অভিজাততন্ত্রের সঙ্গে তুলনা করে; ফ্রিডম হাউসের পদ্ধতিতে নির্বাচন, স্বাধীন বিচারব্যবস্থা ও স্বাধীন গণমাধ্যমের মাপকাঠি আছে। তবে কার্ডের সংজ্ঞাগুলো (কর্তৃত্ববাদ, বংশানুক্রমিক রাজতন্ত্র) সরাসরি এই উৎসে সংজ্ঞায়িত নয়।"
   },
   {
     "id": "propaganda",
@@ -273,8 +288,16 @@
       "রাষ্ট্র"
     ],
     "ref": "সূত্র: রাজনৈতিক সমাজবিজ্ঞানের সাধারণ আলোচনা",
-    "sources": [],
-    "uncertainty": "রাষ্ট্রীয় অস্থিরতার কারণ নিয়ে কোনো একক নির্ভরযোগ্য খোলা-পাতা পাইনি যা কার্ডের তালিকা সমর্থন করে। SEP legitimacy শুধু বৈধতা-সংকট অংশে প্রাসঙ্গিক, কিন্তু সরাসরি 'অস্থিরতার কারণ' বলে না। তাই সূত্রহীন।"
+    "sources": [
+      {
+        "url": "https://openknowledge.worldbank.org/handle/10986/28337",
+        "publisher": "World Bank / United Nations",
+        "title": "Pathways for Peace: Inclusive Approaches to Preventing Violent Conflict",
+        "pageDate": "2018",
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "উৎসগুলো শুধু ক্ষমতা, সুযোগ ও নিরাপত্তা থেকে বঞ্চনা/বৈষম্য (exclusion, grievances) এবং অন্তর্ভুক্তিমূলক প্রতিষ্ঠানের ওপর জোর দেয়। কার্ডের অন্যান্য কারণ এখানে যাচাই হয়নি।"
   },
   {
     "id": "greene",
@@ -288,7 +311,15 @@
       "ম্যানিপুলেশন"
     ],
     "ref": "সূত্র: বইটির সাধারণ পর্যালোচনা-আলোচনা; মূল বই সরাসরি পড়ুন",
-    "sources": [],
-    "uncertainty": "রবার্ট গ্রিনের '৪৮ ল'জ অব পাওয়ার' বিষয়ে কোনো প্রকাশক/লেখক পাতা খোলা যায়নি (Penguin Random House 404, লেখকের সাইট প্রক্সি-ব্লকড)। বইয়ের প্রকাশের বছর/ক্যাটালগ রেকর্ড কেবল সার্চ-ফলাফলে দেখা, নিজে খুলিনি।"
+    "sources": [
+      {
+        "url": "https://en.wikipedia.org/wiki/The_48_Laws_of_Power",
+        "publisher": "Wikipedia",
+        "title": "The 48 Laws of Power (last resort: existence, 1998, critics/supporters)",
+        "pageDate": null,
+        "fetched": "2026-10-08"
+      }
+    ],
+    "uncertainty": "উইকিপিডিয়া শুধু বইয়ের অস্তিত্ব, ১৯৯৮ সালে প্রকাশ (Viking), এবং সমালোচক-সমর্থকদের মত নিশ্চিত করে (Kirkus ও Pfeffer সমালোচক; Quincy Jones III ও Pinder সমর্থক)। এটি তৃতীয় স্তরের উৎস।"
   }
 ]
