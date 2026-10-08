@@ -77,7 +77,8 @@ fun LiveTranslateScreen(wf: DocWorkflow, cacheDir: File, onGoModel: () -> Unit =
             val r = runCatching { withContext(Dispatchers.IO) {
                 val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
                 val target = if (toBengali) "বাংলা" else lang.promptName
-                m.ask(Prompts.INTERPRET_SYSTEM, Prompts.interpret(text, target)).trim()
+                val res = app.personal.banglaai.ai.ChunkedTranslate.run(text, { d, t -> if (t > 1) scope.launch(Dispatchers.Main) { if (my == gen) status = "অনুবাদ হচ্ছে… ($d/$t অংশ)" } }) { part -> m.ask(Prompts.INTERPRET_SYSTEM, Prompts.interpret(part, target)).trim() }
+                if (res.failure != null) res.text + (if (res.text.isBlank()) "" else "\n\n") + "⚠ অনুবাদ অসম্পূর্ণ — ${res.failure}" else res.text
             } }
             if (my != gen || !running) return@launch
             r.onFailure { stopAll("অনুবাদ ব্যর্থ: ${it.javaClass.simpleName}"); return@launch }

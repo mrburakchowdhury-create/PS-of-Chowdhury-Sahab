@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private data class Msg(val fromUser: Boolean, val text: String)
+private data class Msg(val fromUser: Boolean, val text: String, val addressed: Boolean = false)
 
 /**
  * Direct assistant: type (or press-to-talk) a question, or switch to "অনুবাদ" and paste any text to get Bengali. Runs ONLY on the imported local model:
@@ -55,7 +55,7 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
     fun send(text: String) {
         if (busy != null || text.isBlank()) return
         val model = wf.usableModel() ?: run { error = "কোনো AI মডেল বসানো নেই। হোমে ফিরে 'মডেল ফাইল বসান' চাপুন (E4B ≈ 3.66 GB, E2B ≈ 2.59 GB, docs/MODELS.md)। মডেল ছাড়া উত্তর/অনুবাদ হয় না, আর ইন্টারনেটে কিছু পাঠানো হয় না।"; return }
-        error = null; msgs += Msg(true, text.trim()); msgs += Msg(false, ""); input = ""
+        error = null; msgs += Msg(true, text.trim()); msgs += Msg(false, "", addressed = !translate); input = ""
         val idx = msgs.lastIndex
         busy = if (llm[0]?.isLoaded == true) "লিখছে…" else "মডেল লোড হচ্ছে (প্রথমবার কিছু সময় লাগে, ফোনভেদে)…"
         scope.launch {
@@ -65,7 +65,7 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
                     val sys = if (translate) Prompts.TRANSLATE_SYSTEM else if (advisor) Prompts.ADVISOR_SYSTEM else Prompts.ASSISTANT_SYSTEM
                     val prompt = if (translate) Prompts.translateFree(text) else if (advisor) Prompts.advisor(text, app.personal.banglaai.knowledge.KnowledgeBase.search(ctx, text, null, 3).map { "প্রশ্ন: ${it.q}\nউত্তর: ${it.a}" }) else Prompts.ask(text)
                     var first = true
-                    m.askStream(sys, prompt) { piece -> if (first) { first = false; busy = "লিখছে…" }; msgs[idx] = Msg(false, msgs[idx].text + piece) }
+                    m.askStream(sys, prompt) { piece -> if (first) { first = false; busy = "লিখছে…" }; msgs[idx] = msgs[idx].copy(text = msgs[idx].text + piece) }
                 }
             }.onFailure { error = if (stoppedByUser) null else "ব্যর্থ: ${it.javaClass.simpleName}: ${it.message ?: ""}".take(400) }
             stoppedByUser = false
@@ -96,8 +96,8 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (m.fromUser) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(Modifier.padding(12.dp)) {
                         Text(if (m.fromUser) "আপনি" else "সহকারী", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                        SelectionContainer { Text(m.text.ifBlank { "…" }) }
-                        if (!m.fromUser && m.text.isNotBlank() && busy == null) TextButton(onClick = { ReadAloudController.speakExplanation(ctx, m.text) }) { Text("🔊 Listen") }
+                        SelectionContainer { Text(if (m.addressed) app.personal.banglaai.OwnerAddress.present(m.text).ifBlank { "…" } else m.text.ifBlank { "…" }) }
+                        if (!m.fromUser && m.text.isNotBlank() && busy == null) TextButton(onClick = { ReadAloudController.speakExplanation(ctx, if (m.addressed) app.personal.banglaai.OwnerAddress.present(m.text) else m.text) }) { Text("🔊 Listen") }
                     }
                 }
             }

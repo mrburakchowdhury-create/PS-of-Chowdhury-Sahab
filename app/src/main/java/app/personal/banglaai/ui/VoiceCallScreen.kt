@@ -126,8 +126,10 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onGoModel: ()
             val model = wf.usableModel()
             if (model == null) { endCall("কোনো AI মডেল বসানো নেই। হোমে গিয়ে মডেল বসিয়ে আবার কল করুন।"); return }
             scope.launch {
-                val buf = SentenceBuffer(); val sb = StringBuilder()
-                fun emit(s: String) { if (my != turn) return; if (machine.phase == Phase.Thinking) { machine.onAnswerStarted(); phase = machine.phase }; sb.append(s).append(' '); answer = sb.toString().trim(); speaker.speak(s) }
+                val buf = SentenceBuffer(); val sb = StringBuilder(); var addressed = false
+                fun emit(s0: String) { if (my != turn) return; if (machine.phase == Phase.Thinking) { machine.onAnswerStarted(); phase = machine.phase }
+                    val s = if (!addressed) { addressed = true; app.personal.banglaai.OwnerAddress.present(s0) } else s0   // once, at the start of the reply (not in history)
+                    sb.append(s).append(' '); answer = sb.toString().trim(); speaker.speak(s) }
                 val pieces = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.UNLIMITED)
                 val consumer = launch { for (p in pieces) if (my == turn) buf.push(p).forEach(::emit) }   // main thread, in order
                 val ok = runCatching {
@@ -140,7 +142,7 @@ fun VoiceCallScreen(wf: DocWorkflow, vault: Vault, cacheDir: File, onGoModel: ()
                 if (my != turn) return@launch   // interrupted or ended: someone else owns the state now
                 ok.onFailure { generating = false; genDone = true; speaker.stop(); endCall("উত্তর বানাতে ব্যর্থ: ${it.javaClass.simpleName}"); return@launch }
                 buf.flush()?.let { emit(it) }
-                if (sb.isEmpty()) { answer = "(কোনো উত্তর আসেনি)" } else history += historyKey to sb.toString().trim()
+                if (sb.isEmpty()) { answer = "(কোনো উত্তর আসেনি)" } else history += historyKey to sb.toString().trim().removePrefix(app.personal.banglaai.OwnerAddress.OWNER_ADDRESS_BN + ", ")
                 generating = false; genDone = true
                 if (!speaker.isSpeaking) finishTurn()   // nothing queued (no voice / empty): go back to listening
             }
