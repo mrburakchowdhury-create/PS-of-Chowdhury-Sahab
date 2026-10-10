@@ -245,17 +245,27 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     fun usableModel(): File? = models.list().filter(::isUsable).let { ok -> ok.firstOrNull { it.name == chosenModel } ?: ok.firstOrNull() }
         ?.let { File(context.noBackupFilesDir, "models/${it.name}") }
 
+    /** The language this document's translation is (or will be) in; Bengali unless the owner chose otherwise. */
+    fun translationTarget(doc: VaultDoc): TargetLang = prefs().getString("tr_target_${doc.id}", null)?.let { n -> TargetLang.entries.firstOrNull { it.name == n } } ?: TargetLang.BN
+    /** Chooses the target; if it differs from the existing translation's, that translation (a different language) and its job are removed so pages are never mixed. */
+    fun setTranslationTarget(doc: VaultDoc, t: TargetLang) {
+        if (t == translationTarget(doc)) return
+        translations.deleteDoc(doc.id); jobs.delete(jobId(doc, Kind.Translate))
+        prefs().edit().putString("tr_target_${doc.id}", t.name).apply()
+    }
+
     fun translate(doc: VaultDoc, retryFailed: Boolean, onProgress: (Int, Int) -> Unit): JobStatus {
         require(!isCode(doc)) { "সোর্স-কোড ফাইল অনুবাদ করা হয় না — মূল কোড অক্ষত থাকে; কোড বুঝতে 'কোড ব্যাখ্যা' ব্যবহার করুন" }
         val ext = job(doc, Kind.Extract) ?: error("আগে 'লেখা বের করুন' চালান")
         val model = usableModel() ?: error("কোনো AI মডেল বসানো নেই — আগে মডেল import করুন (স্থানীয় ছাড়া অনুবাদ করা হবে না)")
+        val tgt = translationTarget(doc)
         val id = jobId(doc, Kind.Translate)
         val job = jobs.load(id) ?: JobState(id, doc.id, Kind.Translate.key, ext.total)
         LocalLlm(model, File(context.cacheDir, "llm"), background = true).use { m ->
             llm = m
             try {
-                val runner = TranslationJob(job, effectiveSource, translations, jobs, { m.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(it, glossary.promptPairs(it))) },
-                    pauseCheck = guard(), alreadyTarget = { t -> t.count { c -> c.isLetter() } >= 20 && app.personal.banglaai.speech.SpeechText.isMostlyBengali(t) }).also { translation = it }
+                val runner = TranslationJob(job, effectiveSource, translations, jobs, { m.ask(Prompts.translateSystem(tgt), Prompts.translate(it, glossary.promptPairs(it), tgt)) },
+                    pauseCheck = guard(), alreadyTarget = { t -> tgt.isAlready(t) }).also { translation = it }
                 pauseReason = null
                 return runner.run(retryFailed, onProgress).also { pauseReason = runner.pausedBecause }
             } finally { translation = null; llm = null }

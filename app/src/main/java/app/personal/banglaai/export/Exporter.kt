@@ -7,7 +7,7 @@ import java.util.zip.ZipOutputStream
 /** One physical page for export. [translation] null = not translated (reported in the file, never silently skipped). */
 data class ExportPage(val page: Int, val printedLabel: String?, val original: String?, val translation: String?, val originalIsOcr: Boolean = false, val footnotes: List<String> = emptyList())
 
-data class ExportOptions(val title: String, val includeOriginal: Boolean, val originalIsRtl: Boolean)
+data class ExportOptions(val title: String, val includeOriginal: Boolean, val originalIsRtl: Boolean, val targetLabel: String = "বাংলা")
 
 /**
  * Pure builders for TXT and DOCX (testable on the JVM). Every export ends with a coverage section listing pages that are
@@ -29,7 +29,7 @@ object Exporter {
         append(o.title).append("\n").append("=".repeat(o.title.length.coerceAtMost(60))).append("\n\n")
         for (p in pages) {
             append("--- পৃষ্ঠা ${p.page}${p.printedLabel?.let { " (মূল অবস্থান: $it)" } ?: ""} ---\n")
-            if (o.includeOriginal) append("[মূল${if (p.originalIsOcr) " — OCR, ভুল থাকতে পারে" else ""}]\n").append(p.original ?: "(লেখা নেই)").append("\n\n[বাংলা]\n")
+            if (o.includeOriginal) append("[মূল${if (p.originalIsOcr) " — OCR, ভুল থাকতে পারে" else ""}]\n").append(p.original ?: "(লেখা নেই)").append("\n\n[${o.targetLabel}]\n")
             append(p.translation?.takeIf { it.isNotBlank() } ?: "(অনুবাদ হয়নি)").append("\n\n")
         }
         append("--- কভারেজ ---\n").append(coverageLine(pages)).append("\n")
@@ -90,7 +90,7 @@ object Exporter {
                 if (o.includeOriginal) {
                     append(para("মূল${if (p.originalIsOcr) " — OCR, ভুল থাকতে পারে" else ""}", bold = true))
                     append(para(p.original ?: "(লেখা নেই)", rtl = o.originalIsRtl))
-                    append(para("বাংলা অনুবাদ", bold = true))
+                    append(para("${o.targetLabel} অনুবাদ", bold = true))
                 }
                 append(para(p.translation?.takeIf { it.isNotBlank() } ?: "(অনুবাদ হয়নি)"))
             }

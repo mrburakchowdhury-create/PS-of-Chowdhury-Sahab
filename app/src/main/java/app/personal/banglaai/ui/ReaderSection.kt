@@ -61,7 +61,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
         if (src == null || src.text.isBlank()) { voiceMsg = "পৃষ্ঠা $page-এ বের-করা লেখা নেই (স্ক্যান হলে আগে OCR চালান)।"; return }
         translating = page; voiceMsg = null
         scope.launch {
-            runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { LocalLlm(model, java.io.File(ctx.cacheDir, "llm")).use { it.ask(Prompts.TRANSLATE_SYSTEM, Prompts.translate(src.text, wf.glossary.promptPairs(src.text))) } } }
+            runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { LocalLlm(model, java.io.File(ctx.cacheDir, "llm")).use { val tg = wf.translationTarget(doc); it.ask(Prompts.translateSystem(tg), Prompts.translate(src.text, wf.glossary.promptPairs(src.text), tg)) } } }
                 .onSuccess { out -> wf.translations.put(doc.id, app.personal.banglaai.doc.PageText(page, out.trim(), src.printedLabel)); translating = null; useTranslation = true; playRef[0]?.invoke(page) }
                 .onFailure { translating = null; voiceMsg = "অনুবাদ ব্যর্থ: ${it.message ?: it.javaClass.simpleName}" }
         }
@@ -154,7 +154,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
                 "অফলাইন বাংলা voice নামান: সেটিংস → ভাষা → Text-to-speech → (Google) ইঞ্জিনের সেটিংস → ভয়েস ডেটা ইনস্টল → বাংলা। তারপর অ্যাপে ফিরে আসুন।", color = MaterialTheme.colorScheme.error)
         else -> {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(selected = useTranslation, onClick = { useTranslation = true }, label = { Text("বাংলা অনুবাদ") })
+                FilterChip(selected = useTranslation, onClick = { useTranslation = true }, label = { Text("${wf.translationTarget(doc).label} অনুবাদ") })
                 FilterChip(selected = !useTranslation, onClick = { useTranslation = false }, label = { Text("বের করা মূল লেখা") })
             }
             translating?.let { Text("⏳ পৃষ্ঠা $it বাংলায় অনুবাদ হচ্ছে… (মডেল প্রথমবার লোড হয়; কয়েক মিনিট লাগতে পারে — শেষ হলে নিজে পড়া শুরু হবে)", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.bodySmall) }

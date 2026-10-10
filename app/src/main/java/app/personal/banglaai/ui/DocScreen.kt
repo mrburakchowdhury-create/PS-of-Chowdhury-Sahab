@@ -35,8 +35,10 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
     var fixTick by remember { mutableIntStateOf(0) }
     var editing by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
+    var tgtTick by remember { mutableIntStateOf(0) }
+    var target by remember { mutableStateOf(wf.translationTarget(doc)) }
     val ext = remember(tick) { wf.job(doc, DocWorkflow.Kind.Extract) }
-    val tr = remember(tick) { wf.job(doc, DocWorkflow.Kind.Translate) }
+    val tr = remember(tick, tgtTick) { wf.job(doc, DocWorkflow.Kind.Translate) }
 
     fun start(label: String, block: () -> JobStatus) = JobRunner.start(label, block)
 
@@ -46,7 +48,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
     val saver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
         uri ?: return@rememberLauncherForActivityResult
         start("এক্সপোর্ট") {
-            val pages = wf.exportPages(doc); val o = ExportOptions(doc.name, includeOriginal = true, originalIsRtl = rtlOriginal)
+            val pages = wf.exportPages(doc); val o = ExportOptions(doc.name, includeOriginal = true, originalIsRtl = rtlOriginal, targetLabel = target.label)
             ctx.contentResolver.openOutputStream(uri)?.use { out ->
                 when (exportKind) { "docx" -> Exporter.docx(pages, o, out); "pdf" -> PdfExport.write(pages, o, out); else -> out.write(Exporter.txt(pages, o).toByteArray(Charsets.UTF_8)) }
             } ?: error("ফাইল লেখা যায়নি")
@@ -75,12 +77,25 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error) }
         running?.let { Text("চলছে: $it — ${progress.first}/${progress.second}"); LinearProgressIndicator(progress = { if (progress.second == 0) 0f else progress.first / progress.second.toFloat() }, modifier = Modifier.fillMaxWidth()) }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(enabled = running == null, onClick = { start("লেখা বের করা") { wf.extract(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
-                Text(if (ext?.status == JobStatus.PAUSED) "Extract text — resume" else "Extract text")
+        if (!wf.isCode(doc)) {
+            Text("কোন ভাষায় অনুবাদ করবেন? (মূল ফাইল যে ভাষারই হোক)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                app.personal.banglaai.doc.TargetLang.entries.forEach { l ->
+                    FilterChip(selected = target == l, enabled = running == null, onClick = { wf.setTranslationTarget(doc, l); target = l; tgtTick++ }, label = { Text(l.label) })
+                }
             }
-            if (!wf.isCode(doc)) Button(enabled = running == null && ext != null, onClick = { start("বাংলা অনুবাদ") { wf.translate(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
-                Text(if (tr?.status == JobStatus.PAUSED) "Translate — resume" else "Translate to Bengali")
+            if (tr != null && target != wf.translationTarget(doc)) Text("ভাষা বদলালে আগের অনুবাদ মুছে নতুন করে শুরু হবে।", style = MaterialTheme.typography.bodySmall)
+            Button(enabled = running == null, onClick = {
+                start("অনুবাদ → ${target.label}") {
+                    val e = ext
+                    if (e == null || e.status != JobStatus.DONE) { val st = wf.extract(doc, false) { d, t -> JobRunner.progress = d to t }; if (st != JobStatus.DONE) return@start st }   // one button: read the text first, then translate
+                    wf.translate(doc, false) { d, t -> JobRunner.progress = d to t }
+                }
+            }) { Text(when { tr?.status == JobStatus.PAUSED -> "Translate — resume"; tr?.status == JobStatus.DONE -> "Translated ✓ (run again)"; else -> "Translate to ${target.label}" }) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(enabled = running == null, onClick = { start("লেখা বের করা") { wf.extract(doc, false) { d, t -> JobRunner.progress = d to t } } }) {
+                Text(if (ext?.status == JobStatus.PAUSED) "Extract text only — resume" else "Extract text only")
             }
         }
         if (wf.isCode(doc)) Text("সোর্স-কোড ফাইল: অনুবাদ নেই (মূল কোড অক্ষত থাকে)। কোড বুঝতে হোম থেকে 'কোড ব্যাখ্যা' ব্যবহার করুন।", style = MaterialTheme.typography.bodySmall)
@@ -113,7 +128,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("txt" to "TXT", "docx" to "DOCX", "pdf" to "PDF").forEach { (k, label) ->
-                    OutlinedButton(enabled = running == null, onClick = { exportKind = k; saver.launch("${doc.name.substringBeforeLast('.')}-bn.$k") }) { Text(label) }
+                    OutlinedButton(enabled = running == null, onClick = { exportKind = k; saver.launch("${doc.name.substringBeforeLast('.')}-${target.fileTag}.$k") }) { Text(label) }
                 }
             }
             Text("এক্সপোর্টে অনুবাদ-না-হওয়া পৃষ্ঠার তালিকা থাকে। পৃষ্ঠা-বিন্যাস মূলের সঙ্গে হুবহু মিলবে না।", style = MaterialTheme.typography.bodySmall)
@@ -147,7 +162,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
                         OutlinedButton(onClick = { editing = false }) { Text("বাতিল") }
                     }
                 }
-                Text("বাংলা অনুবাদ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Text("${target.label} অনুবাদ", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 SelectionContainer { Text(bn?.text ?: "(এখনো অনুবাদ হয়নি)") }
             }
             pageInput.toIntOrNull()?.takeIf { it in 1..ext.total }?.let { SegmentExplainer(doc, wf, it, ext.total) }
