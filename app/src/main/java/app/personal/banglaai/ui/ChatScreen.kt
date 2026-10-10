@@ -38,11 +38,12 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
     var histTick by remember { mutableIntStateOf(0) }
     var translate by remember { mutableStateOf(false) }
     var advisor by remember { mutableStateOf(false) }
+    var cyber by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
     var stoppedByUser by remember { mutableStateOf(false) }
-    fun modeName() = if (translate) "translate" else if (advisor) "advisor" else "chat"
+    fun modeName() = if (translate) "translate" else if (advisor) "advisor" else if (cyber) "cyber" else "chat"
     fun persist() { if (saveOn) runCatching { wf.chats.save(convId, modeName(), msgs.toList()); histTick++ } }
     // microphone: one press = one sentence, written into the question box (so it can be corrected before sending)
     val voice = remember { app.personal.banglaai.speech.VoiceEngine.create(ctx, wf) }
@@ -62,15 +63,15 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
     fun send(text: String) {
         if (busy != null || text.isBlank()) return
         val model = wf.usableModel() ?: run { error = "কোনো AI মডেল বসানো নেই। হোমে ফিরে 'মডেল ফাইল বসান' চাপুন (E4B ≈ 3.66 GB, E2B ≈ 2.59 GB, docs/MODELS.md)। মডেল ছাড়া উত্তর/অনুবাদ হয় না, আর ইন্টারনেটে কিছু পাঠানো হয় না।"; return }
-        error = null; msgs += ChatMsg(true, text.trim()); msgs += ChatMsg(false, "", addressed = !translate); persist(); input = ""
+        error = null; msgs += ChatMsg(true, text.trim()); msgs += ChatMsg(false, "", addressed = !translate && !cyber); persist(); input = ""
         val idx = msgs.lastIndex
         busy = if (llm[0]?.isLoaded == true) "লিখছে…" else "মডেল লোড হচ্ছে (প্রথমবার কিছু সময় লাগে, ফোনভেদে)…"
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
                     val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
-                    val sys = if (translate) Prompts.TRANSLATE_SYSTEM else if (advisor) Prompts.ADVISOR_SYSTEM else Prompts.ASSISTANT_SYSTEM
-                    val prompt = if (translate) Prompts.translateFree(text, wf.glossary.promptPairs(text)) else if (advisor) Prompts.advisor(text, app.personal.banglaai.knowledge.KnowledgeBase.search(ctx, text, null, 3).map { "প্রশ্ন: ${it.q}\nউত্তর: ${it.a}" }) else Prompts.ask(text)
+                    val sys = if (translate) Prompts.TRANSLATE_SYSTEM else if (advisor) Prompts.ADVISOR_SYSTEM else if (cyber) Prompts.CYBERSEC_SYSTEM else Prompts.ASSISTANT_SYSTEM
+                    val prompt = if (translate) Prompts.translateFree(text, wf.glossary.promptPairs(text)) else if (advisor) Prompts.advisor(text, app.personal.banglaai.knowledge.KnowledgeBase.search(ctx, text, null, 3).map { "প্রশ্ন: ${it.q}\nউত্তর: ${it.a}" }) else if (cyber) Prompts.cybersec(text) else Prompts.ask(text)
                     var first = true
                     m.askStream(sys, prompt) { piece -> if (first) { first = false; busy = "লিখছে…" }; msgs[idx] = msgs[idx].copy(text = msgs[idx].text + piece) }
                 }
@@ -103,9 +104,9 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
                     Card(Modifier.fillMaxWidth()) { Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(c.title.ifBlank { "(শিরোনাম নেই)" }, maxLines = 2)
-                            Text("${java.text.SimpleDateFormat("d MMM, HH:mm", androidx.compose.ui.platform.LocalConfiguration.current.locales[0]).format(java.util.Date(c.at))} · ${c.count}টি বার্তা · ${when (c.mode) { "advisor" -> "পরামর্শদাতা"; "translate" -> "অনুবাদ"; else -> "প্রশ্ন/কথা" }}", style = MaterialTheme.typography.bodySmall)
+                            Text("${java.text.SimpleDateFormat("d MMM, HH:mm", androidx.compose.ui.platform.LocalConfiguration.current.locales[0]).format(java.util.Date(c.at))} · ${c.count}টি বার্তা · ${when (c.mode) { "advisor" -> "পরামর্শদাতা"; "translate" -> "অনুবাদ"; "cyber" -> "সাইবার সিকিউরিটি"; else -> "প্রশ্ন/কথা" }}", style = MaterialTheme.typography.bodySmall)
                         }
-                        TextButton(enabled = busy == null, onClick = { wf.chats.get(c.id)?.let { (m, list0) -> persist(); msgs.clear(); msgs.addAll(list0); convId = c.id; translate = m == "translate"; advisor = m == "advisor"; showHistory = false } }) { Text("Open") }
+                        TextButton(enabled = busy == null, onClick = { wf.chats.get(c.id)?.let { (m, list0) -> persist(); msgs.clear(); msgs.addAll(list0); convId = c.id; translate = m == "translate"; advisor = m == "advisor"; cyber = m == "cyber"; showHistory = false } }) { Text("Open") }
                         TextButton(onClick = { wf.chats.delete(c.id); if (c.id == convId) { msgs.clear(); convId = java.util.UUID.randomUUID().toString() }; histTick++ }) { Text("Delete") }
                     } }
                 }
@@ -115,9 +116,10 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
         }
         if (wf.usableModel() == null || checkTick < 0) ReadinessPanel(wf, needModel = true, needMic = false, needHearing = false, needSpeaking = false, onGoModel = onGoModel, onChanged = { checkTick++ })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !translate && !advisor, onClick = { translate = false; advisor = false }, label = { Text("প্রশ্ন / কথা") })
-            FilterChip(selected = advisor, onClick = { translate = false; advisor = true }, label = { Text("পরামর্শদাতা") })
-            FilterChip(selected = translate, onClick = { translate = true; advisor = false }, label = { Text("অনুবাদ → বাংলা") })
+            FilterChip(selected = !translate && !advisor && !cyber, onClick = { translate = false; advisor = false; cyber = false }, label = { Text("প্রশ্ন / কথা") })
+            FilterChip(selected = advisor, onClick = { translate = false; advisor = true; cyber = false }, label = { Text("পরামর্শদাতা") })
+            FilterChip(selected = cyber, onClick = { translate = false; advisor = false; cyber = true }, label = { Text("সাইবার সিকিউরিটি") })
+            FilterChip(selected = translate, onClick = { translate = true; advisor = false; cyber = false }, label = { Text("অনুবাদ → বাংলা") })
         }
         Text(if (translate) "যেকোনো ভাষার লেখা পেস্ট করুন; শুধু বাংলা অনুবাদ আসবে।" else "যা জানতে চান লিখুন। AI ভুল করতে পারে; ধর্মীয়/আইনি/চিকিৎসা বিষয়ে নিজে যাচাই করুন।",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
