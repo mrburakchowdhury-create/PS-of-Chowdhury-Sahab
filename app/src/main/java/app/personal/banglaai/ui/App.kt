@@ -298,6 +298,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
             pendingJobs.forEach { (d, n, c) -> TextButton(onClick = { openPage = null; openDoc = d }) { Text("${d.name} — $n থামানো ($c)") } }
         }
         val hasModel = remember(modelList, workflow.chosenModel) { workflow.usableModel() != null }
+        if (ThermalGuard.status >= ThermalGuard.WARN) Text("🌡️ ফোন ${ThermalGuard.label(ThermalGuard.status)} — " + (if (ThermalGuard.status >= ThermalGuard.STOP) "ভারী AI কাজ থামানো হয়েছে; ঠান্ডা হলে আবার চালান।" else "ভারী কাজ (অনুবাদ/AI উত্তর) কিছুক্ষণ বিরতি দিয়ে করুন।"), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         if (!hasModel) Text("এই কাজের জন্য AI মডেল প্রয়োজন। মডেল যোগ করুন।", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clickable { tab = HomeTab.Setup })
         val ic = androidx.compose.material.icons.Icons.Rounded; val st = TileStyle
         TileGrid(listOf(

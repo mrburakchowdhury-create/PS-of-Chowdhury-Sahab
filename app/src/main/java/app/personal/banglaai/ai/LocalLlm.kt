@@ -83,9 +83,11 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
     companion object {
         /** Set from the owner's setting at app start. Default false = CPU. */
         @Volatile var preferGpu = false
+        /** CPU threads the model may use. Fewer = cooler phone and less battery, slightly slower; all cores at 100% is what heated the phone. Set from Settings (default 4). */
+        @Volatile var threads = 4
         @Volatile var lastGpuFailure: String? = null
         @Volatile var usedBackend: String = "-"
-        const val IDLE_MS = 4 * 60_000L
+        const val IDLE_MS = 90_000L   // give the model's RAM back quickly: it is idle most of the time
         const val MAX_TOKENS = 4096
 
         /** Frees the model's RAM (app in background, memory pressure, or the owner asked) — only when no request is running; done off the main thread. */
@@ -113,11 +115,11 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
             cacheDir.mkdirs()
             // CPU is the safe default. GPU (lower RAM) is opt-in via [preferGpu]; if it fails to start we fall back to CPU and remember why.
             if (preferGpu) {
-                val gpu = runCatching { Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.GPU(), audioBackend = if (audio) Backend.CPU() else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() } }
+                val gpu = runCatching { Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.GPU(), audioBackend = if (audio) Backend.CPU(threadCount = threads) else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() } }
                 gpu.onSuccess { eng = it; path = modelFile.path; withAudio = audio; usedBackend = "GPU"; touch(); return it }
                 lastGpuFailure = gpu.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" }
             }
-            val e = Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.CPU(), audioBackend = if (audio) Backend.CPU() else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() }
+            val e = Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.CPU(threadCount = threads), audioBackend = if (audio) Backend.CPU(threadCount = threads) else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() }
             eng = e; path = modelFile.path; withAudio = audio; usedBackend = "CPU"; touch(); return e
         }
 

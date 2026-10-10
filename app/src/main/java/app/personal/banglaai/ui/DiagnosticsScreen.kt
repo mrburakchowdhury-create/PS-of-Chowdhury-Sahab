@@ -113,6 +113,20 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
         Button(enabled = !vtOn, onClick = { vtLog = emptyList(); vtPerm.launch(android.Manifest.permission.RECORD_AUDIO) }) { Text(if (vtOn) "🎤 শুনছি… বলুন" else "🎤 Test speech recognition (${if (app.personal.banglaai.speech.VoiceEngine.usesModel(ctx, wf)) "AI model" else "phone service"})") }
         if (vtOn) OutlinedButton(onClick = { vtVoice.stop(); vtOn = false; vtAdd("বন্ধ করা হলো") }) { Text("Stop") }
         vtLog.takeLast(14).forEach { Text(it, style = MaterialTheme.typography.bodySmall.merge(app.personal.banglaai.ui.Ps.Mono)) }
+        SectionTitle("ফোন গরম / চার্জ-খরচ: অ্যাপ এখন কত CPU নিচ্ছে")
+        val cpuMeter = remember { CpuMeter() }
+        var cpu by remember { mutableStateOf(CpuMeter.Result(0, emptyList())) }
+        LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(2000); cpu = cpuMeter.sample() } }
+        Text("এখন: ${cpu.percentOfOneCore}% (১০০% = একটা কোর পুরো ব্যস্ত; ফোনে সাধারণত ৮ কোর)।" + (if (cpu.percentOfOneCore > 150) " ⚠ বেশি — কিছু একটা চলছে" else " ঠিক আছে"), style = MaterialTheme.typography.bodySmall)
+        cpu.top.forEach { (n, p) -> Text("• $n — $p%", style = MaterialTheme.typography.bodySmall.merge(app.personal.banglaai.ui.Ps.Mono)) }
+        Text("কিছু না করে বসে থাকলে এই সংখ্যা প্রায় ০ হওয়া উচিত। যে মুহূর্তে ফোন গরম লাগে, এই পর্দার স্ক্রিনশট পাঠালে বোঝা যাবে কোন অংশ খাটছে।", style = MaterialTheme.typography.bodySmall)
+        SectionTitle("AI কত কোর ব্যবহার করবে (কম কোর = কম গরম, একটু ধীর)")
+        var thr by remember { mutableIntStateOf(LocalLlm.threads) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(2 to "ঠান্ডা (২)", 4 to "মাঝারি (৪)", 6 to "দ্রুত (৬)").forEach { (n, l) ->
+                FilterChip(selected = thr == n, onClick = { thr = n; LocalLlm.threads = n; ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putInt("cpu_threads", n).apply(); LocalLlm.releaseAll() }, label = { Text(l) })
+            }
+        }
         SectionTitle("AI চালানোর উপায়: CPU নাকি GPU")
         var gpu by remember { mutableStateOf(LocalLlm.preferGpu) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
