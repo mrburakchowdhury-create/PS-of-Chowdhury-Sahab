@@ -203,8 +203,9 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         uri ?: return@rememberLauncherForActivityResult
         scope.launch {
             busy = "ফাইল এনক্রিপ্ট করে রাখা হচ্ছে…"; error = null
-            runCatching { withContext(Dispatchers.IO) { vault.import(uri) } }.onFailure { error = it.message ?: "ব্যর্থ" }
+            val added = runCatching { withContext(Dispatchers.IO) { vault.import(uri) } }.onFailure { error = it.message ?: "ব্যর্থ" }.getOrNull()
             busy = null; refresh()
+            if (added != null) { openPage = null; openDoc = added }   // straight to the file: Translate (choose language), read, ask
         }
     }
     val scanPages = remember { mutableStateListOf<ScanPage>() }

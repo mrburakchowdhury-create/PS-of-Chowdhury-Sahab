@@ -14,30 +14,36 @@ import app.personal.banglaai.ai.LocalLlm
 import app.personal.banglaai.ai.Prompts
 import app.personal.banglaai.doc.DocWorkflow
 import app.personal.banglaai.speech.ReadAloudController
+import app.personal.banglaai.userdata.ChatMsg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private data class Msg(val fromUser: Boolean, val text: String, val addressed: Boolean = false)
 
 /**
  * Direct assistant: type (or press-to-talk) a question, or switch to "অনুবাদ" and paste any text to get Bengali. Runs ONLY on the imported local model:
- * if none is imported it says so and shows how. The conversation lives in memory only (nothing saved, nothing sent anywhere).
+ * if none is imported it says so and shows how. Conversations are saved (encrypted) so they can be reopened later; the owner can delete one or all, or switch saving off. Nothing is sent anywhere.
  * Each message is independent (no hidden long memory); answers stream in as the model writes them.
  */
 @Composable
 fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: () -> Unit = {}, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val msgs = remember { mutableStateListOf<Msg>() }
+    val msgs = remember { mutableStateListOf<ChatMsg>() }
     var input by remember { mutableStateOf("") }
+    var convId by remember { mutableStateOf(java.util.UUID.randomUUID().toString()) }
+    var saveOn by remember { mutableStateOf(ctx.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean("chat_history_on", true)) }
+    var showHistory by remember { mutableStateOf(false) }
+    var histTick by remember { mutableIntStateOf(0) }
     var translate by remember { mutableStateOf(false) }
     var advisor by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
     var stoppedByUser by remember { mutableStateOf(false) }
+    fun modeName() = if (translate) "translate" else if (advisor) "advisor" else "chat"
+    fun persist() { if (saveOn) runCatching { wf.chats.save(convId, modeName(), msgs.toList()); histTick++ } }
     // microphone: one press = one sentence, written into the question box (so it can be corrected before sending)
     val voice = remember { app.personal.banglaai.speech.VoiceEngine.create(ctx, wf) }
     var listening by remember { mutableStateOf(false) }; var micMsg by remember { mutableStateOf<String?>(null) }; var heardPartial by remember { mutableStateOf("") }
@@ -50,12 +56,13 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
     val micPerm = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok -> if (ok) listen() else micMsg = "মাইক্রোফোনের অনুমতি দেওয়া হয়নি — লিখে প্রশ্ন করুন" }
     var checkTick by remember { mutableIntStateOf(0) }
     val list = rememberLazyListState()
-    DisposableEffect(Unit) { onDispose { llm[0]?.cancel(); llm[0]?.close(); } }   // free the model's RAM when leaving
+    DisposableEffect(Unit) { onDispose { llm[0]?.cancel(); llm[0]?.close() } }
+    DisposableEffect(saveOn) { onDispose { if (saveOn) runCatching { wf.chats.save(convId, modeName(), msgs.toList()) } } }   // a half-written conversation is kept too   // free the model's RAM when leaving
 
     fun send(text: String) {
         if (busy != null || text.isBlank()) return
         val model = wf.usableModel() ?: run { error = "কোনো AI মডেল বসানো নেই। হোমে ফিরে 'মডেল ফাইল বসান' চাপুন (E4B ≈ 3.66 GB, E2B ≈ 2.59 GB, docs/MODELS.md)। মডেল ছাড়া উত্তর/অনুবাদ হয় না, আর ইন্টারনেটে কিছু পাঠানো হয় না।"; return }
-        error = null; msgs += Msg(true, text.trim()); msgs += Msg(false, "", addressed = !translate); input = ""
+        error = null; msgs += ChatMsg(true, text.trim()); msgs += ChatMsg(false, "", addressed = !translate); persist(); input = ""
         val idx = msgs.lastIndex
         busy = if (llm[0]?.isLoaded == true) "লিখছে…" else "মডেল লোড হচ্ছে (প্রথমবার কিছু সময় লাগে, ফোনভেদে)…"
         scope.launch {
@@ -69,8 +76,8 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
                 }
             }.onFailure { error = if (stoppedByUser) null else "ব্যর্থ: ${it.javaClass.simpleName}: ${it.message ?: ""}".take(400) }
             stoppedByUser = false
-            if (msgs.getOrNull(idx)?.text.isNullOrBlank() && error == null) msgs[idx] = Msg(false, "(কোনো উত্তর আসেনি)")
-            busy = null
+            if (msgs.getOrNull(idx)?.text.isNullOrBlank() && error == null) msgs[idx] = ChatMsg(false, "(কোনো উত্তর আসেনি)")
+            busy = null; persist()
         }
     }
     LaunchedEffect(Unit) { if (!startWith.isNullOrBlank()) send(startWith) }
@@ -80,6 +87,31 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onBack) { Text("← Back") }
             Text("Assistant", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            TextButton(onClick = { showHistory = !showHistory }) { Text(if (showHistory) "Close history" else "History") }
+            TextButton(enabled = busy == null, onClick = { llm[0]?.cancel(); persist(); msgs.clear(); convId = java.util.UUID.randomUUID().toString(); error = null; showHistory = false }) { Text("New chat") }
+        }
+        if (showHistory) {
+            val chats = remember(histTick, showHistory) { runCatching { wf.chats.list() }.getOrDefault(emptyList()) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Switch(checked = saveOn, onCheckedChange = { saveOn = it; ctx.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().putBoolean("chat_history_on", it).apply() })
+                Text(if (saveOn) "কথোপকথন সংরক্ষণ চালু (এনক্রিপ্টেড, ফোনের ভেতরে)" else "সংরক্ষণ বন্ধ — নতুন কথা আর রাখা হবে না", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+            }
+            if (chats.isEmpty()) Text("এখনো কোনো সংরক্ষিত কথোপকথন নেই।", style = MaterialTheme.typography.bodySmall)
+            LazyColumn(Modifier.heightIn(max = 260.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(chats.size) { i ->
+                    val c = chats[i]
+                    Card(Modifier.fillMaxWidth()) { Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(c.title.ifBlank { "(শিরোনাম নেই)" }, maxLines = 2)
+                            Text("${java.text.SimpleDateFormat("d MMM, HH:mm", androidx.compose.ui.platform.LocalConfiguration.current.locales[0]).format(java.util.Date(c.at))} · ${c.count}টি বার্তা · ${when (c.mode) { "advisor" -> "পরামর্শদাতা"; "translate" -> "অনুবাদ"; else -> "প্রশ্ন/কথা" }}", style = MaterialTheme.typography.bodySmall)
+                        }
+                        TextButton(enabled = busy == null, onClick = { wf.chats.get(c.id)?.let { (m, list0) -> persist(); msgs.clear(); msgs.addAll(list0); convId = c.id; translate = m == "translate"; advisor = m == "advisor"; showHistory = false } }) { Text("Open") }
+                        TextButton(onClick = { wf.chats.delete(c.id); if (c.id == convId) { msgs.clear(); convId = java.util.UUID.randomUUID().toString() }; histTick++ }) { Text("Delete") }
+                    } }
+                }
+            }
+            if (chats.isNotEmpty()) OutlinedButton(onClick = { wf.chats.clear(); msgs.clear(); convId = java.util.UUID.randomUUID().toString(); histTick++ }) { Text("Delete all history") }
+            HorizontalDivider()
         }
         if (wf.usableModel() == null || checkTick < 0) ReadinessPanel(wf, needModel = true, needMic = false, needHearing = false, needSpeaking = false, onGoModel = onGoModel, onChanged = { checkTick++ })
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

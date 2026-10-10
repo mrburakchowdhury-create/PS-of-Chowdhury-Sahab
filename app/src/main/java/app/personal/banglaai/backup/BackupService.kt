@@ -62,6 +62,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
             entry("u/vocab.json", JSONArray(wf.vocab.exportJson()).toString().toByteArray(Charsets.UTF_8))
             entry("u/reading.json", JSONArray(wf.reading.exportJson()).toString().toByteArray(Charsets.UTF_8))
             entry("u/savedqa.json", JSONArray(wf.savedQa.exportJson()).toString().toByteArray(Charsets.UTF_8))
+            entry("u/chats.json", JSONArray(wf.chats.exportJson()).toString().toByteArray(Charsets.UTF_8))
             z.putNextEntry(ZipEntry("end.json")); z.write(JSONObject().put("entries", entries).put("docs", docs.size).put("origBytes", origBytes).toString().toByteArray()); z.closeEntry()
         }
     }
@@ -210,6 +211,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
         step("vocab") { wf.vocab.mergeJson(st.user["vocab"].orEmpty(), ids) }
         step("reading") { wf.reading.mergeJson(st.user["reading"].orEmpty(), ids) }
         if (st.version >= 3) step("savedqa") { wf.savedQa.mergeJson(st.user["savedqa"].orEmpty(), ids) }
+        if (st.version >= 4) step("chats") { wf.chats.mergeJson(st.user["chats"].orEmpty()) }
         lastFailed = failed; return out
     }
 
@@ -270,7 +272,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
     }
 
     companion object {
-        const val VERSION = 3
+        const val VERSION = 4
         const val MAX_DOCS = 5_000; const val MAX_ENTRIES = 1_000_000; const val MAX_PAGES = 100_000
         const val MAX_SMALL = 1 shl 20                       // one page / meta / manifest
         const val MAX_USER = 16 shl 20                       // notes, glossary, vocabulary, positions
@@ -280,7 +282,7 @@ class BackupService(private val vault: Vault, private val wf: DocWorkflow, priva
         const val MIN_FREE = 200L shl 20
         private val USER_FILES = listOf("marks", "glossary", "vocab", "reading")
         /** v2 backups have four owner-data parts, v3 adds saved Q&A (and corrected page texts under d/<id>/f/). v1 has none. */
-        private fun userFilesFor(version: Int) = when { version >= 3 -> USER_FILES + "savedqa"; version == 2 -> USER_FILES; else -> emptyList() }
+        private fun userFilesFor(version: Int) = when { version >= 4 -> USER_FILES + "savedqa" + "chats"; version == 3 -> USER_FILES + "savedqa"; version == 2 -> USER_FILES; else -> emptyList() }
         private val ID = Regex("[A-Za-z0-9-]{8,64}"); private val PAGE = Regex("[0-9]{1,6}\\.json")
         private val JOURNAL_AAD = "restore-journal".toByteArray()
         private val RUNNING = AtomicBoolean(false); private val CANCEL = AtomicBoolean(false)

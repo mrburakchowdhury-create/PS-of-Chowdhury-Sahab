@@ -29,6 +29,7 @@ class DocWorkflow(private val context: Context, private val vault: Vault, privat
     val fixes = PageTextStore(File(base, "fix"), vault::seal, vault::unseal)
     val savedQa = app.personal.banglaai.userdata.SavedQa(app.personal.banglaai.userdata.SealedList(File(base, "savedqa.enc"), vault::seal, vault::unseal))
     val glossary = app.personal.banglaai.userdata.Glossary(app.personal.banglaai.userdata.SealedList(File(base, "glossary.enc"), vault::seal, vault::unseal))
+    val chats = app.personal.banglaai.userdata.ChatHistory(app.personal.banglaai.userdata.SealedList(File(base, "chats.enc"), vault::seal, vault::unseal))
     val vocab = app.personal.banglaai.userdata.Vocab(app.personal.banglaai.userdata.SealedList(File(base, "vocab.enc"), vault::seal, vault::unseal))
     data class Chapter(val title: String, val page: Int)
     private fun chapterStore(doc: VaultDoc) = app.personal.banglaai.userdata.SealedList(File(File(base, "chapters").apply { mkdirs() }, "${doc.id}.enc"), vault::seal, vault::unseal)

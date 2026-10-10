@@ -8,7 +8,7 @@ class AdvisorPromptTest {
         val s = Prompts.ADVISOR_SYSTEM
         assertTrue(s.contains("ব্ল্যাকমেইল")); assertTrue(s.contains("৯৯৯")); assertTrue(s.contains("দোষ ভুক্তভোগীর নয়"))
         assertTrue(s.contains("মনস্তাত্ত্বিক") && s.contains("কূটনৈতিক") && s.contains("অর্থনৈতিক"))
-        assertTrue(s.contains("নির্দিষ্ট কর্মপরিকল্পনা দেবে না"))      // recognition/defence, not an operations manual for harming someone
+        assertTrue(s.contains("নির্দিষ্ট কর্মপরিকল্পনা দেবে না")); assertTrue(s.contains("এর বাইরে কোনো বিষয় এড়াবে না"))      // one narrow limit (harm operations), everything else answered
         assertTrue(s.contains("যোগ্য বিশেষজ্ঞ"))
     }
     @Test fun referencesAreWrappedAsDataAndCannotCloseTheTag() {
