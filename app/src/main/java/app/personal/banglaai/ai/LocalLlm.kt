@@ -25,7 +25,7 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
     @Volatile private var current: com.google.ai.edge.litertlm.Conversation? = null
 
     private fun stillWanted(gen: Int) { if (!background && gen != Shared.interactiveGen) throw CancellationException("screen closed or app locked") }
-    private fun engine(audio: Boolean = false): Engine = Shared.engine(modelFile, cacheDir, audio)
+    private fun engine(audio: Boolean = false, vision: Boolean = false): Engine = Shared.engine(modelFile, cacheDir, audio, vision)
 
     /** Loads (or reuses) the shared engine, taking its turn like a request so a memory-trim cannot free it half-way. Call off the main thread. */
     fun load() { Shared.turn.acquire(); try { engine() } finally { Shared.turn.release(); Shared.touch() } }
@@ -72,6 +72,23 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
         } finally { Shared.turn.release(); Shared.touch() }
     }
 
+    /**
+     * One question about a picture (e.g. a screenshot the owner sent): [imageBytes] is a JPEG/PNG. [onText] streams the answer as it is written.
+     * The engine is (re)loaded with the vision encoder on first use. Independent request (no shared history). Call from a background coroutine.
+     */
+    suspend fun askStreamWithImage(system: String, imageBytes: ByteArray, prompt: String, onText: (String) -> Unit) {
+        val gen = Shared.interactiveGen
+        Shared.turn.acquire()
+        try {
+            currentCoroutineContext().ensureActive(); stillWanted(gen)
+            val eng = engine(vision = true); currentCoroutineContext().ensureActive(); stillWanted(gen)
+            val conv = eng.createConversation(ConversationConfig(systemInstruction = Contents.of(system)))
+            current = conv; if (!background) Shared.activeInteractive = conv
+            try { conv.sendMessageAsync(Contents.of(Content.ImageBytes(imageBytes), Content.Text(TokenBudget.guard(system, prompt)))).collect { onText(it.toString()) } }
+            finally { current = null; Shared.activeInteractive = null; conv.close() }
+        } finally { Shared.turn.release(); Shared.touch() }
+    }
+
     val isLoaded get() = Shared.loaded
 
     /** Stops the running generation (used by pause/cancel). */
@@ -104,23 +121,24 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
         private var eng: Engine? = null
         private var path: String? = null
         private var withAudio = false
+        private var withVision = false
         private val main = Handler(Looper.getMainLooper())
         private val idle = Runnable { releaseWhenIdle(retryLater = true) }
         val loaded get() = eng != null
 
-        @Synchronized fun engine(modelFile: File, cacheDir: File, audio: Boolean = false): Engine {
-            // an engine that already has the audio encoder serves text requests too; one without it is replaced when audio is first needed
-            eng?.let { if (path == modelFile.path && (withAudio || !audio)) { touch(); return it } else { runCatching { it.close() }; eng = null } }
+        @Synchronized fun engine(modelFile: File, cacheDir: File, audio: Boolean = false, vision: Boolean = false): Engine {
+            // an engine that already has the audio/vision encoder serves plain-text requests too; one missing a needed encoder is replaced when first needed
+            eng?.let { if (path == modelFile.path && (withAudio || !audio) && (withVision || !vision)) { touch(); return it } else { runCatching { it.close() }; eng = null } }
             require(modelFile.exists()) { "মডেল ফাইল নেই — আগে মডেল import করুন" }
             cacheDir.mkdirs()
             // CPU is the safe default. GPU (lower RAM) is opt-in via [preferGpu]; if it fails to start we fall back to CPU and remember why.
             if (preferGpu) {
-                val gpu = runCatching { Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.GPU(), audioBackend = if (audio) Backend.CPU(threadCount = threads) else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() } }
-                gpu.onSuccess { eng = it; path = modelFile.path; withAudio = audio; usedBackend = "GPU"; touch(); return it }
+                val gpu = runCatching { Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.GPU(), audioBackend = if (audio) Backend.CPU(threadCount = threads) else null, visionBackend = if (vision) Backend.CPU(threadCount = threads) else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() } }
+                gpu.onSuccess { eng = it; path = modelFile.path; withAudio = audio; withVision = vision; usedBackend = "GPU"; touch(); return it }
                 lastGpuFailure = gpu.exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" }
             }
-            val e = Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.CPU(threadCount = threads), audioBackend = if (audio) Backend.CPU(threadCount = threads) else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() }
-            eng = e; path = modelFile.path; withAudio = audio; usedBackend = "CPU"; touch(); return e
+            val e = Engine(EngineConfig(modelPath = modelFile.path, backend = Backend.CPU(threadCount = threads), audioBackend = if (audio) Backend.CPU(threadCount = threads) else null, visionBackend = if (vision) Backend.CPU(threadCount = threads) else null, maxNumTokens = MAX_TOKENS, cacheDir = cacheDir.path)).also { it.initialize() }
+            eng = e; path = modelFile.path; withAudio = audio; withVision = vision; usedBackend = "CPU"; touch(); return e
         }
 
         fun touch() { main.removeCallbacks(idle); if (eng != null) main.postDelayed(idle, IDLE_MS) }
@@ -129,6 +147,6 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
         fun releaseWhenIdle(retryLater: Boolean = false) {
             if (turn.tryAcquire()) Thread { try { release() } finally { turn.release() } }.start() else if (retryLater) touch()
         }
-        @Synchronized fun release() { main.removeCallbacks(idle); runCatching { eng?.close() }; eng = null; path = null; withAudio = false }
+        @Synchronized fun release() { main.removeCallbacks(idle); runCatching { eng?.close() }; eng = null; path = null; withAudio = false; withVision = false }
     }
 }

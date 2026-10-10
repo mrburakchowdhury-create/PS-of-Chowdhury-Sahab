@@ -1,14 +1,22 @@
 package app.personal.banglaai.ui
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import app.personal.banglaai.ai.LocalLlm
 import app.personal.banglaai.ai.Prompts
@@ -18,7 +26,19 @@ import app.personal.banglaai.userdata.ChatMsg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
+
+/** Reads an image the owner picked (e.g. a screenshot), downsized so it loads/answers in reasonable time, as JPEG bytes. Null if the file can't be read as an image. */
+private fun readPickedImage(ctx: android.content.Context, uri: android.net.Uri, maxSide: Int = 1280): ByteArray? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    runCatching { ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } }
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1; while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+    val bmp: Bitmap? = runCatching { ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } }.getOrNull()
+    if (bmp == null) return null
+    return ByteArrayOutputStream().also { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it); bmp.recycle() }.toByteArray()
+}
 
 
 /**
@@ -41,6 +61,12 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
     var cyber by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var pendingImage by remember { mutableStateOf<ByteArray?>(null) }
+    val pendingThumb = remember(pendingImage) { pendingImage?.let { b -> runCatching { BitmapFactory.decodeByteArray(b, 0, b.size) }.getOrNull() } }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch { pendingImage = withContext(Dispatchers.IO) { readPickedImage(ctx, uri) } ?: run { error = "ছবিটি পড়া যায়নি"; null } }
+    }
     val llm = remember { arrayOfNulls<LocalLlm>(1) }
     var stoppedByUser by remember { mutableStateOf(false) }
     fun modeName() = if (translate) "translate" else if (advisor) "advisor" else if (cyber) "cyber" else "chat"
@@ -61,9 +87,10 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
     DisposableEffect(saveOn) { onDispose { if (saveOn) runCatching { wf.chats.save(convId, modeName(), msgs.toList()) } } }   // a half-written conversation is kept too   // free the model's RAM when leaving
 
     fun send(text: String) {
-        if (busy != null || text.isBlank()) return
+        if (busy != null || (text.isBlank() && pendingImage == null)) return
         val model = wf.usableModel() ?: run { error = "কোনো AI মডেল বসানো নেই। হোমে ফিরে 'মডেল ফাইল বসান' চাপুন (E4B ≈ 3.66 GB, E2B ≈ 2.59 GB, docs/MODELS.md)। মডেল ছাড়া উত্তর/অনুবাদ হয় না, আর ইন্টারনেটে কিছু পাঠানো হয় না।"; return }
-        error = null; msgs += ChatMsg(true, text.trim()); msgs += ChatMsg(false, "", addressed = !translate && !cyber); persist(); input = ""
+        val image = pendingImage; pendingImage = null
+        error = null; msgs += ChatMsg(true, text.trim().ifBlank { "(ছবি পাঠানো হয়েছে)" }); msgs += ChatMsg(false, "", addressed = !translate && !cyber); persist(); input = ""
         val idx = msgs.lastIndex
         busy = if (llm[0]?.isLoaded == true) "লিখছে…" else "মডেল লোড হচ্ছে (প্রথমবার কিছু সময় লাগে, ফোনভেদে)…"
         scope.launch {
@@ -71,9 +98,14 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
                 withContext(Dispatchers.IO) {
                     val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
                     val sys = if (translate) Prompts.TRANSLATE_SYSTEM else if (advisor) Prompts.ADVISOR_SYSTEM else if (cyber) Prompts.CYBERSEC_SYSTEM else Prompts.ASSISTANT_SYSTEM
-                    val prompt = if (translate) Prompts.translateFree(text, wf.glossary.promptPairs(text)) else if (advisor) Prompts.advisor(text, app.personal.banglaai.knowledge.KnowledgeBase.search(ctx, text, null, 3).map { "প্রশ্ন: ${it.q}\nউত্তর: ${it.a}" }) else if (cyber) Prompts.cybersec(text) else Prompts.ask(text)
                     var first = true
-                    m.askStream(sys, prompt) { piece -> if (first) { first = false; busy = "লিখছে…" }; msgs[idx] = msgs[idx].copy(text = msgs[idx].text + piece) }
+                    if (image != null) {
+                        val q = text.trim().ifBlank { "এই ছবিতে কী দেখা যাচ্ছে? পরের ধাপ কী, সংক্ষেপে বলো।" }
+                        m.askStreamWithImage(sys, image, Prompts.ask(q)) { piece -> if (first) { first = false; busy = "লিখছে…" }; msgs[idx] = msgs[idx].copy(text = msgs[idx].text + piece) }
+                    } else {
+                        val prompt = if (translate) Prompts.translateFree(text, wf.glossary.promptPairs(text)) else if (advisor) Prompts.advisor(text, app.personal.banglaai.knowledge.KnowledgeBase.search(ctx, text, null, 3).map { "প্রশ্ন: ${it.q}\nউত্তর: ${it.a}" }) else if (cyber) Prompts.cybersec(text) else Prompts.ask(text)
+                        m.askStream(sys, prompt) { piece -> if (first) { first = false; busy = "লিখছে…" }; msgs[idx] = msgs[idx].copy(text = msgs[idx].text + piece) }
+                    }
                 }
             }.onFailure { error = if (stoppedByUser) null else "ব্যর্থ: ${it.javaClass.simpleName}: ${it.message ?: ""}".take(400) }
             stoppedByUser = false
@@ -138,10 +170,18 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
         }
         busy?.let { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text(it, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall); OutlinedButton(onClick = { stoppedByUser = true; llm[0]?.cancel() }) { Text("Stop") } } }
         error?.let { Text("❌ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        pendingThumb?.let { bmp ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Image(bmp.asImageBitmap(), contentDescription = "সংযুক্ত ছবি", modifier = Modifier.heightIn(max = 96.dp))
+                Text("ছবিটা নিয়ে প্রশ্ন লিখে Send চাপুন (খালি রাখলে 'এতে কী আছে' জিজ্ঞাসা হবে)", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                IconButton(onClick = { pendingImage = null }) { Icon(Icons.Rounded.Close, contentDescription = "ছবি সরান") }
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(input, { input = it }, label = { Text(if (translate) "অনুবাদের লেখা" else "প্রশ্ন") }, modifier = Modifier.weight(1f), maxLines = 5)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Button(enabled = busy == null && input.isNotBlank(), onClick = { send(input) }) { Text("Send") }
+                Button(enabled = busy == null && (input.isNotBlank() || pendingImage != null), onClick = { send(input) }) { Text("Send") }
+                OutlinedButton(enabled = busy == null, onClick = { pickImage.launch("image/*") }) { Text("🖼️ স্ক্রিনশট") }
                 OutlinedButton(enabled = busy == null, onClick = { if (listening) { voice.stop(); listening = false } else if (androidx.core.content.ContextCompat.checkSelfPermission(ctx, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) listen() else micPerm.launch(android.Manifest.permission.RECORD_AUDIO) }) { Text(if (listening) "⏹ Stop" else "🎤 Speak") }
             }
         }
