@@ -37,6 +37,9 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     val scope = rememberCoroutineScope()
     var explanation by remember { mutableStateOf<String?>(null) }
     var explaining by remember { mutableStateOf(false) }
+    var askText by remember { mutableStateOf("") }
+    var commentText by remember { mutableStateOf("") }
+    var commentSaved by remember { mutableStateOf(false) }
 
     val reader = remember { ReadAloudController.get(ctx) }
     val state = ReadAloudController.state
@@ -66,7 +69,6 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     fun playNowImpl(page: Int, seg: Int) {
         val pl = plan(); val start = if (seg == 0) pl.startAt(page) else ReadingPosition(page, seg)
         val sample = start?.let { pl.segmentAt(it)?.text }
-        if (!useTranslation && sample != null && !app.personal.banglaai.speech.SpeechText.isMostlyBengali(sample)) { voiceMsg = "এই মূল লেখা বাংলা নয় — বাংলা কণ্ঠ একে ঠিকমতো পড়তে পারে না। আগে 'বাংলায় অনুবাদ করুন' চালিয়ে ‘বাংলা অনুবাদ’ বেছে পড়ুন।"; return }
         if (start == null && useTranslation && seg == 0 && wf.effective(doc.id, page)?.text?.isNotBlank() == true) { translateThenPlay(page); return }
         if (start == null) voiceMsg = if (useTranslation) "এই পৃষ্ঠা থেকে পড়ার মতো লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR চালান)।" else "এই পৃষ্ঠা থেকে পড়ার মতো বের-করা লেখা নেই (স্ক্যান পৃষ্ঠা হলে আগে OCR চালান)।" else {
             voiceMsg = null; ReadAloudController.play(ctx, pl, start)
@@ -85,7 +87,20 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
         ReadAloudController.pause(); explaining = true; voiceMsg = null; explanation = null
         scope.launch {
             runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { LocalLlm(model, java.io.File(ctx.cacheDir, "llm")).use { it.ask(Prompts.EXPLAIN_SYSTEM, Prompts.explain(seg, pageCtx)) } } }
-                .onSuccess { explanation = it; ReadAloudController.speakExplanation(ctx, it) }.onFailure { voiceMsg = it.message ?: it.javaClass.simpleName }
+                .onSuccess { val t = app.personal.banglaai.OwnerAddress.present(it); explanation = t; ReadAloudController.speakExplanation(ctx, t) }.onFailure { voiceMsg = it.message ?: it.javaClass.simpleName }
+            explaining = false
+        }
+    }
+    fun askNow() {
+        val q = askText.trim(); if (q.isEmpty()) return
+        val seg = ReadAloudController.current?.takeIf { !ReadAloudController.adHoc }?.text ?: plan().segments(pageInput.toIntOrNull() ?: 1).firstOrNull()?.text ?: ""
+        val model = wf.usableModel() ?: run { voiceMsg = "এই কাজের জন্য AI মডেল প্রয়োজন। মডেল যোগ করুন।"; return }
+        val pg = ReadAloudController.current?.takeIf { !ReadAloudController.adHoc }?.page ?: (pageInput.toIntOrNull() ?: 1)
+        val pageCtx = (if (useTranslation) wf.translations.get(doc.id, pg) else wf.effective(doc.id, pg))?.text
+        ReadAloudController.pause(); explaining = true; voiceMsg = null; explanation = null
+        scope.launch {
+            runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { LocalLlm(model, java.io.File(ctx.cacheDir, "llm")).use { it.ask(Prompts.ASK_ABOUT_SYSTEM, Prompts.askAbout(seg, pageCtx, q)) } } }
+                .onSuccess { val t = app.personal.banglaai.OwnerAddress.present(it); explanation = t; askText = ""; ReadAloudController.speakExplanation(ctx, t) }.onFailure { voiceMsg = it.message ?: it.javaClass.simpleName }
             explaining = false
         }
     }
@@ -122,7 +137,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     }
     explaining.let { if (it) Text("AI বুঝিয়ে বলার জন্য ভাবছে…", color = MaterialTheme.colorScheme.tertiary) }
     explanation?.let { e ->
-        Text("সহজ বাংলায় ব্যাখ্যা (AI; 'সাধারণ ব্যাখ্যা' অংশ ডকুমেন্টের বক্তব্য নয়)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        Text("AI-র ব্যাখ্যা/উত্তর ('সাধারণ ব্যাখ্যা' অংশ ডকুমেন্টের বক্তব্য নয়)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
         androidx.compose.foundation.text.selection.SelectionContainer { Text(e) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { ReadAloudController.speakExplanation(ctx, e) }) { Text("🔊 Listen again") }
@@ -150,13 +165,24 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { reader.previous() }) { Text("⏮") }
-                OutlinedButton(enabled = state == TtsReader.State.Playing, onClick = { reader.pause() }) { Text("⏸ Pause") }
-                OutlinedButton(enabled = state == TtsReader.State.Paused, onClick = { reader.resume() }) { Text("▶ Resume") }
+                OutlinedButton(onClick = { reader.pause() }) { Text("⏸ Pause") }
+                OutlinedButton(onClick = { reader.resume() }) { Text("▶ Resume") }
                 OutlinedButton(onClick = { reader.next() }) { Text("⏭") }
                 OutlinedButton(onClick = { reader.stop() }) { Text("⏹") }
             }
             Text("গতি: ${"%.2f".format(rate)}×", style = MaterialTheme.typography.bodySmall)
             Slider(value = rate, onValueChange = { rate = it; reader.setRate(it) }, valueRange = 0.5f..2f)
+            // --- Right here while reading: explain, ask, comment (reading pauses by itself) ---
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(enabled = !explaining, onClick = { explainNow() }) { Text(if (explaining) "ভাবছে…" else "💡 Explain this") }
+            }
+            OutlinedTextField(value = askText, onValueChange = { askText = it }, label = { Text("এই অংশ নিয়ে প্রশ্ন করুন (পড়া থেমে যাবে)") }, modifier = Modifier.fillMaxWidth())
+            Button(enabled = !explaining && askText.isNotBlank(), onClick = { askNow() }) { Text("Ask") }
+            OutlinedTextField(value = commentText, onValueChange = { commentText = it; commentSaved = false }, label = { Text("কমেন্ট / নোট (এই পৃষ্ঠার সঙ্গে সংরক্ষিত হবে)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedButton(enabled = commentText.isNotBlank() && !commentSaved, onClick = {
+                val pg = ReadAloudController.current?.takeIf { !ReadAloudController.adHoc }?.page ?: (pageInput.toIntOrNull() ?: 1)
+                runCatching { wf.marks.add(doc.id, pg, app.personal.banglaai.userdata.Mark.Kind.NOTE, commentText.trim()) }.onSuccess { commentSaved = true; commentText = ""; voiceMsg = "কমেন্ট পৃষ্ঠা $pg-এ রাখা হয়েছে (নিচে ‘বুকমার্ক ও নোট’-এ দেখুন)" }.onFailure { voiceMsg = it.message }
+            }) { Text(if (commentSaved) "✅ Saved" else "Save comment") }
             current?.let { Text((if (ReadAloudController.adHoc) "ব্যাখ্যা শোনানো হচ্ছে:" else "এখন পড়া হচ্ছে — পৃষ্ঠা ${it.page}:"), style = MaterialTheme.typography.bodySmall); Surface(color = MaterialTheme.colorScheme.secondaryContainer) { Text(it.text, Modifier.padding(8.dp)) } }
             wf.reading.get(doc.id)?.let { Text("শেষ পড়ার অবস্থান: পৃষ্ঠা ${it.first}", style = MaterialTheme.typography.bodySmall) }
         }

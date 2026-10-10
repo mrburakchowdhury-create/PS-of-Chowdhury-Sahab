@@ -28,6 +28,8 @@ class TtsReader(private val context: Context, private val onState: (State) -> Un
     private var rate = 1.0f
     private var queued: Pair<ReadingPlan, ReadingPosition>? = null   // play() pressed while the voice engine was still starting
     private var token = 0   // invalidates callbacks from segments that were cancelled
+    private var lastId: String? = null   // the segment is finished when its LAST language-run utterance finishes
+    private var bnVoice: Voice? = null
 
     init {
         tts = TextToSpeech(context.applicationContext) { status ->
@@ -38,11 +40,11 @@ class TtsReader(private val context: Context, private val onState: (State) -> Un
                 onlyNetworkBengaliExists = offline == null && bn.isNotEmpty()
                 if (offline == null) return@post set(State.NoOfflineBengali)
                 if (tts!!.setVoice(offline) != TextToSpeech.SUCCESS || tts!!.voice?.name != offline.name) return@post set(State.NoOfflineBengali)   // C06: refused voice = not ready
-                voiceName = offline.name
+                voiceName = offline.name; bnVoice = offline
                 tts!!.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) {}
-                    override fun onDone(id: String?) { main.post { if (id == "s$token" && state == State.Playing) advance() } }
-                    @Deprecated("") override fun onError(id: String?) { main.post { if (id == "s$token") { set(State.Paused) } } }
+                    override fun onDone(id: String?) { main.post { if (id != null && id == lastId && state == State.Playing) advance() } }
+                    @Deprecated("") override fun onError(id: String?) { main.post { if (id != null && id.startsWith("s$token.")) { set(State.Paused) } } }
                 })
                 set(State.Ready)
                 queued?.let { (p, f) -> queued = null; play(p, f) }
@@ -61,8 +63,8 @@ class TtsReader(private val context: Context, private val onState: (State) -> Un
     }
 
     fun resume() { if (state == State.Paused && plan != null && pos != null) { set(State.Playing); speakCurrent() } }
-    fun pause() { if (state == State.Playing) { token++; tts?.stop(); set(State.Paused) } }
-    fun stop() { token++; tts?.stop(); if (state == State.Playing || state == State.Paused) set(State.Ready); onSegment(null, pos) }
+    fun pause() { token++; tts?.stop(); if (state == State.Playing) set(State.Paused) }   // the speech engine is stopped on EVERY press, whatever the screen thinks the state is
+    fun stop() { token++; lastId = null; tts?.stop(); if (state == State.Playing || state == State.Paused) set(State.Ready); onSegment(null, pos) }
     fun next() { val p = pos ?: return; plan?.next(p)?.let { jump(it) } }
     fun previous() { val p = pos ?: return; plan?.previous(p)?.let { jump(it) } }
     fun position() = pos
@@ -81,8 +83,10 @@ class TtsReader(private val context: Context, private val onState: (State) -> Un
         val seg = pos?.let { plan?.segmentAt(it) } ?: return advance()
         token++; onSegment(seg, pos)
         tts?.setSpeechRate(rate)
-        val r = tts?.speak(SpeechText.clean(seg.text).ifBlank { "।" }, TextToSpeech.QUEUE_FLUSH, null, "s$token") ?: TextToSpeech.ERROR
-        if (r != TextToSpeech.SUCCESS) set(State.Paused)   // the engine refused: stop honestly instead of showing "playing" in silence
+        val t = tts; val v = bnVoice
+        val ids = if (t != null && v != null) BengaliVoices.speakRuns(t, v, SpeechText.clean(seg.text).ifBlank { "।" }, true, "s$token") else emptyList()
+        lastId = ids.lastOrNull()
+        if (ids.isEmpty()) set(State.Paused)   // the engine refused: stop honestly instead of showing "playing" in silence
     }
 
     fun shutdown() { queued = null; token++; tts?.stop(); tts?.shutdown(); tts = null }

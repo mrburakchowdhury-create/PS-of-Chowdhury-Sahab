@@ -20,6 +20,7 @@ class CallSpeaker(private val context: Context, private val onReady: (Boolean) -
     var ready = false; private set
     private companion object { const val STALL_MS = 45_000L }
     var onlyNetworkBengaliExists = false; private set
+    private var bnVoice: android.speech.tts.Voice? = null
 
     init {
         tts = TextToSpeech(context.applicationContext) { status ->
@@ -31,6 +32,7 @@ class CallSpeaker(private val context: Context, private val onReady: (Boolean) -
                 onlyNetworkBengaliExists = offline == null && bn.isNotEmpty()
                 if (offline == null) return@post onReady(false)
                 if (t.setVoice(offline) != TextToSpeech.SUCCESS || t.voice?.name != offline.name) return@post onReady(false)   // C06: the engine refused the voice -> not ready, never pretend
+                bnVoice = offline
                 t.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) {}
                     override fun onRangeStart(id: String?, start: Int, end: Int, frame: Int) { val g = gen; main.post { if (g == gen) onWord() } }
@@ -55,9 +57,11 @@ class CallSpeaker(private val context: Context, private val onReady: (Boolean) -
     fun speak(sentence: String) {
         val clean = SpeechText.clean(sentence)
         if (!ready || clean.isBlank()) return
-        pending++; lastEvent = android.os.SystemClock.elapsedRealtime()
-        val r = tts?.speak(clean.take(TextToSpeech.getMaxSpeechInputLength() - 1), TextToSpeech.QUEUE_ADD, null, "c${++seq}") ?: TextToSpeech.ERROR
-        if (r != TextToSpeech.SUCCESS) { main.post { finished() }; return }   // refused: count it as spoken so the call moves on
+        lastEvent = android.os.SystemClock.elapsedRealtime()
+        val t = tts; val v = bnVoice
+        val ids = if (t != null && v != null) BengaliVoices.speakRuns(t, v, clean, false, "c${++seq}") else emptyList()   // one utterance per language run (Bengali / English / Arabic voices)
+        if (ids.isEmpty()) { pending++; main.post { finished() }; return }   // refused: count it as spoken so the call moves on
+        pending += ids.size
         main.removeCallbacks(watchdog); main.postDelayed(watchdog, 5_000)
     }
 

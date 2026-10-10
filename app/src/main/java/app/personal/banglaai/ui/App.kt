@@ -405,7 +405,7 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
                 Text(if (bgRead) "চালু: স্ক্রিন বন্ধ/অ্যাপ লক হলে ভল্ট বন্ধ হয়ে যায়, তবে পড়ার বাকি অংশ (সর্বোচ্চ ${app.personal.banglaai.speech.ReadAloudController.BG_MAX_PAGES} পৃষ্ঠা) শুধু মেমরিতে খোলা অবস্থায় পড়া চলে; শেষ বা বন্ধ করলে মুছে যায়।" else "বন্ধ (ডিফল্ট): স্ক্রিন বন্ধ বা অ্যাপ লক হলে পড়া থেমে যায় এবং ভল্ট পুরো বন্ধ হয়।", style = MaterialTheme.typography.bodySmall)
             }
         }
-        var shots by remember { mutableStateOf(activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean("allow_screenshots", false)) }
+        var shots by remember { mutableStateOf(activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean("allow_screenshots", true)) }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Switch(checked = shots, onCheckedChange = { shots = it; activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).edit().putBoolean("allow_screenshots", it).apply(); activity.applyScreenshotPolicy() })
             Column(Modifier.weight(1f)) {

@@ -61,7 +61,7 @@ class MainActivity : FragmentActivity() {
 
     /** The lock/PIN screen is always hidden from screenshots and recents. After unlocking, screenshots/screen-recording and the recents preview are allowed only if the owner turned that on in Settings (default: NOT allowed — private vault). */
     fun applyScreenshotPolicy() {
-        val allowed = unlocked && getSharedPreferences("settings", MODE_PRIVATE).getBoolean("allow_screenshots", false)
+        val allowed = unlocked && getSharedPreferences("settings", MODE_PRIVATE).getBoolean("allow_screenshots", true)
         if (allowed) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
     }
 
