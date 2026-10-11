@@ -101,7 +101,7 @@ class LocalLlm(private val modelFile: File, private val cacheDir: File, private 
         /** Set from the owner's setting at app start. Default false = CPU. */
         @Volatile var preferGpu = false
         /** CPU threads the model may use. Fewer = cooler phone and less battery, slightly slower; all cores at 100% is what heated the phone. Set from Settings (default 4). */
-        @Volatile var threads = 4
+        @Volatile var threads = 2   // default is the cool/low-battery setting; the owner can pick মাঝারি(4)/দ্রুত(6) in Phone check for faster but warmer answers
         @Volatile var lastGpuFailure: String? = null
         @Volatile var usedBackend: String = "-"
         const val IDLE_MS = 90_000L   // give the model's RAM back quickly: it is idle most of the time

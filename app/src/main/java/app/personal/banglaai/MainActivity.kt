@@ -49,7 +49,7 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         // Screenshots/recents: allowed only if the owner left that on in Settings; while the app is LOCKED the screen is always protected (see applyScreenshotPolicy).
         app.personal.banglaai.ai.LocalLlm.preferGpu = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("gpu", false)
-        app.personal.banglaai.ai.LocalLlm.threads = getSharedPreferences("settings", MODE_PRIVATE).getInt("cpu_threads", 4)
+        app.personal.banglaai.ai.LocalLlm.threads = getSharedPreferences("settings", MODE_PRIVATE).getInt("cpu_threads", 2)
         applyScreenshotPolicy()
         app.personal.banglaai.ui.CrashLog.install(this)
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
