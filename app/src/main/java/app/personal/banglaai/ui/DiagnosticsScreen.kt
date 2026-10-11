@@ -121,12 +121,13 @@ fun DiagnosticsScreen(wf: DocWorkflow, cacheDir: File, onBack: () -> Unit) {
         cpu.top.forEach { (n, p) -> Text("• $n — $p%", style = MaterialTheme.typography.bodySmall.merge(app.personal.banglaai.ui.Ps.Mono)) }
         Text("কিছু না করে বসে থাকলে এই সংখ্যা প্রায় ০ হওয়া উচিত। যে মুহূর্তে ফোন গরম লাগে, এই পর্দার স্ক্রিনশট পাঠালে বোঝা যাবে কোন অংশ খাটছে।", style = MaterialTheme.typography.bodySmall)
         SectionTitle("AI কত কোর ব্যবহার করবে (কম কোর = কম গরম, একটু ধীর)")
-        var thr by remember { mutableIntStateOf(LocalLlm.threads) }
+        var thr by remember { mutableIntStateOf(LocalLlm.preferredThreads) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(2 to "ঠান্ডা (২)", 4 to "মাঝারি (৪)", 6 to "দ্রুত (৬)").forEach { (n, l) ->
-                FilterChip(selected = thr == n, onClick = { thr = n; LocalLlm.threads = n; ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putInt("cpu_threads", n).apply(); LocalLlm.releaseAll() }, label = { Text(l) })
+                FilterChip(selected = thr == n, onClick = { thr = n; LocalLlm.preferredThreads = n; ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putInt("cpu_threads", n).apply(); ThermalGuard.applyThreads() }, label = { Text(l) })
             }
         }
+        if (ThermalGuard.status >= ThermalGuard.WARN && LocalLlm.threads < thr) Text("ফোন এখন ${ThermalGuard.label(ThermalGuard.status)} — তাই সাময়িকভাবে ${LocalLlm.threads}টি কোর ব্যবহার হচ্ছে; ঠান্ডা হলে নিজে থেকেই আপনার বেছে নেওয়া ${thr}টায় ফিরে যাবে।", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
         SectionTitle("AI চালানোর উপায়: CPU নাকি GPU")
         var gpu by remember { mutableStateOf(LocalLlm.preferGpu) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

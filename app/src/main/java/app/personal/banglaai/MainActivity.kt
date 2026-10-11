@@ -36,6 +36,7 @@ class MainActivity : FragmentActivity() {
 
     private val thermal = android.os.PowerManager.OnThermalStatusChangedListener { st ->
         app.personal.banglaai.ui.ThermalGuard.status = st
+        app.personal.banglaai.ui.ThermalGuard.applyThreads()   // automatic: fewer CPU threads while warm, the owner's full choice back once normal — nothing stops working either way
         if (st >= app.personal.banglaai.ui.ThermalGuard.STOP) {   // overheating: stop heavy work (nothing is deleted; the owner restarts it when the phone is cool)
             app.personal.banglaai.ui.AppGraph.workflowIfCreated()?.pause(); app.personal.banglaai.ai.LocalLlm.cancelInteractive(); app.personal.banglaai.ai.LocalLlm.releaseAll()
         }
@@ -49,7 +50,8 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         // Screenshots/recents: allowed only if the owner left that on in Settings; while the app is LOCKED the screen is always protected (see applyScreenshotPolicy).
         app.personal.banglaai.ai.LocalLlm.preferGpu = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("gpu", false)
-        app.personal.banglaai.ai.LocalLlm.threads = getSharedPreferences("settings", MODE_PRIVATE).getInt("cpu_threads", 2)
+        app.personal.banglaai.ai.LocalLlm.preferredThreads = getSharedPreferences("settings", MODE_PRIVATE).getInt("cpu_threads", 2)
+        app.personal.banglaai.ui.ThermalGuard.applyThreads()
         applyScreenshotPolicy()
         app.personal.banglaai.ui.CrashLog.install(this)
         registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF))
