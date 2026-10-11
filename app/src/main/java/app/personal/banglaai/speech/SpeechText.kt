@@ -13,8 +13,21 @@ object SpeechText {
     private val emoji = Regex("[\\p{So}\\p{Cs}\\uFE0F\\u200D✅❌⚠️✔✖▶►◀■□●○★☆→←↑↓]+")
     private val dashes = Regex("\\s*[—–]\\s*")
 
+    /**
+     * Acronyms that English speakers say as ONE WORD (not spelled letter by letter, e.g. "OSINT" = "oh-sint"). The phone's Bengali voice has no idea of this
+     * and, lacking an installed English voice to hand such words to, reads any Latin word it doesn't recognise by spelling out each letter — so these are
+     * rewritten here to a Bengali spelling of how they actually sound. Acronyms people DO spell out in English ("API", "DNS", "PKI"…) are left alone: spelling
+     * them out is the correct pronunciation, in English or Bengali. Word boundaries are Latin-letter boundaries, so "OSINT-এর" still matches "OSINT".
+     */
+    private val wordAcronyms = linkedMapOf(
+        "OSINT" to "ওসিন্ট", "JWT" to "জট", "CSRF" to "সি-সার্ফ", "SSRF" to "এস-সার্ফ", "IDOR" to "আই-ডোর",
+        "MITRE" to "মাইটার", "SAST" to "স্যাস্ট", "DAST" to "ড্যাস্ট", "IAM" to "আই-অ্যাম", "RADIUS" to "রেডিয়াস",
+    )
+    private val acronymPattern = Regex(wordAcronyms.keys.joinToString("|") { Regex.escape(it) }.let { "(?<![A-Za-z])(?:$it)(?![A-Za-z])" }, RegexOption.IGNORE_CASE)
+
     fun clean(raw: String): String {
-        var s = raw.replace(fence, " কোড দেখুন পর্দায়। ").replace(url, " ")
+        var s = acronymPattern.replace(raw) { m -> wordAcronyms[m.value.uppercase()] ?: m.value }
+        s = s.replace(fence, " কোড দেখুন পর্দায়। ").replace(url, " ")
         s = s.replace(heading, "").replace(listMarker, "")
         s = s.replace(Regex("\\.{2,}|[…·]+|(?<=\\s)\\.(?=\\s)"), ", ").replace(emoji, " ").replace(symbols, " ").replace(dashes, ", ")
         s = s.replace(Regex("\\(\\s*\\)"), " ").replace(Regex("\\s*\\n\\s*"), "। ").replace(Regex("[।]\\s*[।]+"), "।")

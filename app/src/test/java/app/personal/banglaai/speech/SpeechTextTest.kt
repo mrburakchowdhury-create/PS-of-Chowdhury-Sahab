@@ -29,4 +29,12 @@ class SpeechTextTest {
         val c = SpeechText.clean("আমরা সবাই... এই প্রতিষ্ঠাতার কর্ম **সম্পাদন** করিব…")
         assertFalse(c.contains("*")); assertFalse(c.contains("...")); assertFalse(c.contains("…"))
     }
+
+    @Test fun wordAcronymsAreSpokenAsWordsNotSpelledOut() {
+        assertTrue(SpeechText.clean("OSINT কী").contains("ওসিন্ট")); assertFalse(SpeechText.clean("OSINT কী").contains("OSINT"))
+        assertTrue(SpeechText.clean("osint এবং OSINT-এর ব্যবহার").let { it.contains("ওসিন্ট এবং ওসিন্ট-এর") })   // case-insensitive, suffix still attaches
+        assertTrue(SpeechText.clean("JWT token").contains("জট"))
+        // acronyms that ARE spelled out in English too are left as-is (correct either way)
+        assertEquals("DNS এবং API", SpeechText.clean("DNS এবং API"))
+    }
 }

@@ -144,7 +144,7 @@ private fun UnlockScreen(activity: MainActivity, pins: PinStore, keys: app.perso
 }
 
 /** First thing on Home: says plainly what is missing (usually the AI model) and gives one-tap access to the assistant and the phone check. */
-private enum class HomeTab { Menu, Files, Model, Terms, Settings, Status, Setup }
+private enum class HomeTab { Menu, Files, Model, Terms, Settings, Status, Setup, History }
 
 @Composable
 private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Float, themeMode: String, onTheme: (String) -> Unit, onFontScale: (Float) -> Unit) {
@@ -293,9 +293,9 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
                     workflow.job(d, k)?.takeIf { it.status == app.personal.banglaai.jobs.JobStatus.PAUSED }?.let { Triple(d, n, "${it.count(app.personal.banglaai.jobs.PageStatus.DONE)}/${it.total} পৃষ্ঠা সম্পন্ন") } } }
             }.getOrDefault(emptyList()) }
         }
+        // the full list lives in History now, not stacked on the home screen; here just a one-line pointer so it is not missed
         if (pendingJobs.isNotEmpty() && JobRunner.label == null) {
-            Text("⏸ অসমাপ্ত কাজ (নিজে থেকে চলবে না — আপনি ফাইল খুলে 'চালিয়ে যান' চাপলে বাকি অংশ চলবে):", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.tertiary)
-            pendingJobs.forEach { (d, n, c) -> TextButton(onClick = { openPage = null; openDoc = d }) { Text("${d.name} — $n থামানো ($c)") } }
+            TextButton(onClick = { tab = HomeTab.History }) { Text("⏸ ${pendingJobs.size}টি অসমাপ্ত কাজ — History-তে দেখুন") }
         }
         val hasModel = remember(modelList, workflow.chosenModel) { workflow.usableModel() != null }
         if (ThermalGuard.status >= ThermalGuard.WARN) Text("🌡️ ফোন ${ThermalGuard.label(ThermalGuard.status)} — " + (if (ThermalGuard.status >= ThermalGuard.STOP) "ভারী AI কাজ থামানো হয়েছে; ঠান্ডা হলে আবার চালান।" else "ভারী কাজ (অনুবাদ/AI উত্তর) কিছুক্ষণ বিরতি দিয়ে করুন।"), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
@@ -385,6 +385,25 @@ private fun HomeScreen(activity: MainActivity, onLock: () -> Unit, fontScale: Fl
         OutlinedButton(onClick = { diagOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("🩺 Phone check (microphone, voice, model test)") }
         OutlinedButton(onClick = { tab = HomeTab.Status }, modifier = Modifier.fillMaxWidth()) { Text("ℹ️ What works and what is not tested yet") }
         OutlinedButton(onClick = { kbOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("📚 Quick answers (short topic cards with sources)") }
+        OutlinedButton(onClick = { tab = HomeTab.History }, modifier = Modifier.fillMaxWidth()) { Text("🕘 History (অসমাপ্ত কাজ ও সংরক্ষিত কথোপকথন)") }
+            }
+            HomeTab.History -> {
+        SectionTitle("History")
+        Text("এখানে অ্যাপের ভেতরের সব 'চলছিল কিন্তু থেমে আছে' বা 'আগে করেছিলেন' এমন জিনিস এক জায়গায় থাকে — হোম পর্দায় নয়, যাতে বোতামগুলো সবসময় একই জায়গায় থাকে।", style = MaterialTheme.typography.bodySmall)
+        HorizontalDivider()
+        Text("অসমাপ্ত কাজ (ফাইল অনুবাদ/লেখা-বের-করা)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        val histPendingJobs by produceState(emptyList<Triple<app.personal.banglaai.storage.VaultDoc, String, String>>(), docs, JobRunner.tick, JobRunner.label, tab) {
+            value = withContext(Dispatchers.IO) { runCatching {
+                docs.flatMap { d -> listOf(DocWorkflow.Kind.Extract to "লেখা বের করা", DocWorkflow.Kind.Translate to "বাংলা অনুবাদ").mapNotNull { (k, n) ->
+                    workflow.job(d, k)?.takeIf { it.status == app.personal.banglaai.jobs.JobStatus.PAUSED }?.let { Triple(d, n, "${it.count(app.personal.banglaai.jobs.PageStatus.DONE)}/${it.total} পৃষ্ঠা সম্পন্ন") } } }
+            }.getOrDefault(emptyList()) }
+        }
+        if (histPendingJobs.isEmpty()) Text("কোনো অসমাপ্ত কাজ নেই।", style = MaterialTheme.typography.bodySmall)
+        else { Text("নিজে থেকে চলবে না — ফাইল খুলে 'চালিয়ে যান' চাপলে বাকি অংশ চলবে:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
+            histPendingJobs.forEach { (d, n, c) -> TextButton(onClick = { tab = HomeTab.Menu; openPage = null; openDoc = d }) { Text("${d.name} — $n থামানো ($c)") } } }
+        HorizontalDivider()
+        Text("সংরক্ষিত কথোপকথন (Assistant-এর)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        OutlinedButton(onClick = { chatStart = null; chatOpen = true }) { Text("Assistant খুলুন → ওপরে 'History' চাপুন") }
             }
             HomeTab.Terms -> {
         DictionaryPanel(workflow, activity.cacheDir)
