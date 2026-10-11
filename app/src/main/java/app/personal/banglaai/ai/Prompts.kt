@@ -141,6 +141,12 @@ object Prompts {
         (if (refs.isEmpty()) "" else "<DOC>${refs.joinToString("\n\n") { sanitize(it) }}</DOC>\n") + "পরিস্থিতি বা প্রশ্ন: ${sanitize(situation).take(2500)}"
 
     fun ask(question: String) = sanitize(question.trim())
+
+    /** The model's context is small, so a long "teach me everything" answer can stop mid-sentence at the token limit. This asks it to pick up exactly
+     *  where it stopped: [soFar] is the tail of the cut-off answer (kept short so it still fits the budget alongside the system prompt). */
+    fun continueAnswer(question: String, soFar: String) =
+        "<DOC>${sanitize(soFar.takeLast(900))}</DOC>\n" +
+            "ওপরেরটা তোমার নিজের আগের উত্তরের শেষ অংশ (প্রশ্ন ছিল: ${sanitize(question.trim()).take(300)})। ঠিক যেখানে থেমেছ সেখান থেকে চালিয়ে যাও — শুরু থেকে আবার লিখবে না, যা লেখা হয়ে গেছে তা পুনরাবৃত্তি করবে না।"
     fun translateFree(text: String, glossary: List<Pair<String, String>> = emptyList()) = "<DOC>${sanitize(text)}</DOC>\n" +
         (if (glossary.isEmpty()) "" else "ব্যবহারকারীর পরিভাষা (এই শব্দগুলো হুবহু এভাবে ব্যবহার করো):\n" + glossary.joinToString("\n") { "- ${sanitize(it.first).take(80)} → ${sanitize(it.second).take(200)}" } + "\n") + "উপরের লেখা বাংলায় অনুবাদ করো। শুধু অনুবাদ দাও।"
 }

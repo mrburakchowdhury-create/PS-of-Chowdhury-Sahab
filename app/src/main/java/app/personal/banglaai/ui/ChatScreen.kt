@@ -44,7 +44,8 @@ private fun readPickedImage(ctx: android.content.Context, uri: android.net.Uri, 
 /**
  * Direct assistant: type (or press-to-talk) a question, or switch to "অনুবাদ" and paste any text to get Bengali. Runs ONLY on the imported local model:
  * if none is imported it says so and shows how. Conversations are saved (encrypted) so they can be reopened later; the owner can delete one or all, or switch saving off. Nothing is sent anywhere.
- * Each message is independent (no hidden long memory); answers stream in as the model writes them.
+ * Each message is independent (no hidden long memory); answers stream in as the model writes them. The model's context is small, so a long answer can stop
+ * mid-sentence; "➕ আরও লিখো" on an answer continues it in place by reminding the model (briefly) where it stopped — no other extra memory is kept.
  */
 @Composable
 fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: () -> Unit = {}, onBack: () -> Unit) {
@@ -113,6 +114,25 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
             busy = null; persist()
         }
     }
+    /** The model's context is small; a long answer can stop mid-sentence at the token limit. This continues it in place (same bubble), reminding
+     *  the model where it left off — it does NOT need translate/advisor/cyber mode to be switched, [idx] carries its own earlier mode via [sys]. */
+    fun continueAnswer(idx: Int, sys: String) {
+        if (busy != null) return
+        val model = wf.usableModel() ?: run { error = "কোনো AI মডেল বসানো নেই।"; return }
+        val question = msgs.getOrNull(idx - 1)?.text.orEmpty()
+        val soFar = msgs.getOrNull(idx)?.text.orEmpty()
+        error = null; busy = if (llm[0]?.isLoaded == true) "আরও লিখছে…" else "মডেল লোড হচ্ছে…"
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val m = llm[0] ?: LocalLlm(model, File(cacheDir, "llm")).also { llm[0] = it }
+                    var first = true
+                    m.askStream(sys, Prompts.continueAnswer(question, soFar)) { piece -> if (first) { first = false; busy = "আরও লিখছে…" }; msgs[idx] = msgs[idx].copy(text = msgs[idx].text + piece) }
+                }
+            }.onFailure { error = if (stoppedByUser) null else "ব্যর্থ: ${it.javaClass.simpleName}: ${it.message ?: ""}".take(400) }
+            stoppedByUser = false; busy = null; persist()
+        }
+    }
     LaunchedEffect(Unit) { if (!startWith.isNullOrBlank()) send(startWith) }
     LaunchedEffect(msgs.size, msgs.lastOrNull()?.text?.length) { if (msgs.isNotEmpty()) list.animateScrollToItem(msgs.lastIndex) }
 
@@ -163,7 +183,10 @@ fun ChatScreen(wf: DocWorkflow, cacheDir: File, startWith: String?, onGoModel: (
                     Column(Modifier.padding(12.dp)) {
                         Text(if (m.fromUser) "আপনি" else "সহকারী", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         SelectionContainer { Text(if (m.addressed) app.personal.banglaai.OwnerAddress.present(m.text).ifBlank { "…" } else m.text.ifBlank { "…" }) }
-                        if (!m.fromUser && m.text.isNotBlank() && busy == null) TextButton(onClick = { ReadAloudController.speakExplanation(ctx, if (m.addressed) app.personal.banglaai.OwnerAddress.present(m.text) else m.text) }) { Text("🔊 Listen") }
+                        if (!m.fromUser && m.text.isNotBlank() && busy == null) Row {
+                            TextButton(onClick = { ReadAloudController.speakExplanation(ctx, if (m.addressed) app.personal.banglaai.OwnerAddress.present(m.text) else m.text) }) { Text("🔊 Listen") }
+                            TextButton(onClick = { continueAnswer(i, if (translate) Prompts.TRANSLATE_SYSTEM else if (advisor) Prompts.ADVISOR_SYSTEM else if (cyber) Prompts.CYBERSEC_SYSTEM else Prompts.ASSISTANT_SYSTEM) }) { Text("➕ আরও লিখো") }
+                        }
                     }
                 }
             }

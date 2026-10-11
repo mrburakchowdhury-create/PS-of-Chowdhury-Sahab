@@ -20,4 +20,10 @@ class CybersecPromptTest {
         assertTrue(p.contains("প্রশ্ন/বিষয়: SQLi কী"))
         assertFalse(Prompts.cybersec("শুধু প্রশ্ন").contains("<DOC>"))
     }
+    @Test fun continueAnswerKeepsOnlyTheTailAndAsksNotToRepeat() {
+        val longAnswer = "ক".repeat(2000) + "শেষ অংশ"
+        val p = Prompts.continueAnswer("প্রশ্ন ছিল এটা", longAnswer)
+        assertTrue(p.contains("শেষ অংশ")); assertFalse(p.contains("ক".repeat(1500)))   // only the tail is sent, not the whole thing
+        assertTrue(p.contains("পুনরাবৃত্তি করবে না")); assertEquals(1, Regex("</DOC>").findAll(p).count())
+    }
 }
