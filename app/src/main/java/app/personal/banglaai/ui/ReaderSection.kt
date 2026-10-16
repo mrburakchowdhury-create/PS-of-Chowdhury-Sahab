@@ -142,12 +142,20 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
             }
         }
     }
+    /**
+     * "Paused" (TTS engine literally paused mid-document) resumes in place; any other state (Ready, e.g. right after an
+     * Explain/Ask/auto-summary interruption replaced the engine's in-memory position) falls back to the last SAVED
+     * document reading position, never a no-op. Shared by the voice command and the on-screen button so both behave alike.
+     */
+    fun resumeReading() {
+        if (state == TtsReader.State.Paused) reader.resume()
+        else wf.reading.get(doc.id)?.let { play(it.first, it.second) } ?: play(pageInput.toIntOrNull() ?: 1)
+    }
     fun run(c: VoiceCommand) {
         when (c) {
             is VoiceCommand.ReadPage -> { pageInput = c.page.toString(); endInput = ""; play(c.page) }
             is VoiceCommand.ReadRange -> { pageInput = c.from.toString(); endInput = c.to.toString(); play(c.from) }
-            VoiceCommand.Resume -> if (state == TtsReader.State.Paused) reader.resume() else {
-                wf.reading.get(doc.id)?.let { play(it.first, it.second) } ?: play(pageInput.toIntOrNull() ?: 1) }
+            VoiceCommand.Resume -> resumeReading()
             VoiceCommand.Pause -> reader.pause(); VoiceCommand.Stop -> reader.stop()
             VoiceCommand.Slower -> { rate = (rate - 0.15f).coerceAtLeast(0.5f); reader.setRate(rate) }
             VoiceCommand.Faster -> { rate = (rate + 0.15f).coerceAtMost(2f); reader.setRate(rate) }
@@ -213,7 +221,7 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedButton(onClick = { reader.previous() }) { Text("⏮") }
                 OutlinedButton(onClick = { reader.pause() }) { Text("⏸ Pause") }
-                OutlinedButton(onClick = { reader.resume() }) { Text("▶ Resume") }
+                OutlinedButton(onClick = { resumeReading() }) { Text("▶ Resume") }
                 OutlinedButton(onClick = { reader.next() }) { Text("⏭") }
                 OutlinedButton(onClick = { reader.stop() }) { Text("⏹") }
             }

@@ -136,9 +136,14 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
             if (tabular) Text("এই ফাইলটি মূলে সারণি/স্প্রেডশিট — XLSX বেছে নিলে সারি-কলাম গঠন বজায় থাকে; DOCX/PDF/TXT লেখা হিসেবে (সারণি ছাড়া) বের করে।", style = MaterialTheme.typography.bodySmall)
             Text("এক্সপোর্টে অনুবাদ-না-হওয়া পৃষ্ঠার তালিকা থাকে। পৃষ্ঠা-বিন্যাস মূলের সঙ্গে হুবহু মিলবে না।", style = MaterialTheme.typography.bodySmall)
             if (tr.status == JobStatus.DONE) {
-                val issues = remember(tick) { app.personal.banglaai.doc.TranslationQualityCheck.run(wf.exportPages(doc), wf.glossary.all().map { it.source to it.bengali }) }
+                // Decrypts & scans every page (could be 1000s for a large book) — never on the UI thread.
+                var issues by remember { mutableStateOf<List<app.personal.banglaai.doc.TranslationQualityCheck.Issue>?>(null) }
+                LaunchedEffect(tick) { issues = withContext(Dispatchers.Default) { app.personal.banglaai.doc.TranslationQualityCheck.run(wf.exportPages(doc), wf.glossary.all().map { it.source to it.bengali }) } }
                 Text("স্বয়ংক্রিয় মান-যাচাই", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                Text(app.personal.banglaai.doc.TranslationQualityCheck.summarize(issues), style = MaterialTheme.typography.bodySmall, color = if (issues.isEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+                when (val i = issues) {
+                    null -> Text("যাচাই করা হচ্ছে…", style = MaterialTheme.typography.bodySmall)
+                    else -> Text(app.personal.banglaai.doc.TranslationQualityCheck.summarize(i), style = MaterialTheme.typography.bodySmall, color = if (i.isEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+                }
             }
         }
         if (ext != null) {
