@@ -40,6 +40,11 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
     var askText by remember { mutableStateOf("") }
     var commentText by remember { mutableStateOf("") }
     var commentSaved by remember { mutableStateOf(false) }
+    var summaryEveryN by remember { mutableStateOf<Int?>(null) }   // null = off
+    var summaryAtChapterEnd by remember { mutableStateOf(false) }
+    var summaryFromPage by remember { mutableStateOf<Int?>(null) }   // first page not yet covered by a summary
+    var summaryText by remember { mutableStateOf<String?>(null) }
+    var summarizing by remember { mutableStateOf(false) }
 
     val reader = remember { ReadAloudController.get(ctx) }
     val state = ReadAloudController.state
@@ -104,6 +109,39 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
             explaining = false
         }
     }
+    fun gatherText(from: Int, to: Int): String {
+        val sb = StringBuilder()
+        for (p in from..to) ((if (useTranslation) wf.translations.get(doc.id, p) else wf.effective(doc.id, p))?.text)?.let { if (it.isNotBlank()) sb.append(it).append("\n") }
+        return sb.toString()
+    }
+    fun runAutoSummary(from: Int, to: Int, chapterEnd: Boolean) {
+        val model = wf.usableModel() ?: return   // no model installed: skip quietly, reading is not interrupted for this
+        val text = gatherText(from, to).take(6000)
+        summaryFromPage = to + 1
+        if (text.isBlank()) return
+        summarizing = true; voiceMsg = null
+        reader.pause()
+        scope.launch {
+            runCatching { withContext(kotlinx.coroutines.Dispatchers.IO) { LocalLlm(model, java.io.File(ctx.cacheDir, "llm")).use { it.ask(Prompts.SUMMARY_SYSTEM, Prompts.summary(text, chapterEnd)) } } }
+                .onSuccess { val t = app.personal.banglaai.OwnerAddress.present(it); summaryText = t; ReadAloudController.speakExplanation(ctx, t) }
+                .onFailure { voiceMsg = "সারাংশ ব্যর্থ: ${it.message ?: it.javaClass.simpleName}" }
+            summarizing = false
+        }
+    }
+    var lastSeenPage by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(current?.page, current?.index) {
+        val c = current
+        if (c != null && !ReadAloudController.adHoc && c.index == 0) {
+            val prev = lastSeenPage; lastSeenPage = c.page
+            if (summaryFromPage == null) summaryFromPage = c.page
+            if (prev != null && prev != c.page) {
+                val from = summaryFromPage ?: prev
+                val chapterBoundary = summaryAtChapterEnd && wf.chapters(doc).any { it.page == c.page }
+                val everyNHit = summaryEveryN?.let { n -> n > 0 && (c.page - from) >= n } ?: false
+                if (chapterBoundary || everyNHit) runAutoSummary(from, prev, chapterBoundary)
+            }
+        }
+    }
     fun run(c: VoiceCommand) {
         when (c) {
             is VoiceCommand.ReadPage -> { pageInput = c.page.toString(); endInput = ""; play(c.page) }
@@ -134,6 +172,15 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
 
     LaunchedEffect(initialCommand, state) {
         if (initialCommand != null && !initialDone && state != TtsReader.State.Initialising) { initialDone = true; run(initialCommand) }
+    }
+    summarizing.let { if (it) Text("পড়া অংশের সারাংশ বানাচ্ছে…", color = MaterialTheme.colorScheme.tertiary) }
+    summaryText?.let { s ->
+        Text("স্বয়ংক্রিয় সারাংশ (যা পড়া হয়েছে তার ভিত্তিতে)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        androidx.compose.foundation.text.selection.SelectionContainer { Text(s) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { ReadAloudController.speakExplanation(ctx, s) }) { Text("🔊 Listen again") }
+            OutlinedButton(onClick = { summaryText = null }) { Text("Close") }
+        }
     }
     explaining.let { if (it) Text("AI বুঝিয়ে বলার জন্য ভাবছে…", color = MaterialTheme.colorScheme.tertiary) }
     explanation?.let { e ->
@@ -172,6 +219,11 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
             }
             Text("গতি: ${"%.2f".format(rate)}×", style = MaterialTheme.typography.bodySmall)
             Slider(value = rate, onValueChange = { rate = it; reader.setRate(it) }, valueRange = 0.5f..2f)
+            Text("স্বয়ংক্রিয় সারাংশ (ঐচ্ছিক)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                FilterChip(selected = summaryAtChapterEnd, onClick = { summaryAtChapterEnd = !summaryAtChapterEnd }, label = { Text("অধ্যায় শেষে সামারি") })
+                listOf(5, 10, 20).forEach { n -> FilterChip(selected = summaryEveryN == n, onClick = { summaryEveryN = if (summaryEveryN == n) null else n }, label = { Text("প্রতি $n পৃষ্ঠা") }) }
+            }
             // --- Right here while reading: explain, ask, comment (reading pauses by itself) ---
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Button(enabled = !explaining, onClick = { explainNow() }) { Text(if (explaining) "ভাবছে…" else "💡 Explain this") }
@@ -183,7 +235,14 @@ fun ReaderSection(doc: VaultDoc, wf: DocWorkflow, totalPages: Int, initialComman
                 val pg = ReadAloudController.current?.takeIf { !ReadAloudController.adHoc }?.page ?: (pageInput.toIntOrNull() ?: 1)
                 runCatching { wf.marks.add(doc.id, pg, app.personal.banglaai.userdata.Mark.Kind.NOTE, commentText.trim()) }.onSuccess { commentSaved = true; commentText = ""; voiceMsg = "কমেন্ট পৃষ্ঠা $pg-এ রাখা হয়েছে (নিচে ‘বুকমার্ক ও নোট’-এ দেখুন)" }.onFailure { voiceMsg = it.message }
             }) { Text(if (commentSaved) "✅ Saved" else "Save comment") }
-            current?.let { Text((if (ReadAloudController.adHoc) "ব্যাখ্যা শোনানো হচ্ছে:" else "এখন পড়া হচ্ছে — পৃষ্ঠা ${it.page}:"), style = MaterialTheme.typography.bodySmall); Surface(color = MaterialTheme.colorScheme.secondaryContainer) { Text(it.text, Modifier.padding(8.dp)) } }
+            current?.let {
+                val endPg = ReadAloudController.endPage
+                Text((if (ReadAloudController.adHoc) "ব্যাখ্যা শোনানো হচ্ছে:" else if (endPg != null && endPg > it.page) "পড়া হচ্ছে — পৃষ্ঠা ${it.page} / $endPg…" else "এখন পড়া হচ্ছে — পৃষ্ঠা ${it.page}:"), style = MaterialTheme.typography.bodySmall)
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer) { Text(it.text, Modifier.padding(8.dp)) }
+            }
+            ReadAloudController.finishedRange?.let { (a, b) ->
+                Text(if (a == b) "✅ পড়া শেষ — পৃষ্ঠা $a" else "✅ পড়া শেষ হয়েছে — পৃষ্ঠা $a–$b", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
+            }
             wf.reading.get(doc.id)?.let { Text("শেষ পড়ার অবস্থান: পৃষ্ঠা ${it.first}", style = MaterialTheme.typography.bodySmall) }
         }
     }

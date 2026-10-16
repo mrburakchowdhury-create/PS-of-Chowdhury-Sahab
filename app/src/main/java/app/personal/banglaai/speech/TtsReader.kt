@@ -14,7 +14,7 @@ import java.util.Locale
  * fallback to a network voice or another language. Pause = stop speaking and remember the segment; resume replays that segment.
  * Status: compiles; whether the S24 Ultra has a usable offline Bengali voice and how it sounds is device-test pending.
  */
-class TtsReader(private val context: Context, private val onState: (State) -> Unit, private val onSegment: (Segment?, ReadingPosition?) -> Unit) {
+class TtsReader(private val context: Context, private val onState: (State) -> Unit, private val onSegment: (Segment?, ReadingPosition?) -> Unit, private val onFinished: () -> Unit = {}) {
     enum class State { Initialising, NoEngine, NoOfflineBengali, Ready, Playing, Paused }
     var state = State.Initialising; private set
     /** True if a Bengali voice exists but needs the network (we refuse to use it). */
@@ -77,7 +77,8 @@ class TtsReader(private val context: Context, private val onState: (State) -> Un
 
     private fun jump(p: ReadingPosition) { pos = p; if (state == State.Playing) speakCurrent() else onSegment(plan?.segmentAt(p), p) }
 
-    private fun advance() { val n = pos?.let { plan?.next(it) }; if (n == null) { set(State.Ready); onSegment(null, pos) } else { pos = n; speakCurrent() } }
+    /** Reaching the end naturally (ran off the plan/range) is reported via [onFinished]; a manual pause/stop never calls it. */
+    private fun advance() { val n = pos?.let { plan?.next(it) }; if (n == null) { set(State.Ready); onSegment(null, pos); onFinished() } else { pos = n; speakCurrent() } }
 
     private fun speakCurrent() {
         val seg = pos?.let { plan?.segmentAt(it) } ?: return advance()

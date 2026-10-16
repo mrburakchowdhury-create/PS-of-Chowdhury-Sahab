@@ -15,6 +15,10 @@ object ReadAloudController {
     var current by mutableStateOf<Segment?>(null); private set
     /** True while the app speaks its own explanation (not the document); the saved reading position is then left untouched. */
     var adHoc by mutableStateOf(false); private set
+    /** Last page a plan can reach (document reading only) — the "N / M" in the live progress line. */
+    var endPage by mutableStateOf<Int?>(null); private set
+    /** Set once when a document plan runs off its own end naturally (not on manual pause/stop); the UI shows a "done, pages A–B" line and clears it. */
+    var finishedRange by mutableStateOf<Pair<Int, Int>?>(null)
     private var reader: TtsReader? = null
     private var onPosition: ((ReadingPosition) -> Unit)? = null
     /** Called whenever state changes; the foreground service uses it to refresh the notification. */
@@ -22,9 +26,14 @@ object ReadAloudController {
 
     fun get(context: Context): TtsReader = reader ?: TtsReader(context.applicationContext,
         { state = it; listener?.invoke() },
-        { seg, pos -> current = seg; if (!adHoc) pos?.let { p -> onPosition?.invoke(p) }; listener?.invoke() }).also { reader = it }
+        { seg, pos -> current = seg; if (!adHoc) pos?.let { p -> onPosition?.invoke(p) }; listener?.invoke() },
+        { if (!adHoc) finishedRange = (startPage ?: 1) to (endPage ?: current?.page ?: 1) }).also { reader = it }
 
-    fun play(context: Context, plan: ReadingPlan, from: ReadingPosition) { adHoc = false; get(context).play(plan, from) }
+    private var startPage: Int? = null
+    fun play(context: Context, plan: ReadingPlan, from: ReadingPosition) {
+        adHoc = false; startPage = from.page; endPage = plan.pageCount; finishedRange = null
+        get(context).play(plan, from)
+    }
 
     /** Plays a plan that is NOT a document (e.g. literal reading of code the user pasted): never saved as a reading position. [from] = first page (= line number) to speak. */
     fun speakPlan(context: Context, plan: ReadingPlan, from: Int = 1) { adHoc = true; get(context).play(plan, plan.startAt(from) ?: return) }
@@ -50,7 +59,7 @@ object ReadAloudController {
 
     fun pause() { reader?.pause() }
     fun resume() { reader?.resume() }
-    fun stop() { reader?.stop() }
+    fun stop() { reader?.stop(); finishedRange = null }   // a manual stop is not "finished reading" — only running off the end naturally shows that line
     fun next() { reader?.next() }
     fun previous() { reader?.previous() }
     val isPlaying get() = state == TtsReader.State.Playing
