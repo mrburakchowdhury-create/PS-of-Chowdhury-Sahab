@@ -50,6 +50,19 @@ class ExporterTest {
     }
 
     @Test fun missingListIsExact() = assertEquals(listOf(2), Exporter.missing(pages))
+
+    @Test fun xlsxIsValidZipWithWellFormedXmlOneSheetPerPagePlusCoverage() {
+        val pg = listOf(ExportPage(1, null, "নাম\tমান\nএক\t১", "name\tvalue\none\t1"), ExportPage(2, null, "শুধু লেখা", null))
+        val bo = ByteArrayOutputStream(); Exporter.xlsx(pg, ExportOptions("T", true, false), bo)
+        val parts = HashMap<String, ByteArray>(); ZipInputStream(ByteArrayInputStream(bo.toByteArray())).use { z -> while (true) { val e = z.nextEntry ?: break; parts[e.name] = z.readBytes() } }
+        assertTrue(parts.keys.containsAll(listOf("[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml")))
+        parts.filterKeys { it.endsWith(".xml") || it.endsWith(".rels") }.values.forEach { DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(it)) }
+        val sheet1 = String(parts.getValue("xl/worksheets/sheet1.xml"), Charsets.UTF_8)
+        assertTrue(sheet1.contains("নাম")); assertTrue(sheet1.contains("value")); assertTrue(sheet1.contains("<c r=\"B")) // a real second column, not one tab-joined cell
+        val workbook = String(parts.getValue("xl/workbook.xml"), Charsets.UTF_8)
+        assertEquals(3, Regex("<sheet ").findAll(workbook).count())   // 2 pages + coverage sheet
+        assertTrue(workbook.contains("Coverage"))
+    }
 }
 
 class ExporterLongDocumentTest {

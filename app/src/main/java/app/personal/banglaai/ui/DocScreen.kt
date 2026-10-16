@@ -50,7 +50,7 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
         start("এক্সপোর্ট") {
             val pages = wf.exportPages(doc); val o = ExportOptions(doc.name, includeOriginal = true, originalIsRtl = rtlOriginal, targetLabel = target.label)
             ctx.contentResolver.openOutputStream(uri)?.use { out ->
-                when (exportKind) { "docx" -> Exporter.docx(pages, o, out); "pdf" -> PdfExport.write(pages, o, out); else -> out.write(Exporter.txt(pages, o).toByteArray(Charsets.UTF_8)) }
+                when (exportKind) { "docx" -> Exporter.docx(pages, o, out); "pdf" -> PdfExport.write(pages, o, out); "xlsx" -> Exporter.xlsx(pages, o, out); else -> out.write(Exporter.txt(pages, o).toByteArray(Charsets.UTF_8)) }
             } ?: error("ফাইল লেখা যায়নি")
             JobStatus.DONE
         }
@@ -126,12 +126,20 @@ fun DocScreen(doc: VaultDoc, wf: DocWorkflow, initialCommand: app.personal.bangl
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(selected = rtlOriginal, onClick = { rtlOriginal = !rtlOriginal }, label = { Text("মূল ডান-থেকে-বাঁ (আরবি/উর্দু)") })
             }
+            val tabular = app.personal.banglaai.importer.OfficeImporter.extension(doc.name.lowercase()).let { it == "xlsx" || it == "csv" }
+            val formats = listOf("txt" to "TXT", "docx" to "DOCX", "pdf" to "PDF") + (if (tabular) listOf("xlsx" to "XLSX (সারণি)") else emptyList())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("txt" to "TXT", "docx" to "DOCX", "pdf" to "PDF").forEach { (k, label) ->
+                formats.forEach { (k, label) ->
                     OutlinedButton(enabled = running == null, onClick = { exportKind = k; saver.launch("${doc.name.substringBeforeLast('.')}-${target.fileTag}.$k") }) { Text(label) }
                 }
             }
+            if (tabular) Text("এই ফাইলটি মূলে সারণি/স্প্রেডশিট — XLSX বেছে নিলে সারি-কলাম গঠন বজায় থাকে; DOCX/PDF/TXT লেখা হিসেবে (সারণি ছাড়া) বের করে।", style = MaterialTheme.typography.bodySmall)
             Text("এক্সপোর্টে অনুবাদ-না-হওয়া পৃষ্ঠার তালিকা থাকে। পৃষ্ঠা-বিন্যাস মূলের সঙ্গে হুবহু মিলবে না।", style = MaterialTheme.typography.bodySmall)
+            if (tr.status == JobStatus.DONE) {
+                val issues = remember(tick) { app.personal.banglaai.doc.TranslationQualityCheck.run(wf.exportPages(doc), wf.glossary.all().map { it.source to it.bengali }) }
+                Text("স্বয়ংক্রিয় মান-যাচাই", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Text(app.personal.banglaai.doc.TranslationQualityCheck.summarize(issues), style = MaterialTheme.typography.bodySmall, color = if (issues.isEmpty()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+            }
         }
         if (ext != null) {
             ReaderSection(doc, wf, ext.total, initialCommand)

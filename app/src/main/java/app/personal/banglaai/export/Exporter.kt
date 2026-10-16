@@ -106,4 +106,57 @@ object Exporter {
             put("word/document.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>$body</w:body></w:document>")
         }
     }
+
+    private fun colLetter(n: Int): String {
+        var x = n; val sb = StringBuilder()
+        while (x > 0) { val rem = (x - 1) % 26; sb.insert(0, ('A' + rem)); x = (x - 1) / 26 }
+        return sb.toString()
+    }
+
+    /** One line -> one row; a tab-separated line becomes one cell per column (the importer writes spreadsheet/table rows that way). */
+    private fun rowsXml(lines: List<String>, startRow: Int): Pair<String, Int> {
+        val sb = StringBuilder(); var r = startRow
+        for (line in lines) {
+            val cells = if (line.contains('\t')) line.split('\t') else listOf(line)
+            sb.append("<row r=\"$r\">")
+            cells.forEachIndexed { i, c -> if (c.isNotEmpty()) sb.append("<c r=\"${colLetter(i + 1)}$r\" t=\"inlineStr\"><is><t xml:space=\"preserve\">${xml(c)}</t></is></c>") }
+            sb.append("</row>")
+            r++
+        }
+        return sb.toString() to r
+    }
+
+    /**
+     * Real XLSX (one worksheet per page/section, original and translation as rows) — for a source document that was itself
+     * tabular (spreadsheet/CSV), so its structure survives export instead of being flattened into prose paragraphs.
+     */
+    fun xlsx(pages: List<ExportPage>, o: ExportOptions, out: OutputStream) {
+        data class Sheet(val name: String, val xml: String)
+        val sheets = ArrayList<Sheet>()
+        for (p in pages) {
+            val body = StringBuilder(); var r = 1
+            fun add(text: String) { val (x, nr) = rowsXml(listOf(text), r); body.append(x); r = nr }
+            fun addAll(text: String) { val (x, nr) = rowsXml(text.split("\n"), r); body.append(x); r = nr }
+            add("পৃষ্ঠা ${p.page}" + (p.printedLabel?.let { " (মূল অবস্থান: $it)" } ?: ""))
+            if (o.includeOriginal) {
+                add("মূল" + if (p.originalIsOcr) " — OCR, ভুল থাকতে পারে" else "")
+                addAll(p.original?.takeIf { it.isNotBlank() } ?: "(লেখা নেই)")
+                add(""); add("${o.targetLabel} অনুবাদ")
+            }
+            addAll(p.translation?.takeIf { it.isNotBlank() } ?: "(অনুবাদ হয়নি)")
+            sheets += Sheet("Page ${p.page}".take(31), body.toString())
+        }
+        sheets += Sheet("Coverage", rowsXml(coverageLine(pages).split("। "), 1).first)
+        ZipOutputStream(out).use { z ->
+            fun put(name: String, c: String) { z.putNextEntry(ZipEntry(name)); z.write(c.toByteArray(Charsets.UTF_8)); z.closeEntry() }
+            put("[Content_Types].xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>" +
+                sheets.indices.joinToString("") { i -> "<Override PartName=\"/xl/worksheets/sheet${i + 1}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>" } + "</Types>")
+            put("_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>")
+            put("xl/_rels/workbook.xml.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+                sheets.indices.joinToString("") { i -> "<Relationship Id=\"rId${i + 1}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet${i + 1}.xml\"/>" } + "</Relationships>")
+            put("xl/workbook.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets>" +
+                sheets.mapIndexed { i, s -> "<sheet name=\"${xml(s.name)}\" sheetId=\"${i + 1}\" r:id=\"rId${i + 1}\"/>" }.joinToString("") + "</sheets></workbook>")
+            sheets.forEachIndexed { i, s -> put("xl/worksheets/sheet${i + 1}.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>${s.xml}</sheetData></worksheet>") }
+        }
+    }
 }
